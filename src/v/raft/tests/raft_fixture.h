@@ -50,6 +50,7 @@
 
 #include <optional>
 #include <ranges>
+#include <system_error>
 namespace raft {
 
 static constexpr raft::group_id test_group(123);
