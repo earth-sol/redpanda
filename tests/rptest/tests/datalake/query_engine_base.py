@@ -53,6 +53,10 @@ class QueryEngineBase(ABC):
             self.logger.debug(f"query result: {result}")
             return result
 
+    def run_query_fetch_one(self, query):
+        with self.run_query(query) as cursor:
+            return cursor.fetchone()
+
     def count_table(self, namespace, table) -> int:
         query = f"select count(*) from {namespace}.{self.escape_identifier(table)}"
         with self.run_query(query) as cursor:
