@@ -421,22 +421,37 @@ ss::future<storage::index_state> do_copy_segment_data(
       cfg.asrc);
 
     // create the segment, get the in-memory index for the new segment
-    auto new_index = co_await create_segment_full_reader(
-                       seg, cfg, pb, std::move(rw_lock_holder))
-                       .consume(std::move(copy_reducer), model::no_timeout)
-                       .finally([&] {
-                           return appender->close().handle_exception(
-                             [](std::exception_ptr e) {
-                                 vlog(
-                                   gclog.error,
-                                   "Error copying index to new segment:{}",
-                                   e);
-                             });
+    auto res = co_await create_segment_full_reader(
+                 seg, cfg, pb, std::move(rw_lock_holder))
+                 .consume(std::move(copy_reducer), model::no_timeout)
+                 .finally([&] {
+                     return appender->close().handle_exception(
+                       [](std::exception_ptr e) {
+                           vlog(
+                             gclog.error,
+                             "Error copying index to new segment:{}",
+                             e);
                        });
+                 });
+    const auto& stats = res.reducer_stats;
+    if (stats.has_removed_data()) {
+        vlog(
+          gclog.info,
+          "Self compaction filtering removing data from {}: {}",
+          seg->filename(),
+          stats);
+    } else {
+        vlog(
+          gclog.debug,
+          "Self compaction filtering not removing any records from {}: {}",
+          seg->filename(),
+          stats);
+    }
+    auto& new_index = res.new_idx;
 
     // restore broker timestamp
     new_index.broker_timestamp = old_broker_timestamp;
-    co_return new_index;
+    co_return std::move(new_index);
 }
 
 model::record_batch_reader create_segment_full_reader(
