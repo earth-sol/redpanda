@@ -692,7 +692,7 @@ ss::future<tx::errc> rm_stm::abort_tx(
       tx_seq,
       timeout);
     if (pid != producer->id()) {
-        co_return cluster::errc::invalid_producer_epoch;
+        co_return tx::errc::invalid_producer_epoch;
     }
     co_return co_await producer->run_with_lock(
       [this, synced_term, tx_seq, timeout, producer](
