@@ -787,7 +787,6 @@ ss::future<> controller_backend::reconcile_ntp_fiber(
     co_await ss::coroutine::switch_to(ss::default_scheduling_group());
 
     while (true) {
-        co_await rs->wakeup_event.wait(_housekeeping_jitter.next_duration());
         if (_as.local().abort_requested()) {
             break;
         }
@@ -810,6 +809,10 @@ ss::future<> controller_backend::reconcile_ntp_fiber(
                   ex);
             }
         }
+
+        // Only wait after we have made it through the semaphore once to avoid
+        // mass wakeups after the entering the function for the first time
+        co_await rs->wakeup_event.wait(_housekeeping_jitter.next_duration());
     }
 }
 
