@@ -723,30 +723,30 @@
     "models": {
         "cpu_profile_result": {
             "id": "cpu_profile_result",
-            "description": "top level object for a cpu profile request",
+            "description": "Top-level object for a CPU profile request",
             "properties" : {
                 "schema": {
-                    "description": "the schema version of the response",
+                    "description": "The schema version of the response",
                     "type": "int"
                 },
                 "arch": {
-                    "description": "the CPU architecture the profile was taken on, one of [amd64, arm64]",
+                    "description": "The CPU architecture the profile was taken on, one of [amd64, arm64]",
                     "type": "string"
                 },
                 "version": {
-                    "description": "the version of Redpanda the profile was taken on",
+                    "description": "The Redpanda version the profile was taken on",
                     "type": "string"
                 },
                 "wait_ms": {
-                    "description": "the requested sample period, in milliseconds, if specified using wait_ms query parameter, or missing otherwise",
+                    "description": "The requested sample period, in milliseconds, if specified using the wait_ms query parameter, or missing otherwise",
                     "type": "int"
                 },
                 "sample_period_ms": {
-                    "description": "the configured sample period in milliseconds (each shard samples at this rate)",
+                    "description": "The configured sample period in milliseconds. Each shard samples at this rate",
                     "type": "int"
                 },
                 "profile": {
-                    "description": "the profile samples, one object per shard",
+                    "description": "The profile samples, one object per shard",
                     "type": "array",
                     "items": {
                         "type": "cpu_profile_shard_samples"
@@ -756,15 +756,15 @@
         },
         "cpu_profile_shard_samples": {
             "id": "cpu_profile_shard_samples",
-            "description": "cpu profile object for one shard",
+            "description": "CPU profile object for one shard",
             "properties": {
                 "shard_id": {
                     "type": "long",
-                    "description": "the shard the sample originated from"
+                    "description": "The shard the sample originated from"
                 },
                 "dropped_samples": {
                     "type": "long",
-                    "description": "number of samples that had to be dropped due to space limitations"
+                    "description": "Number of samples that were dropped due to space limitations during the measurement period."
                 },
                 "samples": {
                     "type": "array",
@@ -776,7 +776,7 @@
         },
         "cpu_profile_sample": {
             "id": "cpu_profile_sample",
-            "description": "an individual cpu profile sample with backtrace and count",
+            "description": "An individual CPU profile sample with backtrace and count",
             "properties": {
                 "user_backtrace": {
                     "type": "string",
