@@ -903,16 +903,11 @@ class HighThroughputTest(PreallocNodesMixin, RedpandaCloudTest):
 
     # sets new target replica count for the cluster
     def set_cluster_replicas(self, cluster_name: str, new_replicas: int):
-        # for operator V2, we scale the statefulset because that seems
-        # to be the only way that works
+        self.redpanda.scale_cluster(new_replicas)
         if self.operator_version == 2:
-            self.redpanda.kubectl.cmd([
-                'scale', '-n=redpanda', 'statefulset', 'redpanda-broker',
-                f'--replicas={new_replicas}'
-            ])
             return
 
-        # for operator v1, we patch the cluster CRD instead
+        # for operator v1, we patch the cluster CRD
         patch = [{
             'op': 'replace',
             'path': '/spec/replicas',
@@ -1132,7 +1127,7 @@ class HighThroughputTest(PreallocNodesMixin, RedpandaCloudTest):
             self.cluster_name)
         assert orig_replicas == orig_ready, f'cluster is unstable, replicas expected {orig_replicas} != ready {orig_ready}'
 
-        new_replicas = orig_replicas - 1
+        new_replicas = orig_replicas - 3
         self.logger.info(
             f'decomm by patching cluster {self.cluster_name} with replicas {new_replicas}'
         )
@@ -1146,7 +1141,8 @@ class HighThroughputTest(PreallocNodesMixin, RedpandaCloudTest):
         self.wait_cluster_replicas(self.cluster_name, new_replicas)
 
         # PVCs are indexed starting at 0, so we want orig_replicas - 1 here...
-        self._delete_cluster_pvc(self.cluster_name, new_replicas)
+        for index in range(new_replicas, orig_replicas, -1):
+            self._delete_cluster_pvc(self.cluster_name, index - 1)
 
         self.logger.info(
             f'ensuring decommission of {self.cluster_name} reduced replicas to {new_replicas}'
@@ -1229,7 +1225,7 @@ class HighThroughputTest(PreallocNodesMixin, RedpandaCloudTest):
             self.cluster_name)
         assert orig_replicas == orig_ready, f'cluster is unstable, replicas expected {orig_replicas} != ready {orig_ready}'
 
-        new_replicas = orig_replicas + 1
+        new_replicas = orig_replicas + 3
 
         self.logger.info(
             f'scaling out cluster {self.cluster_name} from {orig_replicas} to {new_replicas}'
@@ -1249,7 +1245,10 @@ class HighThroughputTest(PreallocNodesMixin, RedpandaCloudTest):
             self._patch_deployment_args('--allow-downscaling=false',
                                         '--allow-downscaling=true')
         self.set_cluster_replicas(self.cluster_name, orig_replicas)
-        self._delete_cluster_pvc(self.cluster_name, orig_replicas)
+
+        for index in range(new_replicas, orig_replicas, -1):
+            self._delete_cluster_pvc(self.cluster_name, index - 1)
+
         if self.operator_version == 1:
             self._patch_deployment_args('--allow-downscaling=true',
                                         '--allow-downscaling=false')
