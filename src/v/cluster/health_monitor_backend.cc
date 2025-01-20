@@ -427,6 +427,9 @@ result<node_health_report> health_monitor_backend::process_node_reply(
 }
 
 ss::future<std::error_code> health_monitor_backend::collect_cluster_health() {
+    bool node_restart_risks_available = _feature_table.local().is_active(
+      features::feature::node_restart_risk_assessment);
+
     vlog(clusterlog.debug, "collecting cluster health statistics");
     // collect all reports
     auto ids = _members.local().node_ids();
@@ -508,6 +511,7 @@ ss::future<std::error_code> health_monitor_backend::collect_cluster_health() {
     absl::erase_if(_reports, not_in_members_table);
     absl::erase_if(_status, not_in_members_table);
 
+    _restart_risks_collected = node_restart_risks_available;
     _last_refresh = ss::lowres_clock::now();
     co_return errc::success;
 }

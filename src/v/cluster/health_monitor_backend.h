@@ -184,6 +184,7 @@ private:
     report_cache_t _reports;
     storage::disk_space_alert _reports_data_disk_health
       = storage::disk_space_alert::ok;
+    bool _restart_risks_collected = false;
     std::optional<size_t> _bytes_in_cloud_storage;
 
     ss::gate _gate;
