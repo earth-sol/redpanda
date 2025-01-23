@@ -150,4 +150,6 @@ INSTANTIATE_TEST_SUITE_P(
     "syntax_proto3",
     "imports",
     "package",
-    "file_options"));
+    "file_options",
+    "enum_proto2",
+    "enum_proto3"));
