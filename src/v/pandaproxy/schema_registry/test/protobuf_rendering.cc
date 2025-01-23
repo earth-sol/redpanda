@@ -159,4 +159,5 @@ INSTANTIATE_TEST_SUITE_P(
     "service_proto2",
     "service_proto3",
     "extension_ranges",
-    "composite_extension"));
+    "composite_extension",
+    "nested_extension"));
