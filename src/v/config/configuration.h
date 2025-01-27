@@ -719,6 +719,7 @@ struct configuration final : public config_store {
     property<std::optional<ss::sstring>> iceberg_rest_catalog_trust_file;
     property<std::optional<ss::sstring>> iceberg_rest_catalog_crl_file;
     property<std::optional<ss::sstring>> iceberg_rest_catalog_prefix;
+    property<std::optional<ss::sstring>> iceberg_rest_catalog_oauth2_server_uri;
     property<double> iceberg_backlog_controller_p_coeff;
     bounded_property<uint32_t> iceberg_target_backlog_size;
 

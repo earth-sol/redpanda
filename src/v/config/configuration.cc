@@ -3812,6 +3812,15 @@ configuration::configuration()
       {.visibility = visibility::user},
       std::nullopt,
       &validate_non_empty_string_opt)
+  , iceberg_rest_catalog_oauth2_server_uri(
+      *this,
+      "iceberg_rest_catalog_oauth2_server_uri",
+      "The OAuth URI used to retrieve access tokens for Iceberg catalog "
+      "authentication. If left undefined, the deprecated Iceberg catalog "
+      "endpoint `/v1/oauth/tokens` is used instead.",
+      {.visibility = visibility::user},
+      std::nullopt,
+      &validate_non_empty_string_opt)
   , iceberg_backlog_controller_p_coeff(
       *this,
       "iceberg_backlog_controller_p_coeff",
