@@ -45,19 +45,29 @@ class ProducerSwarm(Service):
                  unique_topics: Optional[bool] = False,
                  messages_per_second_per_producer: Optional[int] = None):
         super(ProducerSwarm, self).__init__(context, num_nodes=1)
+
+        def assert_int(v: Any) -> int | None:
+            assert isinstance(v, int), f"not an int: {v}"
+            return v
+
+        def assert_int_or_none(v: Any) -> int | None:
+            assert v is None or isinstance(v, int), f"not an int or none: {v}"
+            return v
+
         self._redpanda = redpanda
         self._topic = topic
-        self._producers = producers
-        self._records_per_producer = records_per_producer
-        self._messages_per_second_per_producer = messages_per_second_per_producer
+        self._producers = assert_int(producers)
+        self._records_per_producer = assert_int(records_per_producer)
+        self._messages_per_second_per_producer = assert_int_or_none(
+            messages_per_second_per_producer)
         self._log_level = log_level
         self._properties = properties
-        self._timeout_ms = timeout_ms
+        self._timeout_ms = assert_int(timeout_ms)
         self._compression_type = compression_type
         self._compressible_payload = compressible_payload
-        self._min_record_size = min_record_size
-        self._max_record_size = max_record_size
-        self._keys = keys
+        self._min_record_size = assert_int_or_none(min_record_size)
+        self._max_record_size = assert_int_or_none(max_record_size)
+        self._keys = assert_int_or_none(keys)
         self._unique_topics = unique_topics
         self._node = None
         self._remote_port = 8080
