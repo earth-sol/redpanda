@@ -7,10 +7,11 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-import re
-from typing import Dict, Iterable, Sequence, Tuple
 from contextlib import contextmanager
-import time
+from typing import Dict, Iterable, Sequence, Tuple
+import abc
+import random
+import re
 
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
@@ -18,6 +19,7 @@ from rptest.services.cluster import cluster
 from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST
 from rptest.tests.redpanda_test import RedpandaTest
 
+from ducktape.cluster.cluster import ClusterNode
 from ducktape.utils.util import wait_until
 from rptest.clients.kafka_cli_tools import KafkaCliTools
 
@@ -44,20 +46,66 @@ class Risks(dict):
 NO_RISKS = Risks(**{typ: set() for typ in Risks.KEYS})
 
 
-class NodeRestartProbeTest(RedpandaTest):
-    PRODUCE_BYTES = 300 * 1024 * 1024
+class NodeRestartProbeTestBase(RedpandaTest):
     MSG_SIZE = 1024
 
+    def __init__(self, *args, **kwargs):
+        super(NodeRestartProbeTestBase, self).__init__(*args, **kwargs)
+        self.admin = Admin(self.redpanda)
+        self.kafka_tools = KafkaCliTools(self.redpanda)
+
+    @contextmanager
+    def with_append_entries_error_injection(self: RedpandaTest,
+                                            node: ClusterNode,
+                                            partitions: Sequence[Tuple[str,
+                                                                       int]]):
+        node_id = self.redpanda.node_id(node)
+
+        def toggle(inject: bool):
+            for topic, partition in partitions:
+                self.redpanda.logger.info(
+                    "toggle append_entries failure injection "
+                    f"{topic=} {partition=} {node_id=} {inject=}")
+                self.admin.toggle_failure_injection(topic,
+                                                    partition,
+                                                    "append_entries",
+                                                    inject=inject,
+                                                    node=node)
+
+        toggle(True)
+        try:
+            yield
+        finally:
+            toggle(False)
+
+    def produce_to_all_partitions(self, acks):
+        for topic in self.topics:
+            self.redpanda.logger.debug(f"producing to {topic.name}")
+            produce_bytes = (self.PRODUCE_BYTES +
+                             self.PRODUCE_BYTES_JITTER * random.uniform(-1, 1))
+            produce_messages = max(produce_bytes / self.MSG_SIZE, 1)
+            num_messages = int(topic.partition_count * produce_messages)
+            self.kafka_tools.produce(topic.name, num_messages, self.MSG_SIZE,
+                                     acks)
+            self.redpanda.logger.debug(f"produced to {topic.name}")
+
+    @abc.abstractmethod
+    def create_topics(self):
+        """ should populate self.topics too """
+
+
+class NodePreRestartProbeTest(NodeRestartProbeTestBase):
+    PRODUCE_BYTES = 300 * 1024 * 1024
+    PRODUCE_BYTES_JITTER = 0
+
     def __init__(self, test_context):
-        super(NodeRestartProbeTest, self).__init__(
+        super(NodePreRestartProbeTest, self).__init__(
             test_context=test_context,
             num_brokers=5,
             extra_rp_conf={
                 'health_monitor_max_metadata_age': 100,  # ms
                 'enable_leader_balancer': False
             })
-        self.admin = Admin(self.redpanda)
-        self.kafka_tools = KafkaCliTools(self.redpanda)
 
     def create_topics(self):
         self.topics = [
@@ -98,37 +146,8 @@ class NodeRestartProbeTest(RedpandaTest):
                    backoff_sec=0.1,
                    err_msg="Waiting for reported risks to match expected")
 
-    def produce_to_all_partitions(self, acks):
-        for topic in self.topics:
-            self.redpanda.logger.debug(f"producing to {topic.name}")
-            num_messages = int(topic.partition_count * self.PRODUCE_BYTES /
-                               self.MSG_SIZE)
-            self.kafka_tools.produce(topic.name, num_messages, self.MSG_SIZE,
-                                     acks)
-            self.redpanda.logger.debug(f"produced to {topic.name}")
-
-    @contextmanager
-    def with_append_entries_blocked(self, node,
-                                    partitions: Sequence[Tuple[str, int]]):
-        def block(block: bool):
-            for topic, partition in partitions:
-                self.redpanda.logger.info(
-                    "toggle_block_partition_raft_op "
-                    f"{topic=} {partition=} {node=} {block=}")
-                self.admin.toggle_block_partition_raft_op(topic,
-                                                          partition,
-                                                          "append_entries",
-                                                          block=block,
-                                                          node=node)
-
-        block(True)
-        try:
-            yield
-        finally:
-            block(False)
-
     @cluster(num_nodes=5, log_allow_list=RESTART_LOG_ALLOW_LIST)
-    def node_restart_probe_test(self):
+    def pre_restart_probe_test(self):
         nodes = {
             self.redpanda.node_id(node): node
             for node in self.redpanda.nodes
@@ -296,3 +315,130 @@ class NodeRestartProbeTest(RedpandaTest):
 
         # when lag clears
         self.wait_pre_restart_probes(inevitable_risks, timeout_sec=240)
+
+
+# Same as `wait_until(lambda: value_fn() == target, **kwargs)`, but also checks
+# that:
+# 1) intermediate values can be increased by no more than `max_drop` each but
+# no higher than to `target` to form a non-decreasing sequence.
+# 2) it receives at least `min_values` values, apart from `bottom` and `target`
+def wait_gradually_increases(value_fn, target, max_drop, min_values, **kwargs):
+    max_seen_value = None
+    distinct_values = set()
+
+    def completed():
+        nonlocal max_seen_value, distinct_values
+        cur_value = value_fn()
+        if max_seen_value is None:
+            max_seen_value = cur_value
+        assert cur_value >= max_seen_value - max_drop, (
+            f"received {cur_value} after {max_seen_value}")
+        max_seen_value = max(max_seen_value, cur_value)
+        if len(distinct_values) < min_values:
+            distinct_values.add(cur_value)
+        return cur_value == target and len(distinct_values) == min_values
+
+    wait_until(completed, **kwargs)
+
+
+def unittest_wait_gradually_increases():
+    def make_val_fn(*values):
+        it = iter(values)
+        return lambda: next(it)
+
+    default_params = dict(target=100,
+                          max_drop=2,
+                          min_values=5,
+                          timeout_sec=1,
+                          backoff_sec=0)
+
+    def call_wgi(*values):
+        wait_gradually_increases(make_val_fn(*values), **default_params)
+
+    def expect_wgi_pass(*values):
+        call_wgi(*values)
+
+    def expect_wgi_fail(*values):
+        try:
+            call_wgi(*values)
+        except StopIteration:
+            pass
+        except AssertionError:
+            pass
+        else:
+            assert False, "should have failed"
+
+    expect_wgi_pass(1, 0, 60, 58, 100)
+    expect_wgi_pass(1, 0, 50, 48, 78, 100)
+    expect_wgi_fail(5, 60, 58, 58, 60, 100)  # too few distinct vals
+    expect_wgi_fail(11, 40, 60, 58, 56, 100)  # decreases too much
+    expect_wgi_fail(1, 40, 60, 58, 59, 99)  # does not reach 100
+
+
+class NodePostRestartProbeTest(NodeRestartProbeTestBase):
+    PRODUCE_BYTES = 1 * 1024 * 1024
+    PRODUCE_BYTES_JITTER = 1 * 1024 * 1024
+
+    def __init__(self, test_context):
+        super(NodePostRestartProbeTest, self).__init__(
+            test_context=test_context,
+            num_brokers=3,
+            extra_rp_conf={'health_monitor_max_metadata_age': 100})
+
+    def create_topics(self):
+        self.topics = [
+            TopicSpec(partition_count=10, replication_factor=3)
+            for _ in range(10)
+        ]
+        self.client().create_topic(self.topics)
+
+    def get_load_reclaimed_pc(self, node):
+        load_reclamed_pc = self.admin.get_broker_post_restart_probe(
+            node)["load_reclaimed_pc"]
+        assert 0 <= load_reclamed_pc <= 100
+        self.redpanda.logger.info(f"{load_reclamed_pc=}")
+        return load_reclamed_pc
+
+    @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)
+    def post_restart_probe_test(self):
+        unittest_wait_gradually_increases()
+
+        self.create_topics()
+
+        lagging_node = random.choice(self.redpanda.nodes)
+
+        self.produce_to_all_partitions(acks=1)
+
+        wait_until(
+            lambda: self.get_load_reclaimed_pc(lagging_node) == 100,
+            timeout_sec=10,
+            backoff_sec=1,
+            err_msg="non-lagged replica load_reclamed_pc won't reach 100%")
+
+        all_partitions = [(t.name, pid) for t in self.topics
+                          for pid in range(t.partition_count)]
+        with self.with_append_entries_error_injection(lagging_node,
+                                                      all_partitions):
+            self.produce_to_all_partitions(acks=1)
+
+        # system partitions won't lag, some data partitions catch up quickly
+        wait_until(lambda: self.get_load_reclaimed_pc(lagging_node) <= 75,
+                   timeout_sec=10,
+                   backoff_sec=0.1,
+                   err_msg="lagged replica load_reclamed_pc won't go down")
+
+        wait_gradually_increases(
+            lambda: self.get_load_reclaimed_pc(lagging_node),
+            target=100,
+            max_drop=10,
+            min_values=3,
+            timeout_sec=30,
+            backoff_sec=0.1,
+            err_msg="lagged replica load_reclamed_pc won't reach 100%")
+
+        for n in self.redpanda.nodes:
+            wait_until(
+                lambda: self.get_load_reclaimed_pc(n) == 100,
+                timeout_sec=10,
+                backoff_sec=2,
+                err_msg="non-lagged replica load_reclamed_pc won't reach 100%")
