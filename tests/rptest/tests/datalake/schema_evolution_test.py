@@ -37,6 +37,12 @@ QUERY_ENGINES = [
 ]
 
 
+# for keeping track of the expected total number of rows across rounds
+# of translation (i.e. calls to _produce)
+class TranslationContext:
+    total: int = 0
+
+
 class AvroSchema:
     TableDescription = list[tuple[str, str]]
 
@@ -71,6 +77,56 @@ class AvroSchema:
 
     def gen(self, x: float) -> dict:
         return self._generate_record(x)
+
+    def produce(
+        self,
+        dl: DatalakeServices,
+        topic_name: str,
+        count: int,
+        context: TranslationContext,
+        should_translate: bool = True,
+    ):
+        producer = AvroProducer(
+            {
+                'bootstrap.servers': dl.redpanda.brokers(),
+                'schema.registry.url': dl.redpanda.schema_reg().split(",")[0]
+            },
+            default_value_schema=self.load())
+
+        for i in range(count):
+            #TODO(oren): use something other than the index here?
+            record = self.gen(context.total + i)
+            producer.produce(topic=topic_name, value=record)
+
+        producer.flush()
+        if should_translate:
+            dl.wait_for_translation(topic_name,
+                                    msg_count=context.total + count)
+            context.total = context.total + count
+            return
+
+        with expect_exception(TimeoutError, lambda _: True):
+            dl.wait_for_translation(topic_name,
+                                    msg_count=context.total + count,
+                                    timeout=10)
+
+    def check_table_schema(
+        self,
+        dl: DatalakeServices,
+        table_name: str,
+        query_engine: QueryEngineType,
+    ):
+        qe = dl.spark() if query_engine == QueryEngineType.SPARK else dl.trino(
+        )
+        table = qe.run_query_fetch_all(f"describe {table_name}")
+
+        if query_engine == QueryEngineType.SPARK:
+            table = [(t[0], t[1]) for t in table[1:-3]]
+        elif query_engine == QueryEngineType.TRINO:
+            table = [(t[0], t[1]) for t in table[1:]]
+
+        assert table == self.table(query_engine), \
+            str(table)
 
 
 class EvolutionTestCase(NamedTuple):
@@ -295,12 +351,6 @@ ILLEGAL_TEST_CASES = {
 }
 
 
-# for keeping track of the expected total number of rows across rounds
-# of translation (i.e. calls to _produce)
-class TranslationContext:
-    total: int = 0
-
-
 class SchemaEvolutionE2ETests(RedpandaTest):
     def __init__(self, test_ctx, *args, **kwargs):
         super(SchemaEvolutionE2ETests,
@@ -323,11 +373,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
         # redpanda will be started by DatalakeServices
         pass
 
-    def _select(self,
-                dl: DatalakeServices,
-                query_engine: QueryEngineType,
-                cols=list[str],
-                sort_by_offset: bool = True):
+    def select(self,
+               dl: DatalakeServices,
+               query_engine: QueryEngineType,
+               cols=list[str],
+               sort_by_offset: bool = True):
         qe = dl.spark() if query_engine == QueryEngineType.SPARK else dl.trino(
         )
         query = f"select redpanda.offset, {', '.join(cols)} from {self.table_name}"
@@ -336,56 +386,6 @@ class SchemaEvolutionE2ETests(RedpandaTest):
         if sort_by_offset:
             out.sort(key=lambda r: r[0])
         return out
-
-    def produce(
-        self,
-        dl: DatalakeServices,
-        schema: AvroSchema,
-        count: int,
-        context: TranslationContext,
-        should_translate: bool = True,
-    ):
-        producer = AvroProducer(
-            {
-                'bootstrap.servers': self.redpanda.brokers(),
-                'schema.registry.url': self.redpanda.schema_reg().split(",")[0]
-            },
-            default_value_schema=schema.load())
-
-        for i in range(count):
-            #TODO(oren): use something other than the index here?
-            record = schema.gen(context.total + i)
-            producer.produce(topic=self.topic_name, value=record)
-
-        producer.flush()
-        if should_translate:
-            dl.wait_for_translation(self.topic_name,
-                                    msg_count=context.total + count)
-            context.total = context.total + count
-            return
-
-        with expect_exception(TimeoutError, lambda _: True):
-            dl.wait_for_translation(self.topic_name,
-                                    msg_count=context.total + count,
-                                    timeout=10)
-
-    def check_table_schema(
-        self,
-        dl: DatalakeServices,
-        query_engine: QueryEngineType,
-        expected: AvroSchema,
-    ):
-        qe = dl.spark() if query_engine == QueryEngineType.SPARK else dl.trino(
-        )
-        table = qe.run_query_fetch_all(f"describe {self.table_name}")
-
-        if query_engine == QueryEngineType.SPARK:
-            table = [(t[0], t[1]) for t in table[1:-3]]
-        elif query_engine == QueryEngineType.TRINO:
-            table = [(t[0], t[1]) for t in table[1:]]
-
-        assert table == expected.table(query_engine), \
-            str(table)
 
     @contextmanager
     def setup_services(self,
@@ -423,13 +423,15 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             tc = LEGAL_TEST_CASES[test_case]
 
-            self.produce(dl, tc.initial_schema, count, ctx)
-            self.check_table_schema(dl, query_engine, tc.initial_schema)
-            self.produce(dl, tc.next_schema, count, ctx)
-            self.check_table_schema(dl, query_engine, tc.next_schema)
+            tc.initial_schema.produce(dl, self.topic_name, count, ctx)
+            tc.initial_schema.check_table_schema(dl, self.table_name,
+                                                 query_engine)
+            tc.next_schema.produce(dl, self.topic_name, count, ctx)
+            tc.next_schema.check_table_schema(dl, self.table_name,
+                                              query_engine)
 
-            select_out = self._select(dl, query_engine,
-                                      tc.next_schema.field_names)
+            select_out = self.select(dl, query_engine,
+                                     tc.next_schema.field_names)
             assert len(select_out) == count * 2, \
                 f"Expected {count*2} rows, got {select_out}"
 
@@ -450,17 +452,19 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             tc = ILLEGAL_TEST_CASES[test_case]
 
-            self.produce(dl, tc.initial_schema, count, ctx)
-            self.check_table_schema(dl, query_engine, tc.initial_schema)
-            self.produce(dl,
-                         tc.next_schema,
-                         count,
-                         ctx,
-                         should_translate=False)
-            self.check_table_schema(dl, query_engine, tc.initial_schema)
+            tc.initial_schema.produce(dl, self.topic_name, count, ctx)
+            tc.initial_schema.check_table_schema(dl, self.table_name,
+                                                 query_engine)
+            tc.next_schema.produce(dl,
+                                   self.topic_name,
+                                   count,
+                                   ctx,
+                                   should_translate=False)
+            tc.initial_schema.check_table_schema(dl, self.table_name,
+                                                 query_engine)
 
-            select_out = self._select(dl, query_engine,
-                                      tc.next_schema.field_names)
+            select_out = self.select(dl, query_engine,
+                                     tc.next_schema.field_names)
             assert len(select_out) == count, \
                 f"Expected {count} rows, got {select_out}"
 
@@ -487,9 +491,9 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 set(initial_schema.field_names) - set(next_schema.field_names))
 
             for schema in LEGAL_TEST_CASES["drop_column"]:
-                self.produce(dl, schema, count, ctx)
-                self.check_table_schema(dl, query_engine, schema)
-                select_out = self._select(dl, query_engine, schema.field_names)
+                schema.produce(dl, self.topic_name, count, ctx)
+                schema.check_table_schema(dl, self.table_name, query_engine)
+                select_out = self.select(dl, query_engine, schema.field_names)
                 assert len(select_out) == ctx.total, \
                     f"Expected {ctx.total} rows, got {select_out}"
 
@@ -518,10 +522,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 ],
             )
 
-            self.produce(dl, restored_schema, count, ctx)
-            self.check_table_schema(dl, query_engine, restored_schema)
+            restored_schema.produce(dl, self.topic_name, count, ctx)
+            restored_schema.check_table_schema(dl, self.table_name,
+                                               query_engine)
 
-            select_out = self._select(dl, query_engine, dropped_field_names)
+            select_out = self.select(dl, query_engine, dropped_field_names)
             assert len(select_out) == count*3, \
                 f"Expected {count*3} rows, got {select_out}"
 
@@ -547,20 +552,20 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 set(initial_schema.field_names) - set(next_schema.field_names))
 
             for schema in [initial_schema, next_schema]:
-                self.produce(dl, schema, count, ctx)
-                self.check_table_schema(dl, query_engine, schema)
+                schema.produce(dl, self.topic_name, count, ctx)
+                schema.check_table_schema(dl, self.table_name, query_engine)
 
             if query_engine == QueryEngineType.SPARK:
                 with expect_exception(
                         pyhive.exc.OperationalError, lambda e:
                         'UNRESOLVED_COLUMN' in e.args[0].status.errorMessage):
-                    self._select(dl, query_engine, dropped_field_names)
+                    self.select(dl, query_engine, dropped_field_names)
             else:
                 with expect_exception(
                         pyhive.exc.DatabaseError, lambda e: e.args[0].get(
                             'errorName') == 'COLUMN_NOT_FOUND'):
-                    select_out = self._select(dl, query_engine,
-                                              dropped_field_names)
+                    select_out = self.select(dl, query_engine,
+                                             dropped_field_names)
 
     @cluster(num_nodes=3)
     @matrix(
@@ -577,11 +582,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             initial_schema, next_schema = LEGAL_TEST_CASES['reorder_columns']
             for schema in [initial_schema, next_schema]:
-                self.produce(dl, schema, count, ctx)
-                self.check_table_schema(dl, query_engine, schema)
+                schema.produce(dl, self.topic_name, count, ctx)
+                schema.check_table_schema(dl, self.table_name, query_engine)
 
             for field in initial_schema.field_names:
-                select_out = self._select(dl, query_engine, [field])
+                select_out = self.select(dl, query_engine, [field])
                 assert len(select_out) == count * 2, \
                     f"Expected {count*2} rows, got {len(select_out)}"
                 assert all(r[1] == field for r in select_out), \
@@ -608,14 +613,13 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             initial_schema, next_schema = LEGAL_TEST_CASES[test_case]
 
             for schema in [initial_schema, next_schema]:
-                self.produce(dl, schema, count, ctx)
-                self.check_table_schema(dl, query_engine, schema)
+                schema.produce(dl, self.topic_name, count, ctx)
+                schema.check_table_schema(dl, self.table_name, query_engine)
 
-            self.produce(dl, initial_schema, count, ctx)
-            self.check_table_schema(dl, query_engine, next_schema)
+            initial_schema.produce(dl, self.topic_name, count, ctx)
+            next_schema.check_table_schema(dl, self.table_name, query_engine)
 
-            select_out = self._select(dl, query_engine,
-                                      next_schema.field_names)
+            select_out = self.select(dl, query_engine, next_schema.field_names)
 
             assert len(select_out) == count * 3, \
                 f"Expected {count*3} rows, got {len(select_out)}"
