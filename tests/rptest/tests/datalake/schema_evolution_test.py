@@ -13,11 +13,12 @@ from collections.abc import Callable
 import pyhive
 from contextlib import contextmanager
 import json
+from enum import Enum
 
 from confluent_kafka import avro
 from confluent_kafka.avro import AvroProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
-from rptest.clients.rpk import RpkTool
+from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.cluster import cluster
 from rptest.services.redpanda import PandaproxyConfig, SISettings, SchemaRegistryConfig
 from rptest.services.redpanda_connect import RedpandaConnectService
@@ -31,11 +32,6 @@ from ducktape.mark import matrix
 
 from ducktape.errors import TimeoutError
 
-QUERY_ENGINES = [
-    QueryEngineType.SPARK,
-    QueryEngineType.TRINO,
-]
-
 
 # for keeping track of the expected total number of rows across rounds
 # of translation (i.e. calls to _produce)
@@ -43,7 +39,78 @@ class TranslationContext:
     total: int = 0
 
 
-class AvroSchema:
+class ProducerType(str, Enum):
+    AVRO = 'avro'
+    PROTO2 = 'proto2'
+    PROTO3 = 'proto3'
+
+
+class ProtobufVersion(int, Enum):
+    PROTO2 = 2
+    PROTO3 = 3
+
+
+class ProtoProducer:
+    PROTO_TEMPLATE = """
+syntax = "proto{ver}";
+
+message {name} {{
+{fields}
+}}
+"""
+
+    def __init__(self, redpanda, ver: ProtobufVersion, name: str,
+                 fields: list[dict], topic_name: str):
+        self.redpanda = redpanda
+        self.rpk = RpkTool(redpanda)
+        self.message_name = name
+        p_fields = self._translate_fields(fields)
+        self.schema = self.PROTO_TEMPLATE.format(
+            ver=ver.value,
+            name=self.message_name,
+            fields="\n".join([
+                f"  {'optional ' if ver == ProtobufVersion.PROTO2  else ''}{p_fields[i]['type']} {p_fields[i]['name']} = {i+1};"
+                for i in range(len(p_fields))
+            ]),
+        )
+        self.schema_id = self._create_schema(topic_name)
+
+    def _translate_fields(self, fields: list[dict]) -> list[dict]:
+        return [{
+            "name": f['name'],
+            "type": self._translate_type(f['type']),
+        } for f in fields]
+
+    def _translate_type(self, type: str) -> str:
+        if type == "int":
+            return "int32"
+        elif type == "long":
+            return "int64"
+        else:
+            return type
+
+    def _create_schema(self, topic: str) -> int:
+        with tempfile.NamedTemporaryFile(suffix=".proto") as tf:
+            tf.write(bytes(self.schema, 'UTF-8'))
+            tf.seek(0)
+            subject = f"{topic}-value"
+            out = self.rpk.create_schema(subject, tf.name)
+            assert out['subject'] == subject, \
+                f"Expected {subject}, got {out['subject']}"
+            return out['id']
+
+    def produce(self, topic: str, value: dict):
+        self.rpk.produce(topic,
+                         key='',
+                         msg=json.dumps(value),
+                         schema_id=self.schema_id,
+                         proto_msg=self.message_name)
+
+    def flush(self):
+        pass
+
+
+class GenericSchema:
     TableDescription = list[tuple[str, str]]
 
     def __init__(self,
@@ -51,7 +118,7 @@ class AvroSchema:
                  generate_record: Callable[[float], dict],
                  spark_table: TableDescription = [],
                  trino_table: TableDescription = [],
-                 name="AvroRecord"):
+                 name="Record"):
         self._rep: dict = {
             "type": "record",
             "name": name,
@@ -60,9 +127,6 @@ class AvroSchema:
         self._generate_record = generate_record
         self._spark_table = spark_table
         self._trino_table = trino_table
-
-    def load(self):
-        return avro.loads(json.dumps(self._rep))
 
     def table(self, engine: QueryEngineType):
         return self._spark_table if engine == QueryEngineType.SPARK else self._trino_table
@@ -78,6 +142,23 @@ class AvroSchema:
     def gen(self, x: float) -> dict:
         return self._generate_record(x)
 
+    def _avro_producer(self, dl: DatalakeServices) -> AvroProducer:
+        return AvroProducer(
+            {
+                'bootstrap.servers': dl.redpanda.brokers(),
+                'schema.registry.url': dl.redpanda.schema_reg().split(",")[0]
+            },
+            default_value_schema=avro.loads(json.dumps(self._rep)))
+
+    def _proto_producer(
+        self,
+        dl: DatalakeServices,
+        topic_name: str,
+        ver=ProtobufVersion,
+    ):
+        return ProtoProducer(dl.redpanda, ver, self._rep['name'],
+                             self._rep['fields'], topic_name)
+
     def produce(
         self,
         dl: DatalakeServices,
@@ -85,17 +166,20 @@ class AvroSchema:
         count: int,
         context: TranslationContext,
         should_translate: bool = True,
+        mode: ProducerType = ProducerType.AVRO,
     ):
-        producer = AvroProducer(
-            {
-                'bootstrap.servers': dl.redpanda.brokers(),
-                'schema.registry.url': dl.redpanda.schema_reg().split(",")[0]
-            },
-            default_value_schema=self.load())
+        producer = self._avro_producer(dl) \
+            if mode == ProducerType.AVRO else \
+               self._proto_producer(
+                   dl,
+                   topic_name,
+                   ProtobufVersion.PROTO2 if mode == ProducerType.PROTO2 else ProtobufVersion.PROTO3,
+               )
+
+        assert producer is not None
 
         for i in range(count):
-            #TODO(oren): use something other than the index here?
-            record = self.gen(context.total + i)
+            record = self.gen(time())
             producer.produce(topic=topic_name, value=record)
 
         producer.flush()
@@ -130,14 +214,14 @@ class AvroSchema:
 
 
 class EvolutionTestCase(NamedTuple):
-    initial_schema: AvroSchema
-    next_schema: AvroSchema
+    initial_schema: GenericSchema
+    next_schema: GenericSchema
 
 
 LEGAL_TEST_CASES = {
     "add_column":
     EvolutionTestCase(
-        initial_schema=AvroSchema(
+        initial_schema=GenericSchema(
             fields=[
                 {
                     "name": "verifier_string",
@@ -154,7 +238,7 @@ LEGAL_TEST_CASES = {
                 ('verifier_string', 'varchar'),
             ],
         ),
-        next_schema=AvroSchema(
+        next_schema=GenericSchema(
             fields=[
                 {
                     "name": "verifier_string",
@@ -181,7 +265,7 @@ LEGAL_TEST_CASES = {
     ),
     "drop_column":
     EvolutionTestCase(
-        initial_schema=AvroSchema(
+        initial_schema=GenericSchema(
             fields=[
                 {
                     "name": "verifier_string",
@@ -205,7 +289,7 @@ LEGAL_TEST_CASES = {
                 ('ordinal', 'integer'),
             ],
         ),
-        next_schema=AvroSchema(
+        next_schema=GenericSchema(
             fields=[
                 {
                     "name": "verifier_string",
@@ -225,7 +309,7 @@ LEGAL_TEST_CASES = {
     ),
     "promote_column":
     EvolutionTestCase(
-        initial_schema=AvroSchema(
+        initial_schema=GenericSchema(
             fields=[
                 {
                     "name": "ordinal",
@@ -242,7 +326,7 @@ LEGAL_TEST_CASES = {
                 ('ordinal', 'integer'),
             ],
         ),
-        next_schema=AvroSchema(
+        next_schema=GenericSchema(
             fields=[
                 {
                     "name": "ordinal",
@@ -262,7 +346,7 @@ LEGAL_TEST_CASES = {
     ),
     "reorder_columns":
     EvolutionTestCase(
-        initial_schema=AvroSchema(
+        initial_schema=GenericSchema(
             fields=[
                 {
                     "name": "first",
@@ -286,7 +370,7 @@ LEGAL_TEST_CASES = {
                 ('second', 'varchar'),
             ],
         ),
-        next_schema=AvroSchema(
+        next_schema=GenericSchema(
             fields=[{
                 "name": "second",
                 "type": "string",
@@ -319,7 +403,7 @@ LEGAL_TEST_CASES = {
 ILLEGAL_TEST_CASES = {
     "illegal promotion int->string":
     EvolutionTestCase(
-        initial_schema=AvroSchema(
+        initial_schema=GenericSchema(
             fields=[
                 {
                     "name": "ordinal",
@@ -336,7 +420,7 @@ ILLEGAL_TEST_CASES = {
                 ('ordinal', 'integer'),
             ],
         ),
-        next_schema=AvroSchema(
+        next_schema=GenericSchema(
             fields=[
                 {
                     "name": "ordinal",
@@ -349,6 +433,17 @@ ILLEGAL_TEST_CASES = {
         ),
     ),
 }
+
+QUERY_ENGINES = [
+    QueryEngineType.SPARK,
+    QueryEngineType.TRINO,
+]
+
+PRODUCER_MODES = [
+    ProducerType.AVRO,
+    ProducerType.PROTO2,
+    ProducerType.PROTO3,
+]
 
 
 class SchemaEvolutionE2ETests(RedpandaTest):
@@ -411,9 +506,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
         test_case=list(LEGAL_TEST_CASES.keys()),
+        produce_mode=PRODUCER_MODES,
     )
     def test_legal_schema_evolution(self, cloud_storage_type, query_engine,
-                                    test_case):
+                                    test_case, produce_mode):
         """
         Test that rows written with schema A are still readable after evolving
         the table to schema B.
@@ -423,10 +519,19 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             tc = LEGAL_TEST_CASES[test_case]
 
-            tc.initial_schema.produce(dl, self.topic_name, count, ctx)
+            tc.initial_schema.produce(dl,
+                                      self.topic_name,
+                                      count,
+                                      ctx,
+                                      mode=produce_mode)
+
             tc.initial_schema.check_table_schema(dl, self.table_name,
                                                  query_engine)
-            tc.next_schema.produce(dl, self.topic_name, count, ctx)
+            tc.next_schema.produce(dl,
+                                   self.topic_name,
+                                   count,
+                                   ctx,
+                                   mode=produce_mode)
             tc.next_schema.check_table_schema(dl, self.table_name,
                                               query_engine)
 
@@ -440,9 +545,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
         test_case=list(ILLEGAL_TEST_CASES.keys()),
+        produce_mode=PRODUCER_MODES,
     )
     def test_illegal_schema_evolution(self, cloud_storage_type, query_engine,
-                                      test_case):
+                                      test_case, produce_mode):
         """
         check that records produced with an incompatible schema don't wind up
         in the table.
@@ -452,13 +558,18 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             tc = ILLEGAL_TEST_CASES[test_case]
 
-            tc.initial_schema.produce(dl, self.topic_name, count, ctx)
+            tc.initial_schema.produce(dl,
+                                      self.topic_name,
+                                      count,
+                                      ctx,
+                                      mode=produce_mode)
             tc.initial_schema.check_table_schema(dl, self.table_name,
                                                  query_engine)
             tc.next_schema.produce(dl,
                                    self.topic_name,
                                    count,
                                    ctx,
+                                   mode=produce_mode,
                                    should_translate=False)
             tc.initial_schema.check_table_schema(dl, self.table_name,
                                                  query_engine)
@@ -473,9 +584,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
     @matrix(
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
+        produce_mode=PRODUCER_MODES,
     )
     def test_dropped_column_no_collision(self, cloud_storage_type,
-                                         query_engine):
+                                         query_engine, produce_mode):
         """
         Translate some records, drop field A, translate some more, reintroduce field A  *by name*
         (this should create a *new* column). Confirm that 'select A' reads only the new column,
@@ -491,13 +603,17 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 set(initial_schema.field_names) - set(next_schema.field_names))
 
             for schema in LEGAL_TEST_CASES["drop_column"]:
-                schema.produce(dl, self.topic_name, count, ctx)
+                schema.produce(dl,
+                               self.topic_name,
+                               count,
+                               ctx,
+                               mode=produce_mode)
                 schema.check_table_schema(dl, self.table_name, query_engine)
                 select_out = self.select(dl, query_engine, schema.field_names)
                 assert len(select_out) == ctx.total, \
                     f"Expected {ctx.total} rows, got {select_out}"
 
-            restored_schema = AvroSchema(
+            restored_schema = GenericSchema(
                 fields=[
                     {
                         "name": "verifier_string",
@@ -522,7 +638,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 ],
             )
 
-            restored_schema.produce(dl, self.topic_name, count, ctx)
+            restored_schema.produce(dl,
+                                    self.topic_name,
+                                    count,
+                                    ctx,
+                                    mode=produce_mode)
             restored_schema.check_table_schema(dl, self.table_name,
                                                query_engine)
 
@@ -537,9 +657,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
     @matrix(
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
+        produce_mode=PRODUCER_MODES,
     )
     def test_dropped_column_select_fails(self, cloud_storage_type,
-                                         query_engine):
+                                         query_engine, produce_mode):
         """
         Test that selecting a dropped column fails "gracefully" - or at least
         predictably and consistently.
@@ -552,7 +673,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                 set(initial_schema.field_names) - set(next_schema.field_names))
 
             for schema in [initial_schema, next_schema]:
-                schema.produce(dl, self.topic_name, count, ctx)
+                schema.produce(dl,
+                               self.topic_name,
+                               count,
+                               ctx,
+                               mode=produce_mode)
                 schema.check_table_schema(dl, self.table_name, query_engine)
 
             if query_engine == QueryEngineType.SPARK:
@@ -571,8 +696,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
     @matrix(
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
+        produce_mode=PRODUCER_MODES,
     )
-    def test_reorder_columns(self, cloud_storage_type, query_engine):
+    def test_reorder_columns(self, cloud_storage_type, query_engine,
+                             produce_mode):
         """
         Test that changing the order of columns doesn't change the values
         associated with a column or field name.
@@ -582,7 +709,11 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             ctx = TranslationContext()
             initial_schema, next_schema = LEGAL_TEST_CASES['reorder_columns']
             for schema in [initial_schema, next_schema]:
-                schema.produce(dl, self.topic_name, count, ctx)
+                schema.produce(dl,
+                               self.topic_name,
+                               count,
+                               ctx,
+                               mode=produce_mode)
                 schema.check_table_schema(dl, self.table_name, query_engine)
 
             for field in initial_schema.field_names:
@@ -597,9 +728,10 @@ class SchemaEvolutionE2ETests(RedpandaTest):
         cloud_storage_type=supported_storage_types(),
         query_engine=QUERY_ENGINES,
         test_case=list(LEGAL_TEST_CASES.keys()),
+        produce_mode=PRODUCER_MODES,
     )
     def test_old_schema_writer(self, cloud_storage_type, query_engine,
-                               test_case):
+                               test_case, produce_mode):
         """
         Tests that, after a backwards compatible update from schema A to schema B, we can keep
         tranlsating records produced with schema A without another schema update by falling back
@@ -613,10 +745,18 @@ class SchemaEvolutionE2ETests(RedpandaTest):
             initial_schema, next_schema = LEGAL_TEST_CASES[test_case]
 
             for schema in [initial_schema, next_schema]:
-                schema.produce(dl, self.topic_name, count, ctx)
+                schema.produce(dl,
+                               self.topic_name,
+                               count,
+                               ctx,
+                               mode=produce_mode)
                 schema.check_table_schema(dl, self.table_name, query_engine)
 
-            initial_schema.produce(dl, self.topic_name, count, ctx)
+            initial_schema.produce(dl,
+                                   self.topic_name,
+                                   count,
+                                   ctx,
+                                   mode=produce_mode)
             next_schema.check_table_schema(dl, self.table_name, query_engine)
 
             select_out = self.select(dl, query_engine, next_schema.field_names)
