@@ -119,6 +119,7 @@ redpanda_cc_library(
         "//src/v/config",
         "//src/v/http",
         "//src/v/http:request_builder",
+        "//src/v/http:rest_entity",
         "//src/v/http:utils",
         "//src/v/iceberg:json_writer",
         "//src/v/iceberg:logger",

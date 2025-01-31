@@ -171,6 +171,14 @@ private:
     // expired. Acquired token is cached for future calls.
     ss::future<expected<ss::sstring>> ensure_token(retry_chain_node& rtc);
 
+    // Depending on the _auth_mode used in the catalog_client, authentication
+    // may be added to the http request.
+    //
+    // Returns an error if the authentication was unable to be added for any
+    // reason.
+    ss::future<expected<std::monostate>> maybe_add_bearer_auth(
+      http::request_builder& request, retry_chain_node& rtc);
+
     // Builds the request from supplied builder after validating it, performs
     // the request with optional payload, and takes care of retrying according
     // to policy
