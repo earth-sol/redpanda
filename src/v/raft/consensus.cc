@@ -2025,8 +2025,8 @@ consensus::do_append_entries(append_entries_request&& r) {
             ss::future<ss::stop_iteration>
             operator()(const model::record_batch& b) {
                 model::offset last_batch_offset
-                  = last_matched
-                    + model::offset(b.header().last_offset_delta + 1);
+                  = model::offset(b.header().last_offset_delta)
+                    + model::next_offset(last_matched);
                 if (
                   last_batch_offset > last_log_offset
                   || parent.get_term(last_batch_offset) != b.term()) {
