@@ -10,11 +10,10 @@
  */
 #include "io/page_set.h"
 
-#include <seastar/util/later.hh>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/temporary_buffer.hh>
 
 #include <gtest/gtest.h>
-
-#include <random>
 
 namespace io = experimental::io;
 
