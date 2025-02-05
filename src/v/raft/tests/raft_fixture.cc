@@ -385,11 +385,11 @@ raft_node_instance::raft_node_instance(
   , _base_directory(std::move(base_directory))
   , _protocol(ss::make_shared<in_memory_test_protocol>(node_map, _logger))
   , _features(feature_table)
-  , _recovery_mem_quota([] {
+  , _recovery_mem_quota([this] {
       return raft::recovery_memory_quota::configuration{
         .max_recovery_memory = config::mock_binding<std::optional<size_t>>(
           200_MiB),
-        .default_read_buffer_size = config::mock_binding<size_t>(128_KiB),
+        .default_read_buffer_size = _default_recovery_read_size.bind(),
       };
   })
   , _recovery_scheduler(
