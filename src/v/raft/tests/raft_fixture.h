@@ -103,6 +103,18 @@ struct raft_node_map {
       node_for(model::node_id) = 0;
 };
 
+using reply_variant = std::variant<
+  vote_reply,
+  append_entries_reply,
+  heartbeat_reply,
+  heartbeat_reply_v2,
+  install_snapshot_reply,
+  timeout_now_reply,
+  transfer_leadership_reply>;
+
+using reply_interceptor_t = ss::noncopyable_function<ss::future<reply_variant>(
+  reply_variant, model::node_id)>;
+
 using dispatch_callback_t
   = ss::noncopyable_function<ss::future<>(model::node_id, msg_type)>;
 
@@ -147,6 +159,12 @@ public:
 
     void reset_dispatch_handlers();
 
+    void set_reply_interceptor(reply_interceptor_t interceptor) {
+        _reply_interceptor.emplace(std::move(interceptor));
+    }
+
+    void reset_reply_interceptor() { _reply_interceptor.reset(); }
+
     ss::future<> stop();
 
 private:
@@ -158,6 +176,7 @@ private:
     std::vector<dispatch_callback_t> _on_dispatch_handlers;
     raft_node_map& _nodes;
     prefix_logger& _logger;
+    std::optional<reply_interceptor_t> _reply_interceptor;
 };
 
 inline model::timeout_clock::time_point default_timeout() {
@@ -263,6 +282,17 @@ public:
     /// dispatched.
     void on_dispatch(dispatch_callback_t);
     void reset_dispatch_handlers();
+
+    /**
+     * Sets the reply interceptor for this node, the interceptor will be called
+     * for each service reply on this node. It can be used to inject failures or
+     * modify the reply to trigger specific behaviors.
+     */
+    void set_reply_interceptor(reply_interceptor_t interceptor) {
+        _protocol->set_reply_interceptor(std::move(interceptor));
+    }
+
+    void reset_reply_interceptor() { _protocol->reset_reply_interceptor(); }
 
     ss::shared_ptr<in_memory_test_protocol> get_protocol() { return _protocol; }
 
