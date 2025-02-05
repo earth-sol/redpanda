@@ -145,6 +145,8 @@ public:
 
     void on_dispatch(dispatch_callback_t f);
 
+    void reset_dispatch_handlers();
+
     ss::future<> stop();
 
 private:
@@ -260,6 +262,7 @@ public:
     //// \param f The callback function to be invoked when a message is
     /// dispatched.
     void on_dispatch(dispatch_callback_t);
+    void reset_dispatch_handlers();
 
     ss::shared_ptr<in_memory_test_protocol> get_protocol() { return _protocol; }
 
