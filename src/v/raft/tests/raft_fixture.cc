@@ -245,6 +245,10 @@ void in_memory_test_protocol::on_dispatch(dispatch_callback_t f) {
     _on_dispatch_handlers.push_back(std::move(f));
 }
 
+void in_memory_test_protocol::reset_dispatch_handlers() {
+    _on_dispatch_handlers.clear();
+}
+
 ss::future<> in_memory_test_protocol::stop() {
     auto f = _gate.close();
     for (auto& [_, ch] : _channels) {
@@ -595,6 +599,10 @@ raft_node_instance::random_batch_base_offset(model::offset max) {
 
 void raft_node_instance::on_dispatch(dispatch_callback_t f) {
     _protocol->on_dispatch(std::move(f));
+}
+
+void raft_node_instance::reset_dispatch_handlers() {
+    _protocol->reset_dispatch_handlers();
 }
 
 seastar::future<> raft_fixture::TearDownAsync() {
