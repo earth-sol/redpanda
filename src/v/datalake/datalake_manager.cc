@@ -25,6 +25,7 @@
 #include "datalake/record_translator.h"
 #include "raft/group_manager.h"
 #include "schema/registry.h"
+#include "utils/directory_walker.h"
 
 #include <memory>
 
@@ -368,6 +369,42 @@ void datalake_manager::stop_translator(const model::ntp& ntp) {
         auto* t_ptr = t.get();
         return t_ptr->stop().finally([_ = std::move(t)] {});
     });
+}
+
+ss::future<uint64_t> datalake_manager::disk_usage() {
+    const auto path = config::node().datalake_staging_path();
+
+    if (!co_await ss::file_exists(path.string())) {
+        co_return 0;
+    }
+
+    chunked_vector<std::filesystem::path> files;
+    co_await directory_walker::walk(
+      path.string(), [&files, path](const ss::directory_entry& de) {
+          if (de.type == ss::directory_entry_type::regular) {
+              files.push_back(path / std::filesystem::path(de.name));
+          }
+          return ss::now();
+      });
+
+    uint64_t total = 0;
+    co_await ss::max_concurrent_for_each(
+      files.begin(),
+      files.end(),
+      config::shard_local_cfg().space_management_max_log_concurrency(),
+      [&total](const std::filesystem::path& path) {
+          return ss::file_size(path.string())
+            .then([&total](uint64_t size) { total += size; })
+            .handle_exception([path](std::exception_ptr eptr) {
+                vlog(
+                  datalake_log.debug,
+                  "Stat failed for path: {}: {}",
+                  path,
+                  eptr);
+            });
+      });
+
+    co_return total;
 }
 
 } // namespace datalake
