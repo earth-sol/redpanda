@@ -21,6 +21,7 @@ redpanda_cc_library(
     srcs = [
         "client_quota_translator.cc",
         "connection_context.cc",
+        "consumer_group_lag_metrics_frontend.cc",
         "fetch_pid_controller.cc",
         "fetch_session_cache.cc",
         "group.cc",
@@ -72,6 +73,7 @@ redpanda_cc_library(
         "atomic_token_bucket.h",
         "client_quota_translator.h",
         "connection_context.h",
+        "consumer_group_lag_metrics_frontend.h",
         "consumer_group_lag_metrics_rpc_types.h",
         "coordinator_ntp_mapper.h",
         "errors.h",

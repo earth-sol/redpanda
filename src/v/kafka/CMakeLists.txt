@@ -44,6 +44,7 @@ v_cc_library(
   NAME kafka
   SRCS
     ${handlers_srcs}
+    server/consumer_group_lag_metrics_frontend.cc
     server/requests.cc
     server/member.cc
     server/group_stm.cc
