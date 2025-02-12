@@ -251,7 +251,7 @@ record_multiplexer::operator()(model::record_batch batch) {
 
         auto& writer = writer_iter->second;
         auto write_result = co_await writer->add_data(
-          std::move(record_data_res.value()), estimated_size);
+          std::move(record_data_res.value()), estimated_size, _noop_as);
 
         if (write_result != writer_error::ok) {
             vlog(
@@ -438,7 +438,7 @@ record_multiplexer::handle_invalid_record(
         _result.value().last_offset = offset;
 
         auto add_data_err = co_await _invalid_record_writer->add_data(
-          std::move(record_data_res.value()), estimated_size);
+          std::move(record_data_res.value()), estimated_size, _noop_as);
 
         if (add_data_err != writer_error::ok) {
             vlog(

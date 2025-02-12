@@ -111,6 +111,7 @@ redpanda_cc_library(
         ":model",
         ":stm",
         ":translation_probe",
+        ":translator_deps",
         ":utils",
         "//src/v/base",
         "//src/v/cluster",
