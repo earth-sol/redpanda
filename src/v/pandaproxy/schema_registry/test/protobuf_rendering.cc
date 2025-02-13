@@ -164,4 +164,5 @@ INSTANTIATE_TEST_SUITE_P(
     "extension_ranges",
     "composite_extension",
     "nested_extension",
-    "map_entry_hack"));
+    "map_entry_hack",
+    "repeated_custom_options"));
