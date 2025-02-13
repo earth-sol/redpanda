@@ -32,12 +32,13 @@ struct file_to_append {
 //
 // Unlike the field_summary in manifest_file, which stores bytes per bound,
 // this is value-comparable by maintaining the bounds as values instead of
-// serialized bytes.
+// serialized bytes. Note that only values that are the same primitive_value
+// variant are directly comparable.
 struct field_summary_val {
     using list_t = chunked_vector<field_summary_val>;
-    // Creates a list of field summaries meant to summarize the fields of the
-    // given partition key type.
-    static list_t empty_summaries(const partition_key_type&);
+    // Creates a list of field summaries meant to summarize partition key values
+    // with the given number of fields.
+    static list_t empty_summaries(size_t num_fields);
     // Returns this summary with the bounds converted to bytes.
     field_summary release_with_bytes() &&;
 
@@ -97,7 +98,6 @@ private:
         const uuid_t& commit_uuid;
         const schema& schema;
         const partition_spec& pspec;
-        const partition_key_type& pk_type;
         const snapshot_id snap_id;
         const sequence_number seq_num;
     };
@@ -130,10 +130,8 @@ private:
     // new manifest entries (i.e. data file metadata).
     ss::future<checked<manifest_file, metadata_io::errc>> merge_mfiles(
       chunked_vector<manifest_file> to_merge,
-      const table_snapshot_ctx& ctx,
-      field_summary_val::list_t added_summaries = {},
-      chunked_vector<manifest_entry> added_entries = {},
-      size_t added_rows = 0);
+      chunked_vector<manifest_entry> added_entries,
+      const table_snapshot_ctx& ctx);
 
     // Takes the given manifest list and bin-packs them to reduce the number of
     // manifests, adding new data files either to a new manifest or the latest

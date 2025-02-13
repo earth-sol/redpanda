@@ -119,9 +119,8 @@ chunked_vector<field_summary> release_with_bytes(field_summary_val::list_t l) {
 } // namespace
 
 field_summary_val::list_t
-field_summary_val::empty_summaries(const partition_key_type& pk_type) {
+field_summary_val::empty_summaries(size_t num_fields) {
     field_summary_val::list_t ret;
-    const auto num_fields = pk_type.type.fields.size();
     ret.reserve(num_fields);
     for (size_t i = 0; i < num_fields; ++i) {
         ret.emplace_back(field_summary_val{});
@@ -254,12 +253,10 @@ ss::future<action::action_outcome> merge_append_action::build_updates() && {
 
     // TODO: support more than one partition spec by grouping the merged
     // manifests by spec id.
-    auto pk_type = partition_key_type::create(pspec, schema);
     const table_snapshot_ctx ctx{
       .commit_uuid = commit_uuid_,
       .schema = schema,
       .pspec = pspec,
-      .pk_type = pk_type,
       .snap_id = new_snap_id,
       .seq_num = new_seq_num,
     };
@@ -359,8 +356,6 @@ merge_append_action::maybe_merge_mfiles_and_new_data(
   chunked_vector<manifest_file> to_merge,
   chunked_vector<file_to_append> new_data_files,
   const table_snapshot_ctx& ctx) {
-    size_t added_rows{0};
-    size_t added_files{0};
     vlog(
       log.info,
       "Considering {} existing manifest files and {} data files to merge",
@@ -370,10 +365,7 @@ merge_append_action::maybe_merge_mfiles_and_new_data(
     // of if we upload a brand new manifest or merge with an existing manifest,
     // the new data files will need new entries.
     chunked_vector<manifest_entry> new_data_entries;
-    auto partition_summaries = field_summary_val::empty_summaries(ctx.pk_type);
     for (auto& f : new_data_files) {
-        update_partition_summaries(f.file, partition_summaries);
-        added_rows += f.file.record_count;
         manifest_entry e{
           .status = manifest_entry_status::added,
           .snapshot_id = ctx.snap_id,
@@ -386,44 +378,17 @@ merge_append_action::maybe_merge_mfiles_and_new_data(
     chunked_vector<manifest_file> ret;
     if (to_merge.size() < default_min_to_merge_new_files) {
         // Upload and return. This bin is too small to merge.
-        const auto new_manifest_path = get_manifest_path(
-          table_.location, ctx.commit_uuid, generate_manifest_num());
-        added_files = new_data_entries.size();
-        const auto mfile_up_res = co_await upload_as_manifest(
-          new_manifest_path,
-          ctx.schema,
-          ctx.pspec,
-          std::move(new_data_entries));
-        if (mfile_up_res.has_error()) {
-            co_return mfile_up_res.error();
+        auto new_mfile_res = co_await merge_mfiles(
+          {}, std::move(new_data_entries), ctx);
+        if (new_mfile_res.has_error()) {
+            co_return new_mfile_res.error();
         }
-        // Since this bin was too small to merge, we won't do anything else to
-        // its manifests, just add them back to the returned container.
-        ret.emplace_back(manifest_file{
-          .manifest_path = new_manifest_path,
-          .manifest_length = mfile_up_res.value(),
-          .partition_spec_id = ctx.pspec.spec_id,
-          .content = manifest_file_content::data,
-          .seq_number = ctx.seq_num,
-          .min_seq_number = ctx.seq_num,
-          .added_snapshot_id = ctx.snap_id,
-          .added_files_count = added_files,
-          .existing_files_count = 0,
-          .deleted_files_count = 0,
-          .added_rows_count = added_rows,
-          .existing_rows_count = 0,
-          .deleted_rows_count = 0,
-          .partitions = release_with_bytes(std::move(partition_summaries)),
-        });
+        ret.emplace_back(std::move(new_mfile_res.value()));
         std::move(to_merge.begin(), to_merge.end(), std::back_inserter(ret));
         co_return ret;
     }
     auto merged_mfile_res = co_await merge_mfiles(
-      std::move(to_merge),
-      ctx,
-      std::move(partition_summaries),
-      std::move(new_data_entries),
-      added_rows);
+      std::move(to_merge), std::move(new_data_entries), ctx);
     if (merged_mfile_res.has_error()) {
         co_return merged_mfile_res.error();
     }
@@ -434,24 +399,25 @@ merge_append_action::maybe_merge_mfiles_and_new_data(
 ss::future<checked<manifest_file, metadata_io::errc>>
 merge_append_action::merge_mfiles(
   chunked_vector<manifest_file> to_merge,
-  const table_snapshot_ctx& ctx,
-  field_summary_val::list_t added_summaries,
   chunked_vector<manifest_entry> added_entries,
-  size_t added_rows) {
-    vlog(
-      log.info,
+  const table_snapshot_ctx& ctx) {
+    vlogl(
+      log,
+      to_merge.empty() ? ss::log_level::debug : ss::log_level::info,
       "Merging {} manifest files and {} added manifest entries",
       to_merge.size(),
       added_entries.size());
-    auto added_files = added_entries.size();
+
+    const size_t added_files = added_entries.size();
+    size_t added_rows = 0;
+    for (const auto& e : added_entries) {
+        added_rows += e.data_file.record_count;
+    }
+
     auto merged_entries = std::move(added_entries);
     size_t existing_rows = 0;
     size_t existing_files = 0;
     auto min_seq_num = ctx.seq_num;
-    auto partition_summaries = added_summaries.empty()
-                                 ? field_summary_val::empty_summaries(
-                                     ctx.pk_type)
-                                 : std::move(added_summaries);
     for (const auto& mfile : to_merge) {
         // Download the manifest file and collect the entries into the merged
         // container.
@@ -462,7 +428,6 @@ merge_append_action::merge_mfiles(
         auto m = std::move(mfile_res).value();
         existing_files += m.entries.size();
         for (auto& e : m.entries) {
-            update_partition_summaries(e.data_file, partition_summaries);
             existing_rows += e.data_file.record_count;
             // Rewrite sequence numbers for previously added entries.
             // These entries refer to files committed prior to this action.
@@ -482,6 +447,13 @@ merge_append_action::merge_mfiles(
           m.entries.end(),
           std::back_inserter(merged_entries));
     }
+
+    auto partition_summaries = field_summary_val::empty_summaries(
+      ctx.pspec.fields.size());
+    for (const auto& e : merged_entries) {
+        update_partition_summaries(e.data_file, partition_summaries);
+    }
+
     const auto merged_manifest_path = get_manifest_path(
       table_.location, ctx.commit_uuid, generate_manifest_num());
     const auto mfile_up_res = co_await upload_as_manifest(
@@ -548,7 +520,7 @@ merge_append_action::pack_mlist_and_new_data(
             new_mfiles.emplace_back(std::move(bin[0]));
             continue;
         }
-        auto merged_bin_res = co_await merge_mfiles(std::move(bin), ctx);
+        auto merged_bin_res = co_await merge_mfiles(std::move(bin), {}, ctx);
         if (merged_bin_res.has_error()) {
             co_return merged_bin_res.error();
         }
