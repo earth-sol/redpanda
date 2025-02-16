@@ -54,6 +54,8 @@ setup(
         "thrift==0.21.0",
         "thrift-sasl==0.4.3",
         "pyhive==0.7.0",
+        "python-snappy==0.7.3",
+        "lz4==4.4.3",
     ],
     scripts=[],
 )
