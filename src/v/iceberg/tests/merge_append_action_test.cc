@@ -10,6 +10,7 @@
 #include "cloud_io/remote.h"
 #include "cloud_io/tests/s3_imposter.h"
 #include "cloud_io/tests/scoped_remote.h"
+#include "iceberg/compatibility.h"
 #include "iceberg/manifest_entry.h"
 #include "iceberg/manifest_io.h"
 #include "iceberg/merge_append_action.h"
@@ -71,9 +72,9 @@ public:
         };
     }
 
-    partition_key make_int_pk(int32_t v) {
+    partition_key make_single_field_pk(primitive_value v) {
         auto pk_struct = std::make_unique<struct_value>();
-        pk_struct->fields.emplace_back(int_value{v});
+        pk_struct->fields.emplace_back(std::move(v));
         return {std::move(pk_struct)};
     }
 
@@ -82,7 +83,7 @@ public:
       const ss::sstring& path_base,
       size_t num_files,
       size_t record_count,
-      int32_t pk_value = 42) {
+      primitive_value pk_value = int_value{42}) {
         chunked_vector<file_to_append> ret;
         ret.reserve(num_files);
         const auto records_per_file = record_count / num_files;
@@ -92,7 +93,7 @@ public:
             data_file file{
               .content_type = data_file_content_type::data,
               .file_path = uri(path),
-              .partition = partition_key{make_int_pk(pk_value)},
+              .partition = make_single_field_pk(make_copy(pk_value)),
               .record_count = records_per_file,
               .file_size_bytes = 1_KiB,
             };
@@ -104,6 +105,25 @@ public:
         }
         ret[0].file.record_count += leftover_records;
         return ret;
+    }
+
+    void merge_append_and_check(
+      transaction& tx,
+      chunked_vector<file_to_append> files,
+      size_t expected_snapshots,
+      size_t expected_manifests) {
+        auto res = tx.merge_append(io, std::move(files)).get();
+        ASSERT_FALSE(res.has_error()) << res.error();
+        const auto& table = tx.table();
+        ASSERT_TRUE(table.snapshots.has_value());
+        ASSERT_TRUE(table.current_snapshot_id.has_value());
+        ASSERT_EQ(table.snapshots.value().size(), expected_snapshots);
+
+        auto latest_mlist_path
+          = table.snapshots.value().back().manifest_list_path;
+        auto latest_mlist = io.download_manifest_list(latest_mlist_path).get();
+        ASSERT_TRUE(latest_mlist.has_value());
+        ASSERT_EQ(latest_mlist.value().files.size(), expected_manifests);
     }
 
     std::unique_ptr<cloud_io::scoped_remote> sr;
@@ -260,6 +280,101 @@ TEST_F(MergeAppendActionTest, TestMergeByBytes) {
     ASSERT_EQ(merged_mfile.deleted_rows_count, 0);
 }
 
+TEST_F(MergeAppendActionTest, TestMergeAfterTypePromotion) {
+    const size_t num_to_merge_at
+      = merge_append_action::default_min_to_merge_new_files;
+    const size_t files_per_man = 2;
+    const size_t rows_per_man = 25;
+    transaction tx(create_table());
+    // Repeatedly add new data files up to the merge count threshold. First half
+    // of the files will be with the old schema.
+    for (size_t i = 0; i < num_to_merge_at / 2; i++) {
+        const auto expected_snapshots = i + 1;
+        const auto expected_manifests = expected_snapshots;
+        merge_append_and_check(
+          tx,
+          create_data_files(tx.table(), "foo", files_per_man, rows_per_man),
+          expected_snapshots,
+          expected_manifests);
+    }
+
+    // Promote int partition column to long.
+    {
+        auto orig_type = tx.table().schemas.at(0).schema_struct.copy();
+        auto new_type = orig_type.copy();
+        bool found = false;
+        for (auto& field : new_type.fields) {
+            if (field->name == "bar") {
+                field->type = long_type{};
+                found = true;
+            }
+        }
+        ASSERT_TRUE(found);
+
+        auto compat_res = evolve_schema(
+          orig_type, new_type, tx.table().partition_specs.back());
+        ASSERT_FALSE(compat_res.has_error());
+
+        auto res = tx.set_schema(iceberg::schema{
+                                   .schema_struct = std::move(new_type),
+                                   .schema_id = iceberg::schema::unassigned_id,
+                                   .identifier_field_ids = {},
+                                 })
+                     .get();
+        ASSERT_FALSE(res.has_error()) << res.error();
+    }
+
+    // Add the remaining files, now partition column value is long.
+    for (size_t i = num_to_merge_at / 2; i < num_to_merge_at; i++) {
+        const auto expected_snapshots = i + 1;
+        const auto expected_manifests = expected_snapshots;
+        merge_append_and_check(
+          tx,
+          create_data_files(
+            tx.table(), "foo", files_per_man, rows_per_man, long_value{42}),
+          expected_snapshots,
+          expected_manifests);
+    }
+
+    // At the merge threshold, we expect the latest snapshot contains a merged
+    // manifest. All manifests should be successfully merged, even though the
+    // type of the partition column is not the same.
+    auto res = tx.merge_append(
+                   io,
+                   create_data_files(
+                     tx.table(), "foo", files_per_man, rows_per_man))
+                 .get();
+    ASSERT_FALSE(res.has_error()) << res.error();
+    const auto& table = tx.table();
+    ASSERT_TRUE(table.snapshots.has_value());
+    ASSERT_EQ(table.snapshots.value().size(), num_to_merge_at + 1);
+
+    // Validate that the latest snapshot indeed contains a single manifest.
+    auto latest_mlist_path = table.snapshots.value().back().manifest_list_path;
+    auto latest_mlist = io.download_manifest_list(latest_mlist_path).get();
+    ASSERT_TRUE(latest_mlist.has_value());
+    ASSERT_EQ(latest_mlist.value().files.size(), 1);
+    const auto& merged_mfile = latest_mlist.value().files[0];
+
+    // Check that the manifest file's metadata seem sane.
+    ASSERT_EQ(merged_mfile.partition_spec_id(), 0);
+
+    ASSERT_EQ(merged_mfile.partitions.size(), 1);
+    ASSERT_FALSE(merged_mfile.partitions[0].contains_nan);
+    ASSERT_FALSE(merged_mfile.partitions[0].contains_null);
+    auto partition_bytes = value_to_bytes(long_value{42});
+    ASSERT_EQ(merged_mfile.partitions[0].lower_bound, partition_bytes);
+    ASSERT_EQ(merged_mfile.partitions[0].upper_bound, partition_bytes);
+
+    ASSERT_EQ(merged_mfile.added_files_count, files_per_man);
+    ASSERT_EQ(merged_mfile.added_rows_count, rows_per_man);
+    ASSERT_EQ(
+      merged_mfile.existing_files_count, num_to_merge_at * files_per_man);
+    ASSERT_EQ(merged_mfile.existing_rows_count, num_to_merge_at * rows_per_man);
+    ASSERT_EQ(merged_mfile.deleted_files_count, 0);
+    ASSERT_EQ(merged_mfile.deleted_rows_count, 0);
+}
+
 TEST_F(MergeAppendActionTest, TestUniqueSnapshotIds) {
     transaction tx(create_table());
     const auto& table = tx.table();
@@ -300,9 +415,10 @@ TEST_F(MergeAppendActionTest, TestPartitionSummaries) {
     for (size_t i = 0; i < num_to_merge_at; i++) {
         int32_t pk = base_pk + i;
         const auto expected_manifests = i + 1;
-        auto res = tx.merge_append(
-                       io, create_data_files(tx.table(), "foo", 1, 1, pk))
-                     .get();
+        auto res
+          = tx.merge_append(
+                io, create_data_files(tx.table(), "foo", 1, 1, int_value{pk}))
+              .get();
         ASSERT_FALSE(res.has_error()) << res.error();
 
         // Download the resulting manifest list and make sure we only added a
@@ -333,9 +449,10 @@ TEST_F(MergeAppendActionTest, TestPartitionSummaries) {
     }
     // Write one more manifest, triggering a merge.
     const int32_t last_pk = base_pk + num_to_merge_at + 123;
-    auto res = tx.merge_append(
-                   io, create_data_files(tx.table(), "foo", 1, 1, last_pk))
-                 .get();
+    auto res
+      = tx.merge_append(
+            io, create_data_files(tx.table(), "foo", 1, 1, int_value{last_pk}))
+          .get();
     ASSERT_FALSE(res.has_error()) << res.error();
     auto latest_mlist_path = table.snapshots.value().back().manifest_list_path;
     auto latest_mlist_res = io.download_manifest_list(latest_mlist_path).get();
