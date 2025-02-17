@@ -5,11 +5,6 @@ load(":packaging.bzl", "redpanda_package")
 redpanda_package(
     name = "redpanda_tar",
     out = "redpanda.tar.gz",
-    bin_wrappers = [
-        "//bazel/packaging/bin_wrapper:redpanda",
-        "//bazel/packaging/bin_wrapper:rpk",
-        "//bazel/packaging/bin_wrapper:iotune",
-    ],
     default_yaml_config = "//conf:redpanda.yaml",
     include_sysroot_libs = True,
     redpanda_binary = "//:redpanda",
@@ -31,10 +26,6 @@ NONROOT_USER = 65532
 redpanda_package(
     name = "oci_image_contents",
     out = "redpanda_nonroot.tar.gz",
-    bin_wrappers = [
-        "//bazel/packaging/bin_wrapper:redpanda",
-        "//bazel/packaging/bin_wrapper:rpk",
-    ],
     default_yaml_config = "//conf:redpanda.yaml",
     owner = NONROOT_USER,
     redpanda_binary = "//:redpanda",

@@ -88,7 +88,6 @@ def _prepare_package_content(ctx, dynamic_loader_path = "/opt/redpanda/lib"):
         redpanda_binary = rp_binary,
         rpk_binary = ctx.file.rpk_binary,
         shared_libraries = shared_libraries,
-        bin_wrappers = ctx.files.bin_wrappers,
     )
 
 def _impl(ctx):
@@ -101,12 +100,11 @@ def _impl(ctx):
         "rpk": package_content.rpk_binary.path if package_content.rpk_binary else None,
         "shared_libraries": [solib.path for solib in package_content.shared_libraries],
         "default_yaml_config": ctx.file.default_yaml_config.path if ctx.file.default_yaml_config else None,
-        "bin_wrappers": [f.path for f in package_content.bin_wrappers],
         "owner": ctx.attr.owner,
     }
     ctx.actions.write(cfg_file, content = json.encode_indent(cfg))
 
-    inputs = [cfg_file, package_content.redpanda_binary] + package_content.shared_libraries + package_content.bin_wrappers
+    inputs = [cfg_file, package_content.redpanda_binary] + package_content.shared_libraries
 
     if package_content.rpk_binary:
         inputs.append(package_content.rpk_binary)
@@ -139,9 +137,6 @@ redpanda_package = rule(
         ),
         "default_yaml_config": attr.label(
             allow_single_file = True,
-        ),
-        "bin_wrappers": attr.label_list(
-            allow_files = True,
         ),
         "rpk_binary": attr.label(
             allow_single_file = True,
