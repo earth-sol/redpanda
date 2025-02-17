@@ -1529,12 +1529,14 @@ class Admin:
 
     def stress_fiber_start(
         self,
-        node,
-        num_fibers,
-        min_spins_per_scheduling_point=None,
-        max_spins_per_scheduling_point=None,
-        min_ms_per_scheduling_point=None,
-        max_ms_per_scheduling_point=None,
+        node: MaybeNode,
+        num_fibers: int,
+        *,
+        min_spins_per_scheduling_point: int | None = None,
+        max_spins_per_scheduling_point: int | None = None,
+        min_ms_per_scheduling_point: int | None = None,
+        max_ms_per_scheduling_point: int | None = None,
+        stack_depth: int | None = None,
     ):
         p = {"num_fibers": str(num_fibers)}
         if min_spins_per_scheduling_point is not None:
@@ -1547,6 +1549,8 @@ class Admin:
             p["min_ms_per_scheduling_point"] = str(min_ms_per_scheduling_point)
         if max_ms_per_scheduling_point is not None:
             p["max_ms_per_scheduling_point"] = str(max_ms_per_scheduling_point)
+        if stack_depth is not None:
+            p["stack_depth"] = str(stack_depth)
         kwargs = {"params": p}
         return self._request("PUT",
                              "debug/stress_fiber_start",
@@ -1657,8 +1661,8 @@ class Admin:
         params = {}
         timeout = DEFAULT_TIMEOUT
 
-        if wait_ms:
-            params["wait_ms"] = wait_ms
+        if wait_ms is not None:
+            params["wait_ms"] = str(wait_ms)
             timeout = max(2 * (int(wait_ms) // 1_000), timeout)
 
         return self._request("get",

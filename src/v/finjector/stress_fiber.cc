@@ -67,12 +67,32 @@ stress_payload::stress_payload(stress_config cfg) {
     }
 }
 
-[[gnu::noinline]]
-static void spinner(int depth, int spins_per_scheduling_point) { // NOLINT
-    if (depth > 0) {
-        spinner(depth - 1, spins_per_scheduling_point);
+/**
+ * @brief Spins a given number of times at a given stack depth.
+ *
+ * The spinning function will have this many extra frames
+ * added to its stack depth using recursive calls. Each frame is one
+ * of two variants (corresponding to 0 or 1 for the template parameter).
+ * The exact series of frames is set by the seed parameter: each unique seed has
+ * a unique series of calls. This can help stress the CPU profiler by creating a
+ * large number of unique stacks.
+ * @param stack_depth
+ * @param spins_per_scheduling_point number of spins before returning
+ * @param seed the pattern of stack traces will be unique to the seed
+ */
+template<int VALUE>
+[[clang::noinline]] void spinner(
+  int stack_depth, int spins_per_scheduling_point, uint64_t seed) { // NOLINT
+    volatile int spins = 0;
+    if (stack_depth > 0) {
+        auto to_call = seed & 1u ? spinner<1> : spinner<2>;
+        to_call(stack_depth - 1, spins_per_scheduling_point, seed >> 1u);
+        // the line below is prevent tailcall optimization would would otherwise
+        // defeat our attempt to create many stack frames (we would make the
+        // required number of calls but each call would simply replace the
+        // current stack frame, not add a new one)
+        spins = stack_depth;
     } else {
-        volatile int spins = 0;
         while (true) {
             if (spins == spins_per_scheduling_point) {
                 break;
@@ -85,13 +105,14 @@ static void spinner(int depth, int spins_per_scheduling_point) { // NOLINT
 ss::future<>
 // NOLINTNEXTLINE
 stress_payload::run_count_fiber(int depth, int min_count, int max_count) {
+    uint64_t seed = 0;
     while (!_as.abort_requested()) {
         int spins_per_scheduling_point = min_count == max_count
                                            ? min_count
                                            : random_generators::get_int(
                                                min_count, max_count);
-        spinner(depth, spins_per_scheduling_point);
         co_await ss::maybe_yield();
+        spinner<0>(depth, spins_per_scheduling_point, seed++);
     }
 }
 
