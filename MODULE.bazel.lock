@@ -58,8 +58,8 @@
     "https://bcr.bazel.build/modules/gazelle/0.33.0/MODULE.bazel": "a13a0f279b462b784fb8dd52a4074526c4a2afe70e114c7d09066097a46b3350",
     "https://bcr.bazel.build/modules/gazelle/0.34.0/MODULE.bazel": "abdd8ce4d70978933209db92e436deb3a8b737859e9354fb5fd11fb5c2004c8a",
     "https://bcr.bazel.build/modules/gazelle/0.36.0/MODULE.bazel": "e375d5d6e9a6ca59b0cb38b0540bc9a05b6aa926d322f2de268ad267a2ee74c0",
-    "https://bcr.bazel.build/modules/gazelle/0.38.0/MODULE.bazel": "51bb3ca009bc9320492894aece6ba5f50aae68a39fff2567844b77fc12e2d0a5",
-    "https://bcr.bazel.build/modules/gazelle/0.38.0/source.json": "7fedf9b531bcbbe90b009e4d3aef478a2defb8b8a6e31e931445231e425fc37c",
+    "https://bcr.bazel.build/modules/gazelle/0.42.0/MODULE.bazel": "fa140a7c019f3a22779ba7c6132ffff9d2d10a51dba2f3304dee61523d11fef4",
+    "https://bcr.bazel.build/modules/gazelle/0.42.0/source.json": "eb6f7b0cb76c52d2679164910a01fa6ddcee409e6a7fee06e602ef259f65165c",
     "https://bcr.bazel.build/modules/google_benchmark/1.8.2/MODULE.bazel": "a70cf1bba851000ba93b58ae2f6d76490a9feb74192e57ab8e8ff13c34ec50cb",
     "https://bcr.bazel.build/modules/googletest/1.11.0/MODULE.bazel": "3a83f095183f66345ca86aa13c58b59f9f94a2f81999c093d4eeaa2d262d12f4",
     "https://bcr.bazel.build/modules/googletest/1.14.0.bcr.1/MODULE.bazel": "22c31a561553727960057361aa33bf20fb2e98584bc4fec007906e27053f80c6",
@@ -121,7 +121,6 @@
     "https://bcr.bazel.build/modules/rules_go/0.41.0/MODULE.bazel": "55861d8e8bb0e62cbd2896f60ff303f62ffcb0eddb74ecb0e5c0cbe36fc292c8",
     "https://bcr.bazel.build/modules/rules_go/0.42.0/MODULE.bazel": "8cfa875b9aa8c6fce2b2e5925e73c1388173ea3c32a0db4d2b4804b453c14270",
     "https://bcr.bazel.build/modules/rules_go/0.46.0/MODULE.bazel": "3477df8bdcc49e698b9d25f734c4f3a9f5931ff34ee48a2c662be168f5f2d3fd",
-    "https://bcr.bazel.build/modules/rules_go/0.47.0/MODULE.bazel": "e425890d2a4d668abc0f59d8388b70bf63ad025edec76a385c35d85882519417",
     "https://bcr.bazel.build/modules/rules_go/0.50.1/MODULE.bazel": "b91a308dc5782bb0a8021ad4330c81fea5bda77f96b9e4c117b9b9c8f6665ee0",
     "https://bcr.bazel.build/modules/rules_go/0.50.1/source.json": "205765fd30216c70321f84c9a967267684bdc74350af3f3c46c857d9f80a4fa2",
     "https://bcr.bazel.build/modules/rules_java/4.0.0/MODULE.bazel": "5a78a7ae82cd1a33cef56dc578c7d2a46ed0dca12643ee45edbb8417899e6f74",
@@ -182,8 +181,8 @@
     "https://bcr.bazel.build/modules/stardoc/0.7.0/MODULE.bazel": "05e3d6d30c099b6770e97da986c53bd31844d7f13d41412480ea265ac9e8079c",
     "https://bcr.bazel.build/modules/stardoc/0.7.2/MODULE.bazel": "fc152419aa2ea0f51c29583fab1e8c99ddefd5b3778421845606ee628629e0e5",
     "https://bcr.bazel.build/modules/stardoc/0.7.2/source.json": "58b029e5e901d6802967754adf0a9056747e8176f017cfe3607c0851f4d42216",
-    "https://bcr.bazel.build/modules/toolchains_llvm/1.1.2/MODULE.bazel": "402101d6f73115ec49a3a765a3361c1dd90ba3959fa688ccdcd465c36dbbbc52",
-    "https://bcr.bazel.build/modules/toolchains_llvm/1.1.2/source.json": "27f3cf531bc654c719b50411cac94613b7676d63e60962243d485af63e13b9ff",
+    "https://bcr.bazel.build/modules/toolchains_llvm/1.3.0/MODULE.bazel": "6e02731e51f7eb2ec4b01c5e79e722bf738a631f6e03d9b4917cbf2cb027bee1",
+    "https://bcr.bazel.build/modules/toolchains_llvm/1.3.0/source.json": "4ce0373a89c6df34dd37cd67285bb871d8e225d30dcb67dd093e077a04bbbb71",
     "https://bcr.bazel.build/modules/upb/0.0.0-20220923-a547704/MODULE.bazel": "7298990c00040a0e2f121f6c32544bab27d4452f80d9ce51349b1a28f3005c43",
     "https://bcr.bazel.build/modules/xz/5.4.5.bcr.4/MODULE.bazel": "2cbf58a2875e7f23ab77073902e009bfce25481fac231f950b89d57d441d5ef3",
     "https://bcr.bazel.build/modules/xz/5.4.5.bcr.4/source.json": "f497d68412aab85c8aa83b54c0eac229fdce67c95c98a7ad562d58504ecaf9e5",
@@ -5487,7 +5486,7 @@
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/rustc": "241027b94ad67beb36d0356f7cc05180daaa9966b2958cfba1d4de089d2e521c",
           "@@//bazel/thirdparty/Cargo.lock": "931fa1bc55d0e5d2e5b6d96da399569a4c2254a4bb1d99c98f71bb4b98eead73",
           "@@//bazel/thirdparty/Cargo.toml": "cb23768a6e7edc8f97215921e956f5be06521ad93cc0ecf64a932e3a8caada54",
-          "@@//MODULE.bazel": "597a38fa2dfa87ba2de3c6ec3a8d489b95c5db39dcb3f5e20d15af4d8217bcce",
+          "@@//MODULE.bazel": "4130765e11eb3d796f0e1cb5536c6078f381fdf8a1eea875a3c18f84521d3769",
           "@@//bazel/thirdparty/wasmtime.BUILD": "4b55deaf51f5b8be25fc3592f9bcf3d732f99632cd793c685436ddca9a177534",
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/cargo": "35099f3b7b9497b3ae95aa00886ac6839343488e5cdb958e69c16c9b58c3afb2"
         },
@@ -7930,7 +7929,7 @@
     },
     "@@toolchains_llvm~//toolchain/extensions:llvm.bzl%llvm": {
       "general": {
-        "bzlTransitiveDigest": "y9h5L2NtWbogyWSOJgqnUaU50MTPWAW+waelXSirMVg=",
+        "bzlTransitiveDigest": "DbHjmsbc+5UNcxe3NTxwxbUMxZqW/A99vu2JcopPuJk=",
         "usagesDigest": "hGO5fnF/ODuk341HkV0/ZN2pQDWVvxnaWC8MO4bIy00=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -7945,6 +7944,7 @@
               "distribution": "auto",
               "exec_arch": "",
               "exec_os": "",
+              "libclang_rt": {},
               "llvm_mirror": "",
               "llvm_version": "19.1.1",
               "llvm_versions": {},
@@ -7994,6 +7994,7 @@
                   "-Wself-assign"
                 ]
               },
+              "conly_flags": {},
               "coverage_compile_flags": {},
               "coverage_link_flags": {},
               "cxx_builtin_include_directories": {},
@@ -8004,6 +8005,8 @@
               "dbg_compile_flags": {},
               "exec_arch": "",
               "exec_os": "",
+              "extra_exec_compatible_with": {},
+              "extra_target_compatible_with": {},
               "link_flags": {},
               "link_libs": {},
               "llvm_versions": {
@@ -8030,6 +8033,7 @@
               "distribution": "auto",
               "exec_arch": "",
               "exec_os": "",
+              "libclang_rt": {},
               "llvm_mirror": "",
               "llvm_version": "18.1.8",
               "llvm_versions": {},
@@ -8079,6 +8083,7 @@
                   "-Wself-assign"
                 ]
               },
+              "conly_flags": {},
               "coverage_compile_flags": {},
               "coverage_link_flags": {},
               "cxx_builtin_include_directories": {},
@@ -8089,6 +8094,8 @@
               "dbg_compile_flags": {},
               "exec_arch": "",
               "exec_os": "",
+              "extra_exec_compatible_with": {},
+              "extra_target_compatible_with": {},
               "link_flags": {},
               "link_libs": {},
               "llvm_versions": {
