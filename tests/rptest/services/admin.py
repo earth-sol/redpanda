@@ -456,7 +456,7 @@ class Admin:
                  default_node: ClusterNode | None = None,
                  retry_codes: list[int] | None = None,
                  auth=None,
-                 retries_amount=5):
+                 retries_amount: int = 5):
         self.redpanda = redpanda
 
         self._session = AuthPreservingSession()
@@ -688,7 +688,7 @@ class Admin:
                  verb: str,
                  path: str,
                  node: MaybeNode = None,
-                 params: Optional[dict] = None,
+                 params: Optional[dict[str, str]] = None,
                  **kwargs: Any):
         if node is None and self._default_node is not None:
             # We were constructed with an explicit default node: use that one
@@ -1653,7 +1653,9 @@ class Admin:
                              node=node,
                              **kwargs).json()
 
-    def get_cpu_profile(self, node=None, wait_ms=None):
+    def get_cpu_profile(self,
+                        node: MaybeNode = None,
+                        wait_ms: int | None = None):
         """
         Get the CPU profile of a node.
         """
