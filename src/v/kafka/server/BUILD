@@ -188,6 +188,7 @@ redpanda_cc_library(
     visibility = ["//visibility:public"],
     deps = [
         ":consumer_group_lag_metrics_rpc",
+        ":datalake_throttle_manager",
         ":logger",
         ":qdc_monitor_config",
         "//src/v/base",
@@ -401,6 +402,7 @@ redpanda_cc_library(
     include_prefix = "kafka/server",
     visibility = ["//src/v/redpanda:__pkg__"],
     deps = [
+        ":datalake_throttle_manager",
         ":qdc_monitor_config",
         "@seastar",
     ],
