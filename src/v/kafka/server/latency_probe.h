@@ -20,6 +20,8 @@
 
 #include <chrono>
 
+struct prod_consume_fixture;
+
 namespace kafka {
 class latency_probe {
 public:
@@ -93,6 +95,9 @@ public:
     }
 
 private:
+    // for testing
+    friend prod_consume_fixture;
+
     hist_t _produce_latency;
     hist_t _fetch_latency;
     metrics::internal_metric_groups _metrics;
