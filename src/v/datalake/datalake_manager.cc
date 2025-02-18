@@ -436,4 +436,20 @@ ss::future<uint64_t> datalake_manager::disk_usage() {
     co_return total;
 }
 
+size_t datalake_manager::partitions_over_target_translation_backlog() const {
+    auto now = translation::scheduling::clock::now();
+    return std::ranges::count_if(
+      _scheduler.all_translators(), [now](const auto& entry) {
+          return entry.second.status().next_checkpoint_deadline < now;
+      });
+}
+/**
+ * Returns count of partitions that translation is blocked. This value
+ * should be 0 in normal conditions.
+ */
+size_t datalake_manager::partitions_with_translation_blocked() const {
+    //TODO: Return blocked if partition wasn't translated for a long time f.e. moret 
+    return 0;
+}
+
 } // namespace datalake
