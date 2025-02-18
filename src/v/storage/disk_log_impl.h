@@ -259,9 +259,9 @@ public:
 
     size_t max_segment_size() const;
 
-    uint64_t dirty_segment_bytes() const { return _dirty_segment_bytes; }
+    uint64_t dirty_segment_bytes() const final { return _dirty_segment_bytes; }
 
-    uint64_t closed_segment_bytes() const { return _closed_segment_bytes; }
+    uint64_t closed_segment_bytes() const final { return _closed_segment_bytes; }
 
     // Returns the dirty ratio of the log.
     // The dirty ratio is the ratio of bytes in closed, dirty segments to the
