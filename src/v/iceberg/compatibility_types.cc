@@ -12,6 +12,17 @@
 
 namespace iceberg {
 
+std::string_view to_string_view(type_promoted tp) {
+    switch (tp) {
+    case type_promoted::no:
+        return "type_promoted::no";
+    case type_promoted::yes:
+        return "type_promoted::yes";
+    case type_promoted::changes_partition:
+        return "type_promoted::changes_partition";
+    }
+}
+
 std::string_view to_string_view(schema_evolution_errc ec) {
     switch (ec) {
     case schema_evolution_errc::type_mismatch:
@@ -43,6 +54,12 @@ operator+=(schema_transform_state& lhs, const schema_transform_state& rhs) {
 
 auto fmt::formatter<iceberg::schema_evolution_errc>::format(
   iceberg::schema_evolution_errc ec,
+  format_context& ctx) const -> format_context::iterator {
+    return formatter<string_view>::format(iceberg::to_string_view(ec), ctx);
+}
+
+auto fmt::formatter<iceberg::type_promoted>::format(
+  iceberg::type_promoted ec,
   format_context& ctx) const -> format_context::iterator {
     return formatter<string_view>::format(iceberg::to_string_view(ec), ctx);
 }
