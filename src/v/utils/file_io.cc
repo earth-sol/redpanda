@@ -19,8 +19,6 @@
 #include <seastar/core/fstream.hh>
 #include <seastar/core/temporary_buffer.hh>
 
-#include <exception>
-
 ss::future<ss::temporary_buffer<char>>
 read_fully_tmpbuf(const std::filesystem::path& name) {
     return ss::with_file(
