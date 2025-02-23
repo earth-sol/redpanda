@@ -4,11 +4,13 @@ The following dockerfiles in this directory support compiling clang and it's too
 We install minimal dependencies and build clang toolchains that bazel loads directly. This makes the build more
 hermetic and allows us to atomically upgrade the compiler as desired. 
 
-To build a toolchain use the following command:
+To build a toolchain with the latest LLVM release use the following command:
 
 ```
-OUTPUT_FILE="llvm-ubuntu-22.04-x86_64-$(date --rfc-3339=date -u).tar.zst"
-docker build --file Dockerfile.llvm --output type=tar,dest=- . | zstd -o "$OUTPUT_FILE"
+LLVM_VERSION="$(gh release list --repo llvm/llvm-project --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName | ltrimstr("llvmorg-")')"
+OUTPUT_FILE="llvm-$LLVM_VERSION-ubuntu-22.04-x86_64-$(date --rfc-3339=date -u).tar.zst"
+echo "Building $OUTPUT_FILE"
+docker build --file Dockerfile.llvm --build-arg LLVM_VERSION=$LLVM_VERSION --output type=tar,dest=- . | zstd -o "$OUTPUT_FILE"
 ```
 
 The compiler output will be in a tarball in the current directory, this can be uploaded to S3, then bazel can pull
@@ -22,8 +24,10 @@ You can build an `aarch64` toolchain on a `x86_64` host by installing QEMU:
 Then build the docker image using buildx like so:
 
 ```
-OUTPUT_FILE="llvm-ubuntu-22.04-aarch64-$(date --rfc-3339=date -u).tar.zst"
-docker buildx build --platform=linux/arm64 --file Dockerfile.llvm --output type=tar,dest=- . | zstd -o "$OUTPUT_FILE"
+LLVM_VERSION="$(gh release list --repo llvm/llvm-project --limit 1 --exclude-drafts --exclude-pre-releases --json tagName --jq '.[0].tagName | ltrimstr("llvmorg-")')"
+OUTPUT_FILE="llvm-$LLVM_VERSION-ubuntu-22.04-aarch64-$(date --rfc-3339=date -u).tar.zst"
+echo "Building $OUTPUT_FILE"
+docker buildx build --platform=linux/arm64 --build-arg LLVM_VERSION=$LLVM_VERSION --file Dockerfile.llvm --output type=tar,dest=- . | zstd -o "$OUTPUT_FILE"
 ```
 
 ### LTO Builds

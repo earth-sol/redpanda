@@ -137,13 +137,24 @@ llvm.toolchain_root(
     name = "pgo_toolchain",
     path = "/opt/stage-1",
 )
+llvm.sysroot(
+    name = "pgo_toolchain",
+    label = "@x86_64_sysroot//:sysroot",
+    targets = ["linux-x86_64"],
+)
+llvm.sysroot(
+    name = "pgo_toolchain",
+    label = "@aarch64_sysroot//:sysroot",
+    targets = ["linux-aarch64"],
+)
 use_repo(llvm, "pgo_toolchain")
 EOF
 RUN cat pgo_compiler.bzl >> MODULE.bazel
 
-RUN retry --sleep=0 --tries=100 -- bazel build \
+RUN bazel build \
   --config=release \
   --extra_toolchains=@pgo_toolchain//:all \
+  --nokeep_going \
   --copt=-g \
   --copt=-w \
   --copt=-Wno-error \
