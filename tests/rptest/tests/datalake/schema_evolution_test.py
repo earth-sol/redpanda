@@ -19,6 +19,7 @@ from confluent_kafka import avro
 from confluent_kafka.avro import AvroProducer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from rptest.clients.rpk import RpkTool, RpkException
+from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 from rptest.services.redpanda import PandaproxyConfig, SISettings, SchemaRegistryConfig
 from rptest.services.redpanda_connect import RedpandaConnectService
@@ -38,6 +39,7 @@ from ducktape.errors import TimeoutError
 # of translation (i.e. calls to _produce)
 class TranslationContext:
     total: int = 0
+    dlq: int = 0
 
 
 class ProducerType(str, Enum):
@@ -188,12 +190,11 @@ class GenericSchema:
             dl.wait_for_translation(topic_name,
                                     msg_count=context.total + count)
             context.total = context.total + count
-            return
-
-        with expect_exception(TimeoutError, lambda _: True):
+        else:
             dl.wait_for_translation(topic_name,
-                                    msg_count=context.total + count,
-                                    timeout=10)
+                                    msg_count=context.dlq + count,
+                                    table_override=f"{topic_name}~dlq")
+            context.dlq = context.dlq + count
 
     def check_table_schema(
         self,
@@ -539,7 +540,9 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                               include_query_engines=[
                                   query_engine,
                               ]) as dl:
-            config = {}
+            config = {
+                TopicSpec.PROPERTY_ICEBERG_INVALID_RECORD_ACTION: "dlq_table"
+            }
             if partition_spec is not None:
                 config["redpanda.iceberg.partition.spec"] = partition_spec
             dl.create_iceberg_enabled_topic(
@@ -631,6 +634,8 @@ class SchemaEvolutionE2ETests(RedpandaTest):
                                      tc.next_schema.field_names)
             assert len(select_out) == count, \
                 f"Expected {count} rows, got {select_out}"
+            assert ctx.dlq == count, \
+                f"Expected {count} records were dlq'ed, got {ctx.dlq}"
 
     @cluster(num_nodes=3)
     @cluster(num_nodes=3)
