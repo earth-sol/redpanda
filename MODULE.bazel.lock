@@ -200,7 +200,7 @@
   "moduleExtensions": {
     "//bazel:extensions.bzl%non_module_dependencies": {
       "general": {
-        "bzlTransitiveDigest": "JBym5rg76NFdIblnjtiWo5gRO3Mx6nwaD9O+oDnZdMQ=",
+        "bzlTransitiveDigest": "7yHEvqkGjICm+74vrxJH44/bjB/C66ZXUPSLBwrvXZQ=",
         "usagesDigest": "8eEn6X1e7HKkx2OPWUwQBOEnT9TIkMhEcXbu/wRjGno=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -424,9 +424,9 @@
             "ruleClassName": "http_archive",
             "attributes": {
               "build_file_content": "\nfilegroup(\n  name = \"sysroot\",\n  srcs = glob([\"*/**\"]),\n  visibility = [\"//visibility:public\"],\n)",
-              "sha256": "7639199d529a2aee4b0007a2c55f6178235e732782ca47795a3022342e7ad985",
+              "sha256": "282b7eb89ca45d2309217d5d2099cc087c1e7bd55f7891b9d2ddca648b6663b7",
               "urls": [
-                "http://redpanda-core-toolchain.s3-website-us-east-1.amazonaws.com/sysroot-ubuntu-22.04-x86_64-2025-01-26.tar.gz"
+                "https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/sysroot-ubuntu-22.04-x86_64-2025-02-24.tar.zst"
               ]
             }
           },
@@ -435,9 +435,9 @@
             "ruleClassName": "http_archive",
             "attributes": {
               "build_file_content": "\nfilegroup(\n  name = \"sysroot\",\n  srcs = glob([\"*/**\"]),\n  visibility = [\"//visibility:public\"],\n)",
-              "sha256": "536cc7a4e0eb41418239da62f7f8d7205f1006fa5670f4ab8fab4a8db86de087",
+              "sha256": "a162b62d4d34588232137c8f14d45849aaa36202b9081f2718452f4a086ae817",
               "urls": [
-                "http://redpanda-core-toolchain.s3-website-us-east-1.amazonaws.com/sysroot-ubuntu-22.04-aarch64-2025-01-26.tar.gz"
+                "https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/sysroot-ubuntu-22.04-aarch64-2025-02-24.tar.zst"
               ]
             }
           }
@@ -5477,7 +5477,7 @@
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/rustc": "241027b94ad67beb36d0356f7cc05180daaa9966b2958cfba1d4de089d2e521c",
           "@@//bazel/thirdparty/Cargo.lock": "931fa1bc55d0e5d2e5b6d96da399569a4c2254a4bb1d99c98f71bb4b98eead73",
           "@@//bazel/thirdparty/Cargo.toml": "cb23768a6e7edc8f97215921e956f5be06521ad93cc0ecf64a932e3a8caada54",
-          "@@//MODULE.bazel": "c6ed856d6d5def8fa48b4865759fb7136e60552d0ee71cef4e4ddb65d14a4cdb",
+          "@@//MODULE.bazel": "5928374d2d47a7756986874d0b52dff8d1c2da51fffeba791447d64e081a3611",
           "@@//bazel/thirdparty/wasmtime.BUILD": "4b55deaf51f5b8be25fc3592f9bcf3d732f99632cd793c685436ddca9a177534",
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/cargo": "35099f3b7b9497b3ae95aa00886ac6839343488e5cdb958e69c16c9b58c3afb2"
         },
@@ -7921,7 +7921,7 @@
     "@@toolchains_llvm~//toolchain/extensions:llvm.bzl%llvm": {
       "general": {
         "bzlTransitiveDigest": "fmsRTyBp1xIamu23ImT9c9gJrJFKP4BZtd9ZBzOtLeo=",
-        "usagesDigest": "XixqAKOxA7LrMrPxhVrEVscxagLWvWOM2J7OhQqoKvQ=",
+        "usagesDigest": "exYHWj6RKT1iZGln90pdXYIB1u2Zw11KBuxycC5VPvA=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -7940,9 +7940,19 @@
               "llvm_version": "19.1.7",
               "llvm_versions": {},
               "netrc": "",
-              "sha256": {},
+              "sha256": {
+                "linux-aarch64": "7c64d4b7847cdb48df946bfed66705b6dab042eb69814bd72145750b87052bfe",
+                "linux-x86_64": "8ffe11b83ee02e7ffd82bcd4a426c36619ca971222f2bccadb08e3bf2b39a961"
+              },
               "strip_prefix": {},
-              "urls": {}
+              "urls": {
+                "linux-aarch64": [
+                  "https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/llvm-19.1.7-ubuntu-22.04-aarch64-2025-02-23.tar.zst"
+                ],
+                "linux-x86_64": [
+                  "https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/llvm-19.1.7-ubuntu-22.04-x86_64-2025-02-23.tar.zst"
+                ]
+              }
             }
           },
           "llvm_19_toolchain": {

@@ -140,16 +140,14 @@ llvm.toolchain(
     compile_flags = COMPILE_FLAGS,
     cxx_standard = {"": CXX_STANDARD},
     llvm_version = "19.1.7",
-    # Currently our custom build of clang causes false positives with sanitizers, so we use the default clang distribution.
-    #
-    # sha256 = {
-    #     "linux-aarch64": "c5cade3af930255296e097687ed9c86c660ca5b619a352a536353aaa5d4fde2e",
-    #     "linux-x86_64": "0617e50fdb484bcd2169b24acd90e9b9fec7e6730d187fe8d2acfe69d2d429c4",
-    # },
-    # urls = {
-    #     "linux-aarch64": ["http://redpanda-core-toolchain.s3-website-us-east-1.amazonaws.com/llvm-19.1.1-ubuntu-22.04-aarch64.tar.gz"],
-    #     "linux-x86_64": ["http://redpanda-core-toolchain.s3-website-us-east-1.amazonaws.com/llvm-19.1.1-ubuntu-22.04-x86_64.tar.gz"],
-    # },
+    sha256 = {
+        "linux-aarch64": "7c64d4b7847cdb48df946bfed66705b6dab042eb69814bd72145750b87052bfe",
+        "linux-x86_64": "8ffe11b83ee02e7ffd82bcd4a426c36619ca971222f2bccadb08e3bf2b39a961",
+    },
+    urls = {
+        "linux-aarch64": ["https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/llvm-19.1.7-ubuntu-22.04-aarch64-2025-02-23.tar.zst"],
+        "linux-x86_64": ["https://github.com/redpanda-data/llvm-project/releases/download/llvmorg-19.1.7/llvm-19.1.7-ubuntu-22.04-x86_64-2025-02-23.tar.zst"],
+    },
 )
 llvm.sysroot(
     name = "llvm_19_toolchain",
