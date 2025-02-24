@@ -385,7 +385,7 @@ redpanda_cc_btest(
     ],
 )
 
-redpanda_cc_btest(
+redpanda_cc_gtest(
     name = "state_removal_test",
     timeout = "short",
     srcs = [
@@ -393,11 +393,13 @@ redpanda_cc_btest(
     ],
     tags = ["exclusive"],
     deps = [
+        ":raft_fixiture_retry_policy",
+        ":raft_fixture",
         "//src/v/raft",
         "//src/v/raft/tests:stm_raft_fixture",
         "//src/v/test_utils:seastar_boost",
         "//src/v/utils:directory_walker",
-        "@boost//:test",
+        "@googletest//:gtest",
         "@seastar",
         "@seastar//:testing",
     ],

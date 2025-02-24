@@ -20,7 +20,7 @@ set(srcs
     append_entries_test.cc
     offset_monitor_test.cc
     mutex_buffer_test.cc
-    state_removal_test.cc
+
     configuration_manager_test.cc
     coordinated_recovery_throttle_test.cc
     heartbeats_test.cc
@@ -50,6 +50,7 @@ set(gsrcs
     replication_monitor_tests.cc
     mux_state_machine_test.cc
     snapshot_recovery_test.cc
+    state_removal_test.cc
     group_configuration_tests.cc
 )
 
