@@ -142,7 +142,7 @@ redpanda_cc_btest(
 )
 
 redpanda_test_cc_library(
-    name = "raft_fixiture_retry_policy",
+    name = "raft_fixture_retry_policy",
     hdrs = [
         "raft_fixture_retry_policy.h",
     ],
@@ -161,7 +161,7 @@ redpanda_cc_gtest(
         "partition_properties_stm_test.cc",
     ],
     deps = [
-        ":raft_fixiture_retry_policy",
+        ":raft_fixture_retry_policy",
         ":utils",
         "//src/v/bytes:iobuf",
         "//src/v/bytes:random",
