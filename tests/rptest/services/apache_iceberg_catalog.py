@@ -231,7 +231,7 @@ class IcebergRESTCatalog(CatalogService):
         self.wait(timeout_sec=30)
 
     def wait_node(self, node, timeout_sec=None):
-        check_cmd = f"pyiceberg --uri {self.catalog_url} create namespace default"
+        check_cmd = f"pyiceberg --uri {self.iceberg_rest_url} create namespace default"
 
         def _ready():
             try:

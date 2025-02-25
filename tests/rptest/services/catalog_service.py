@@ -59,7 +59,7 @@ class CatalogService(Service):
         self._catalog_url = None
 
     @property
-    def catalog_url(self) -> str:
+    def iceberg_rest_url(self) -> str:
         assert self._catalog_url, "URL not available because service is not started"
         return self._catalog_url
 
@@ -89,7 +89,7 @@ class CatalogService(Service):
                 catalog_name: str = 'default',
                 catalog_url: Optional[str] = None):
         if not catalog_url:
-            catalog_url = self.catalog_url
+            catalog_url = self.iceberg_rest_url
 
         conf = dict()
         conf["uri"] = catalog_url

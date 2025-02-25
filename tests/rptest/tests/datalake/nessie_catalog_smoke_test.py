@@ -67,13 +67,15 @@ class NessieCatalogSmokeTest(RedpandaTest):
         change to the redpanda.properties file and a restart.
         """
         self.trino = TrinoService(self.test_ctx,
-                                  self.catalog_service.catalog_url,
+                                  self.catalog_service.iceberg_rest_url,
                                   self.catalog_service.cloud_storage_warehouse,
                                   self.catalog_service.catalog_type())
         self.trino.start()
         client = self.trino.make_client()
 
-        nessie_client_conf = {"endpoint": self.catalog_service.catalog_url}
+        nessie_client_conf = {
+            "endpoint": self.catalog_service.iceberg_rest_url
+        }
         nessie_client = pynessie.init(config_dict=nessie_client_conf)
         try:
             cursor = client.cursor()
@@ -114,7 +116,7 @@ class NessieCatalogSmokeTest(RedpandaTest):
     @matrix(cloud_storage_type=supported_storage_types())
     def test_nessie_with_spark(self, cloud_storage_type):
         self.spark = SparkService(self.test_ctx,
-                                  self.catalog_service.catalog_url,
+                                  self.catalog_service.iceberg_rest_url,
                                   self.catalog_service.cloud_storage_warehouse,
                                   self.catalog_service.catalog_type())
         self.spark.start()

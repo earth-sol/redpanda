@@ -28,7 +28,7 @@ class TrinoSmokeTest(IcebergRESTCatalogTest):
     def setUp(self):
         super().setUp()
         self.trino = TrinoService(self.test_ctx,
-                                  self.catalog_service.catalog_url,
+                                  self.catalog_service.iceberg_rest_url,
                                   self.catalog_service.cloud_storage_warehouse,
                                   self.catalog_service.catalog_type())
         self.trino.start()
