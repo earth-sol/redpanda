@@ -70,20 +70,21 @@ class NessieCatalog(CatalogService):
         self._current_reference = "main"
         self.compute_warehouse_path()
 
+        self._vendor_api_url = None
+
     # The endpoint that directly accesses the iceberg catalog.
     _iceberg_url: Optional[str] = None
 
     @property
     def vendor_api_url(self) -> str:
-        assert self._catalog_url, "URL not available because service is not started"
-        return self._catalog_url
+        assert self._vendor_api_url, "URL not available because service is not started"
+        return self._vendor_api_url
 
     def catalog_type(self) -> CatalogType:
         return CatalogType.NESSIE
 
     def client(self, catalog_name: str = 'default'):
-        return self._client(catalog_name=catalog_name,
-                            catalog_url=self._iceberg_url)
+        return self._client(catalog_name=catalog_name)
 
     def _java_home(self, node):
         return node.account.ssh_output(
@@ -172,8 +173,8 @@ class NessieCatalog(CatalogService):
                    err_msg="Error waiting for nessie catalog to start",
                    retry_on_exc=True)
 
-        self._iceberg_url = self._nessie_iceberg_path(node)
-        self._catalog_url = self._http_request_path_from_node(
+        self._catalog_url = self._nessie_iceberg_path(node)
+        self._vendor_api_url = self._http_request_path_from_node(
             node, NessieCatalog.NESSIE_API_VERSION)
 
     def wait_node(self, node, timeout_sec=None):
