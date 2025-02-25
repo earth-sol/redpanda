@@ -348,7 +348,7 @@ redpanda_cc_btest(
     ],
 )
 
-redpanda_cc_btest(
+redpanda_cc_gtest(
     name = "membership_test",
     timeout = "short",
     srcs = [
@@ -356,13 +356,15 @@ redpanda_cc_btest(
     ],
     tags = ["exclusive"],
     deps = [
+        ":raft_fixture",
+        ":raft_fixture_retry_policy",
         "//src/v/model",
         "//src/v/raft",
         "//src/v/raft/tests:stm_raft_fixture",
         "//src/v/storage",
         "//src/v/test_utils:fixture",
         "//src/v/test_utils:seastar_boost",
-        "@boost//:test",
+        "@googletest//:gtest",
         "@seastar//:testing",
     ],
 )
