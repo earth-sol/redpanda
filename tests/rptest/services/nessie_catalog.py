@@ -8,21 +8,13 @@
 # by the Apache License, Version 2.0
 
 import os
-import json
-import collections
-import re
-import time
-from typing import Optional, Any
-
-from ducktape.services.service import Service
-from ducktape.utils.util import wait_until
-from ducktape.cluster.cluster import ClusterNode
+from typing import Optional
 
 import requests
+from ducktape.utils.util import wait_until
 
-from rptest.services.tls import TLSCertManager
-from rptest.services.catalog_service import CatalogType, CatalogService
 from rptest.context import cloud_storage
+from rptest.services.catalog_service import CatalogService, CatalogType
 
 
 class NessieCatalog(CatalogService):
