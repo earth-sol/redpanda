@@ -10,6 +10,7 @@
 from ducktape.services.service import Service
 from rptest.context import cloud_storage
 
+import abc
 from typing import Optional, Any
 from enum import Enum
 
@@ -39,7 +40,7 @@ def catalog_type_to_config_string(catalog_type: CatalogType) -> str:
     raise ValueError(f"Unsupported catalog type: {catalog_type}")
 
 
-class CatalogService(Service):
+class CatalogService(abc.ABC, Service):
     # Expected to be available after initialization of derived class.
     # Use catalog_url property to access.
     _catalog_url: Optional[str] = None
@@ -57,6 +58,10 @@ class CatalogService(Service):
         self.cloud_storage_bucket = cloud_storage_bucket
         self.warehouse_name = warehouse_name
         self._catalog_url = None
+
+    @abc.abstractmethod
+    def catalog_type(self) -> CatalogType:
+        ...
 
     @property
     def iceberg_rest_url(self) -> str:
