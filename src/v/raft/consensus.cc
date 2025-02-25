@@ -49,6 +49,7 @@
 #include <seastar/core/gate.hh>
 #include <seastar/core/metrics.hh>
 #include <seastar/core/semaphore.hh>
+#include <seastar/coroutine/switch_to.hh>
 #include <seastar/util/defer.hh>
 
 #include <fmt/ostream.h>
@@ -3263,6 +3264,10 @@ ss::future<timeout_now_reply> consensus::timeout_now(timeout_now_request r) {
           .result = timeout_now_reply::status::failure,
         };
     }
+    // TODO: consider using raft scheduling group for all Raft operations,
+    // currently we switch to 'main' group here as election is running in the
+    // main group
+    co_await ss::coroutine::switch_to(ss::default_scheduling_group());
 
     if (r.term != _term) {
         vlog(
