@@ -94,9 +94,6 @@ class IcebergRESTCatalog(CatalogService):
         # Trino <-> REST server (JDBC Catalog) <-> local sqllite DB.
         self.db_file = None
 
-    def catalog_name(self) -> str:
-        return self.catalog_type().value
-
     def catalog_type(self) -> CatalogType:
         if self.filesystem_wrapper_mode:
             return CatalogType.REST_HADOOP

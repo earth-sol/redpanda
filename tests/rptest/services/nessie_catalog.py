@@ -78,9 +78,6 @@ class NessieCatalog(CatalogService):
         assert self._catalog_url, "URL not available because service is not started"
         return self._catalog_url
 
-    def catalog_name(self) -> str:
-        return self.catalog_type().value
-
     def catalog_type(self) -> CatalogType:
         return CatalogType.NESSIE
 
