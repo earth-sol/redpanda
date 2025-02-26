@@ -20,6 +20,7 @@
 #include "datalake/translation/translation_probe.h"
 #include "features/fwd.h"
 #include "model/record_batch_reader.h"
+#include "model/timestamp.h"
 #include "utils/retry_chain_node.h"
 
 #include <seastar/core/io_priority_class.hh>

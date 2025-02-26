@@ -18,6 +18,7 @@
 #include "datalake/translation/translation_probe.h"
 #include "model/record.h"
 #include "model/record_batch_reader.h"
+#include "model/timestamp.h"
 #include "utils/prefix_logger.h"
 
 #include <seastar/core/future.hh>

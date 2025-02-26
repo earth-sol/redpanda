@@ -186,6 +186,7 @@ public:
         while (!has_more_data_to_translate(last_translated_offset)) {
             co_await ss::sleep_abortable(poll_duration, as);
         }
+        update_translation_target();
         auto read_begin_offset = min_offset_for_translation();
         if (last_translated_offset) {
             read_begin_offset = kafka::next_offset(
@@ -241,8 +242,12 @@ public:
       model::term_id term,
       model::timeout_clock::duration timeout,
       ss::abort_source& as) final {
+        std::optional<model::timestamp> new_ts{};
+        if (_translation_target && new_offset >= _translation_target->offset) {
+            new_ts.emplace(_translation_target->ts);
+        }
         return _stm->reset_highest_translated_offset(
-          new_offset, term, timeout, as);
+          new_offset, new_ts, term, timeout, as);
     }
 
     void update_commit_lag(
@@ -288,6 +293,24 @@ private:
     ss::shared_ptr<translation_stm> _stm;
     std::unique_ptr<kafka::partition_proxy> _partition_proxy;
     cluster::partition_flush_hook_id _partition_flush_subscription;
+
+    struct timestamped_offset {
+        kafka::offset offset;
+        model::timestamp ts;
+    };
+    // updated to max_offset_for_translation and current system time when
+    // wait_for_data_to_translated finds untranslated offsets on the input
+    // partition. the timestamp here is used as a rough approximation of
+    // the corresponding recor's write time, replicated when we translate
+    // an offset meeting or exceeding target.offset.
+    std::optional<timestamped_offset> _translation_target;
+
+    void update_translation_target() {
+        if (auto max_o = max_offset_for_translation(); max_o.has_value()) {
+            _translation_target.emplace(
+              timestamped_offset{max_o.value(), model::timestamp::now()});
+        }
+    }
 };
 
 std::unique_ptr<data_source> data_source::make_default_data_source(
