@@ -1438,6 +1438,7 @@ void application::wire_up_redpanda_services(
       .start(
         node_id,
         sched_groups.raft_recv_sg(),
+        sched_groups.raft_send_sg(),
         sched_groups.raft_heartbeats(),
         [] {
             return raft::group_manager::configuration{

@@ -739,11 +739,15 @@ inline constexpr voter_priority min_voter_priority = voter_priority{1};
  */
 struct scheduling_config {
     scheduling_config(
-      ss::scheduling_group recv_sg, ss::io_priority_class default_iopc)
+      ss::scheduling_group recv_sg,
+      ss::scheduling_group send_sg,
+      ss::io_priority_class default_iopc)
       : recv_sg(recv_sg)
+      , send_sg(send_sg)
       , default_iopc(default_iopc) {}
 
     ss::scheduling_group recv_sg;
+    ss::scheduling_group send_sg;
     ss::io_priority_class default_iopc;
 };
 
