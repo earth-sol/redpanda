@@ -14,6 +14,8 @@
 #include "cluster/fwd.h"
 #include "cluster/metrics_reporter.h"
 #include "crash_tracker/recorder.h"
+#include "model/timestamp.h"
+#include "storage/fwd.h"
 #include "utils/prefix_logger.h"
 
 #include <seastar/core/abort_source.hh>
@@ -51,6 +53,25 @@ public:
 
     ss::future<> start();
     ss::future<> stop();
+
+    class rate_limiter {
+    public:
+        using clock = model::timestamp_clock;
+
+        static constexpr auto upload_rate = std::chrono::seconds{30};
+
+        explicit rate_limiter(storage::kvstore& kvstore)
+          : _kvstore(kvstore) {}
+
+        /// Called before an upload to rate limit subsequent uploads
+        ss::future<> record();
+
+        /// Called before an upload to get how long to wait before uploading
+        clock::duration wait_time();
+
+    private:
+        storage::kvstore& _kvstore;
+    };
 
 private:
     using report_batch = std::vector<crash_tracker::recorder::recorded_crash>;
