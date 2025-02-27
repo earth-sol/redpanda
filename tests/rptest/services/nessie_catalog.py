@@ -127,6 +127,9 @@ class NessieCatalog(CatalogService):
         elif isinstance(self.credentials,
                         cloud_storage.AWSInstanceMetadataCredentials):
             d_flags += "-Dnessie.catalog.service.s3.default-options.auth-type=APPLICATION_GLOBAL"
+        elif isinstance(self.credentials,
+                        cloud_storage.GCPInstanceMetadataCredentials):
+            d_flags += "-Dnessie.catalog.service.gcs.default-options.auth-type=APPLICATION_DEFAULT"
         return d_flags
 
     def _java_cmd(self, node):
