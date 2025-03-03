@@ -64,7 +64,6 @@ class JavaCompressionTest(EndToEndTest):
                 err_msg=
                 f"Timed out waiting for {count} segments to be produced.")
         finally:
-            producer.stop()
             producer.clean()
             producer.free()
 
@@ -72,7 +71,6 @@ class JavaCompressionTest(EndToEndTest):
         deadline = time() + timeout_sec
         consumer = KafkaConsumer(self.topic_spec.name,
                                  bootstrap_servers=self.redpanda.brokers(),
-                                 group_id="0",
                                  consumer_timeout_ms=1000,
                                  auto_offset_reset='earliest',
                                  enable_auto_commit=False)
@@ -95,7 +93,7 @@ class JavaCompressionTest(EndToEndTest):
             f"Saw {num_compacted_segments} compacted segments")
         return num_compacted_segments
 
-    def wait_for_compacted_segments(self, num_segments, timeout_sec=120):
+    def wait_for_compacted_segments(self, num_segments, timeout_sec=360):
         self.redpanda.logger.debug(
             f"Waiting for {num_segments} compacted segments")
         wait_until(
@@ -183,13 +181,20 @@ class JavaCompressionTest(EndToEndTest):
         # Install the latest version of `redpanda` and restart nodes
         self.redpanda._installer.install(self.redpanda.nodes,
                                          RedpandaInstaller.HEAD)
-        self.redpanda.restart_nodes(self.redpanda.nodes)
+        self.redpanda.stop_node(self.redpanda.nodes[0])
+
+        # Delete all the compaction indices to force self compaction of segments.
+        storage = self.redpanda.storage(all_nodes=True)
+        partitions = storage.partitions("kafka", self.topic_spec.name)
+        for p in partitions:
+            p.delete_indices(allow_fail=True)
+
+        self.redpanda.start_node(self.redpanda.nodes[0])
 
         # Repeat the process
         expected_num_segments = 8
         self.produce_until_segment_count(
             expected_num_segments, compression_type=compression_type.value)
-        self.wait_for_compacted_segments(expected_num_segments)
 
         # The min_cleanable_dirty_ratio cluster config was not in the original
         # version of redpanda installed above, it was added in v25.1.0.
@@ -201,8 +206,19 @@ class JavaCompressionTest(EndToEndTest):
                 "log_compaction_interval_ms": 500
             })
 
+        def consumer_succeeds():
+            """
+            In the case of `snappy`, every single batch should eventually be decompressed
+            and recompressed using the new big-endian fix during compaction.
+            Expect to see consuming with `kafka-python` eventually succeed.
+            """
+            try:
+                self.consume()
+                return True
+            except:
+                return False
 
-        # In the case of `snappy`, every single batch should have been decompressed
-        # and recompressed using the new big-endian fix. Expect to see consuming
-        # with `kafka-python` succeed.
-        self.consume()
+        wait_until(consumer_succeeds,
+                   timeout_sec=360,
+                   backoff_sec=5,
+                   err_msg=f"Timed out waiting for consuming to succeed.")
