@@ -75,7 +75,9 @@ class DatalakeServices():
         if self.catalog_service.catalog_type() == CatalogType.NESSIE:
             self.redpanda.add_extra_rp_conf({
                 "iceberg_rest_catalog_prefix":
-                NessieCatalog.NESSIE_DEFAULT_WAREHOUSE
+                NessieCatalog.NESSIE_DEFAULT_WAREHOUSE,
+                "iceberg_disable_snapshot_tagging":
+                "true"
             })
         self.redpanda.start(start_si=False)
 
