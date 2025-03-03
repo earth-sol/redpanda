@@ -29,8 +29,6 @@ def supported_catalog_types() -> List[CatalogType]:
 def make_catalog_service_for_type(catalog_type: CatalogType, test_ctx,
                                   cloud_storage_bucket: str,
                                   warehouse_name: str) -> CatalogService:
-    if catalog_type not in SUPPORTED_CATALOG_TYPES:
-        raise NotImplementedError(f"No catalog of type {catalog_type}")
     if catalog_type == CatalogType.REST_JDBC:
         return IcebergRESTCatalog(test_ctx,
                                   cloud_storage_bucket=cloud_storage_bucket,
@@ -40,3 +38,5 @@ def make_catalog_service_for_type(catalog_type: CatalogType, test_ctx,
                                   cloud_storage_bucket=cloud_storage_bucket,
                                   warehouse_name=warehouse_name,
                                   filesystem_wrapper_mode=True)
+    else:
+        raise NotImplementedError(f"No catalog of type {catalog_type}")
