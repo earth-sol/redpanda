@@ -12,6 +12,7 @@
 #include "cloud_io/tests/scoped_remote.h"
 #include "config/property.h"
 #include "datalake/catalog_schema_manager.h"
+#include "datalake/coordinator/commit_offset_metadata.h"
 #include "datalake/coordinator/iceberg_file_committer.h"
 #include "datalake/coordinator/tests/state_test_utils.h"
 #include "datalake/table_definition.h"
@@ -163,6 +164,17 @@ public:
                 uris->emplace_back(e.data_file.file_path());
             }
         }
+    }
+
+    // Populates `uris` with the data files referenced by the current snapshot.
+    void get_current_data_files(chunked_vector<ss::sstring>* uris) {
+        auto load_res = catalog.load_table(table_ident).get();
+        ASSERT_FALSE(load_res.has_error());
+        const auto& table = load_res.value();
+        ASSERT_TRUE(table.current_snapshot_id.has_value());
+        auto cur_snap = table.get_snapshots_by_id().at(
+          *table.current_snapshot_id);
+        ASSERT_NO_FATAL_FAILURE(get_snap_data_files(cur_snap, uris));
     }
 
     std::unique_ptr<cloud_io::scoped_remote> sr;
@@ -519,6 +531,100 @@ TEST_F(FileCommitterTest, TestDeduplicateFromAncestor) {
     ASSERT_FALSE(load_res.has_error());
     ASSERT_TRUE(load_res.value().snapshots.has_value());
     ASSERT_EQ(2, load_res.value().snapshots.value().size());
+}
+
+TEST_F(FileCommitterTest, TestDontDeduplicateFromOtherCluster) {
+    create_table();
+
+    // Create some offset ranges with file paths.
+    topics_state state;
+    state.topic_to_state[topic] = make_topic_state(
+      /*offset_bounds_by_pid=*/{{{0, 99}, {100, 199}}},
+      /*added_at=*/model::offset{1000},
+      /*with_files=*/true);
+    auto res = committer.commit_topic_files_to_catalog(topic, state).get();
+    ASSERT_FALSE(res.has_error());
+    chunked_vector<ss::sstring> uris;
+    ASSERT_NO_FATAL_FAILURE(get_current_data_files(&uris));
+    ASSERT_EQ(2, uris.size());
+
+    // Now commit some data, but with a new cluster UUID. Even though the
+    // files were added at a lower offset than above, since it's from a new
+    // cluster UUID, the files should still be added.
+    topics_state new_cluster_state;
+    new_cluster_state.topic_to_state[topic] = make_topic_state(
+      // NOTE: deduplication is based on the added_at offset rather than offset
+      // ranges, so it doesn't matter we're adding the same ranges here.
+      /*offset_bounds_by_pid=*/{{{0, 99}, {100, 199}}},
+      /*added_at=*/model::offset{0},
+      /*with_files=*/true);
+
+    model::cluster_uuid new_cluster{uuid_t::create()};
+    auto new_storage = dummy_storage(feature_table);
+    new_storage.set_cluster_uuid(new_cluster);
+    iceberg_file_committer new_cluster_committer(
+      new_storage, catalog, manifest_io, config::mock_binding(false));
+    res = new_cluster_committer
+            .commit_topic_files_to_catalog(topic, new_cluster_state)
+            .get();
+    ASSERT_FALSE(res.has_error());
+
+    uris.clear();
+    ASSERT_NO_FATAL_FAILURE(get_current_data_files(&uris));
+    ASSERT_EQ(4, uris.size());
+}
+
+TEST_F(FileCommitterTest, TestDeduplicateWithMissingClusterUUID) {
+    create_table();
+
+    // Create some offset ranges with file paths.
+    topics_state state;
+    state.topic_to_state[topic] = make_topic_state(
+      /*offset_bounds_by_pid=*/{{{0, 99}, {100, 199}}},
+      /*added_at=*/model::offset{1000},
+      /*with_files=*/true);
+    auto res = committer.commit_topic_files_to_catalog(topic, state).get();
+    ASSERT_FALSE(res.has_error());
+    chunked_vector<ss::sstring> uris;
+    ASSERT_NO_FATAL_FAILURE(get_current_data_files(&uris));
+    ASSERT_EQ(2, uris.size());
+
+    auto load_res = catalog.load_table(table_ident).get();
+    ASSERT_FALSE(load_res.has_error());
+    auto& table = load_res.value();
+    for (auto& snap : table.snapshots.value()) {
+        auto& props = snap.summary.other;
+        auto prop_it = props.find("redpanda.commit-metadata");
+        if (prop_it != props.end()) {
+            auto res = parse_commit_offset_json(prop_it->second);
+            ASSERT_FALSE(res.has_error());
+            auto& meta = res.value();
+            // Reset the cluster field, to simulate an version of Redpanda that
+            // didn't write this field.
+            meta.cluster = std::nullopt;
+
+            prop_it->second = to_json_str(meta);
+        }
+    }
+    auto rewrite_res
+      = catalog.rewrite_table_meta_for_tests(table_ident, table).get();
+    ASSERT_FALSE(rewrite_res.has_error());
+
+    topics_state new_cluster_state;
+    new_cluster_state.topic_to_state[topic] = make_topic_state(
+      /*offset_bounds_by_pid=*/{{{0, 99}, {100, 199}}},
+      /*added_at=*/model::offset{0},
+      /*with_files=*/true);
+
+    res
+      = committer.commit_topic_files_to_catalog(topic, new_cluster_state).get();
+    ASSERT_FALSE(res.has_error());
+
+    // Redpanda should assume that the cluster-UUID-less metadata belongs to
+    // the current cluster and the files should be deduplicated.
+    uris.clear();
+    ASSERT_NO_FATAL_FAILURE(get_current_data_files(&uris));
+    ASSERT_EQ(2, uris.size());
 }
 
 TEST_F(FileCommitterTest, TestDeduplicateConcurrently) {

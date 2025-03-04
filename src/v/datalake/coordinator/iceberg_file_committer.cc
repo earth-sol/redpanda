@@ -70,9 +70,7 @@ constexpr auto commit_tag_name = "redpanda.tag";
 // recent ancestor if none.
 checked<std::optional<model::offset>, parse_offset_error>
 get_iceberg_committed_offset(
-  // XXX: cluster UUID is plumbed here but not used! Next commit will use.
-  const iceberg::table_metadata& table,
-  const model::cluster_uuid&) {
+  const iceberg::table_metadata& table, const model::cluster_uuid& cluster) {
     if (!table.current_snapshot_id.has_value()) {
         return std::nullopt;
     }
@@ -92,7 +90,18 @@ get_iceberg_committed_offset(
             if (res.has_error()) {
                 return res.error();
             }
-            return res.value().offset;
+            const auto& meta = res.value();
+            // If there is no cluster UUID in the metadata (it was written from
+            // an older version of Redpanda), assume it's from this cluster,
+            // given cluster restore events are rare.
+            // Otherwise, we should only honor the metadata if it was from this
+            // cluster, since it refers to an offset of this cluster's datalake
+            // control topic.
+            if (!meta.cluster.has_value() || *meta.cluster == cluster) {
+                return meta.offset;
+            }
+            // The metadata wasn't written by this cluster. Keep looking for
+            // some metadata that was.
         }
 
         if (!snap.parent_snapshot_id.has_value()) {
@@ -233,7 +242,11 @@ public:
         }
 
         return table_commit_builder(
-          std::move(table_id), std::move(table), meta_res.value(), with_tag);
+          cluster,
+          std::move(table_id),
+          std::move(table),
+          meta_res.value(),
+          with_tag);
     }
 
 public:
@@ -308,6 +321,7 @@ public:
           "New Iceberg files implies new commit metadata");
         const auto commit_meta = commit_offset_metadata{
           .offset = *new_committed_offset_,
+          .cluster = cluster_,
         };
 
         vlog(
@@ -353,11 +367,13 @@ public:
 
 private:
     table_commit_builder(
+      const model::cluster_uuid& cluster,
       iceberg::table_identifier table_id,
       iceberg::table_metadata&& table,
       std::optional<model::offset> table_commit_offset,
       bool with_tag)
-      : table_id_(std::move(table_id))
+      : cluster_(cluster)
+      , table_id_(std::move(table_id))
       , table_(std::move(table))
       , table_commit_offset_(table_commit_offset)
       , with_snapshot_tag_(with_tag) {}
@@ -369,6 +385,7 @@ private:
     }
 
 private:
+    model::cluster_uuid cluster_;
     iceberg::table_identifier table_id_;
     iceberg::table_metadata table_;
     std::optional<model::offset> table_commit_offset_;
