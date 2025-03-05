@@ -103,7 +103,8 @@ class CloudCleanup():
         self.utils = CloudClusterUtils(_fake_context, self.log, _keyId,
                                        _secret, self.config.provider,
                                        self.config.api_url, oauth_url_origin,
-                                       self.config.oauth_audience)
+                                       self.config.oauth_audience,
+                                       self.config.public_api_url)
 
         self.log.info(f"# Using CloudV2 API at '{self.config.api_url}'")
 
