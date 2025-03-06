@@ -57,6 +57,7 @@
 #include <seastar/util/defer.hh>
 #include <seastar/util/file.hh>
 
+#include <absl/container/btree_map.h>
 #include <boost/algorithm/string/predicate.hpp>
 #include <fmt/format.h>
 
@@ -373,7 +374,8 @@ ss::future<> log_manager::housekeeping_loop() {
              * estimated reclaimable space. since logs may be asynchronously
              * deleted doing this safely is tricky.
              */
-            absl::btree_map<size_t, model::ntp, std::greater<>> ntp_by_gc_size;
+            absl::btree_multimap<size_t, model::ntp, std::greater<>>
+              ntp_by_gc_size;
 
             /*
              * first we build a collection of ntp's as their estimated
@@ -408,8 +410,8 @@ ss::future<> log_manager::housekeeping_loop() {
              * official log registry to avoid problems with concurrent removals
              * since the log interface does not tolerate ops on closed logs.
              */
-            for (const auto& candidate : ntp_by_gc_size) {
-                auto log = get(candidate.second);
+            for (const auto& [_, candidate] : ntp_by_gc_size) {
+                auto log = get(candidate);
                 if (!log) {
                     continue;
                 }
