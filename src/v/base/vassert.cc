@@ -15,59 +15,29 @@
 
 #include <seastar/util/backtrace.hh>
 #include <seastar/util/log.hh>
-#include <seastar/util/noncopyable_function.hh>
 
 #include <atomic>
 #include <string_view>
 
-namespace detail {
 using namespace base;
-struct dummyassert {
-    static inline ss::logger l{"assert"};
-};
-inline dummyassert g_assert_log;
-/**
- * @brief Class used to format assert messages
- *
- * This class will format the provided assert message and produce a backtrace
- * caused by an assert.  It also provides a means of registering a callback
- * function that will be called when an assert is triggered.
- */
-class assert_log_holder {
-public:
-    void do_assert(
-      ss::saved_backtrace bt,
-      const char* prefix, // NOLINT(bugprone-easily-swappable-parameters)
-      const char* format,
-      fmt::format_args args) noexcept {
-        std::string buffer = fmt::format(
-          "Assert failure: {} {}", prefix, fmt::vformat(format, args));
-        assert_handler(bt, buffer);
+
+namespace detail {
+namespace {
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables,cert-err58-cpp)
+ss::logger assert_logger{"assert"};
+std::atomic<assert_cb_func> _cb_func{nullptr};
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables,cert-err58-cpp)
+
+void assert_handler(const ss::saved_backtrace& bt, std::string_view text) {
+    assert_logger.error("{}", text);
+    assert_logger.error("Backtrace:\n{}", bt);
+
+    auto cb_func = _cb_func.load();
+    if (cb_func != nullptr) {
+        cb_func(text);
     }
-
-    void register_cb(assert_cb_func cb) {
-        assert_cb_func before = nullptr;
-        _cb_func.compare_exchange_strong(before, cb);
-    }
-
-private:
-    friend void ::base::register_event(
-      const ss::saved_backtrace&, std::string_view);
-
-    void assert_handler(ss::saved_backtrace bt, std::string_view text) {
-        g_assert_log.l.error("{}", text);
-        g_assert_log.l.error("Backtrace:\n{}", bt);
-
-        auto cb_func = _cb_func.load();
-        if (cb_func != nullptr) {
-            cb_func(text);
-        }
-    }
-
-    std::atomic<assert_cb_func> _cb_func{nullptr};
-};
-
-assert_log_holder g_assert_log_holder;
+}
 
 // Implementation notes:
 // Asserts rarely trigger: after all, they can occur at most once
@@ -121,25 +91,29 @@ assert_log_holder g_assert_log_holder;
 // This goldbolt link may be useful when considering changes to this
 // strategy: https://godbolt.org/z/naYddPff5
 
+} // namespace
+
 // This thunk is fully type erased. See implementation details above.
 [[gnu::cold]] [[noreturn]]
 void assert_failed_thunk2(
-  const char* prefix, const char* msg, fmt::format_args args) noexcept {
-    ::detail::g_assert_log_holder.do_assert(
-      ss::current_backtrace(), prefix, msg, args);
+  const char* prefix, const char* format, fmt::format_args args) noexcept {
+    std::string buffer = fmt::format(
+      "Assert failure: {} {}", prefix, fmt::vformat(format, args));
+    assert_handler(ss::current_backtrace(), buffer);
     __builtin_trap();
 }
 
 } // namespace detail
 
-using namespace detail;
-
 namespace base {
 
 void register_event(const ss::saved_backtrace& bt, std::string_view message) {
-    g_assert_log_holder.assert_handler(bt, message);
+    detail::assert_handler(bt, message);
 }
 
-void register_cb(assert_cb_func cb) { g_assert_log_holder.register_cb(cb); }
+void register_cb(assert_cb_func cb) {
+    assert_cb_func before = nullptr;
+    detail::_cb_func.compare_exchange_strong(before, cb);
+}
 
 } // namespace base
