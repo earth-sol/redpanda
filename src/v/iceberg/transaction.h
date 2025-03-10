@@ -69,6 +69,11 @@ public:
 
     std::optional<action::errc> error() const { return error_; }
 
+    bool is_noop() const {
+        return !error_ && updates_.updates.empty()
+               && updates_.requirements.empty();
+    }
+
     // NOTE: it is up to the caller to ensure the transaction has not hit any
     // errors before calling these.
     const table_metadata& table() const { return table_; }
