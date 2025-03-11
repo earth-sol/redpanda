@@ -88,7 +88,7 @@ ss::future<> coordinator_manager::start() {
       });
 }
 
-ss::future<> coordinator_manager::shutdown() {
+ss::future<> coordinator_manager::stop() {
     if (manage_notifications_) {
         pm_.unregister_manage_notification(*manage_notifications_);
     }
