@@ -7,6 +7,7 @@ RUN apt update && apt install -y \
     curl \
     wget \
     gnupg \
+    software-properties-common \
     lsb-release
 
 # Install latest versions using backports
@@ -22,6 +23,10 @@ RUN echo "deb http://deb.debian.org/debian bullseye-backports main" > /etc/apt/s
       ninja-build \
       zlib1g-dev \
       pkg-config
+
+ARG STAGE_0_LLVM_VERSION=20
+
+RUN wget https://apt.llvm.org/llvm.sh && chmod +x llvm.sh && /llvm.sh ${STAGE_0_LLVM_VERSION} all
 
 # Set working directory
 WORKDIR /src
@@ -46,7 +51,7 @@ set(LLVM_ENABLE_ZLIB ON CACHE BOOL "")
 set(LLVM_ENABLE_BACKTRACES OFF CACHE BOOL "")
 set(LLVM_ENABLE_PROJECTS clang bolt lld lldb clang-tools-extra CACHE STRING "")
 set(LLVM_ENABLE_RUNTIMES libcxx libcxxabi compiler-rt CACHE STRING "")
-set(LLVM_USE_LINKER gold CACHE STRING "")
+set(LLVM_USE_LINKER lld CACHE STRING "")
 set(LLVM_BUILD_TOOLS ON CACHE BOOL "")
 set(LLVM_BINUTILS_INCDIR ON CACHE BOOL "")
 set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
@@ -61,7 +66,7 @@ set(LIBCXX_CXX_ABI libcxxabi CACHE STRING "")
 # in clang-18 this appears to be on by default, but we don't use libunwind
 set(LIBCXXABI_USE_LLVM_UNWINDER OFF CACHE BOOL "")
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
-set(LLVM_ENABLE_LTO On CACHE STRING "")
+set(LLVM_ENABLE_LTO Thin CACHE STRING "")
 set(LLVM_PARALLEL_LINK_JOBS ${MAX_LINK_JOBS} CACHE STRING "")
 EOF
 
@@ -71,6 +76,14 @@ WORKDIR /src/build
 RUN cmake -G Ninja \
     -C /llvm.cmake \
     -DCMAKE_INSTALL_PREFIX=/opt/install \
+    -DCMAKE_C_COMPILER=/usr/bin/clang-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_ASM_COMPILER=/usr/bin/clang-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_CXX_COMPILER=/usr/bin/clang++-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_AR=/usr/bin/llvm-ar-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_LINKER=/usr/bin/llvm-ld-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_NM=/usr/bin/llvm-nm-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_OBJDUMP=/usr/bin/llvm-objdump-${STAGE_0_LLVM_VERSION} \
+    -DCMAKE_RANLIB=/usr/bin/llvm-ranlib-${STAGE_0_LLVM_VERSION} \
     ../llvm-project/llvm
 
 RUN ninja -j$(nproc) && ninja install
