@@ -212,6 +212,120 @@ class DatalakeE2ETests(RedpandaTest):
             dl.produce_to_topic(self.topic_name, 1024, count)
             dl.wait_for_translation(self.topic_name, msg_count=count)
 
+    @cluster(num_nodes=4)
+    @matrix(cloud_storage_type=supported_storage_types(),
+            catalog_type=supported_catalog_types())
+    def test_iceberg_files_location(self, cloud_storage_type, catalog_type):
+        """
+        Test that redpanda writes data files to the correct location
+        as directed by the catalog.
+        """
+        count = 100
+        with DatalakeServices(self.test_ctx,
+                              redpanda=self.redpanda,
+                              catalog_type=catalog_type,
+                              include_query_engines=[QueryEngineType.SPARK
+                                                     ]) as dl:
+            dl.create_iceberg_enabled_topic(self.topic_name, partitions=2)
+            dl.produce_to_topic(self.topic_name, 1024, count)
+            dl.wait_for_translation(self.topic_name, msg_count=count)
+
+            table = dl.catalog_client().load_table(
+                f"redpanda.{self.topic_name}")
+
+            spark = dl.spark()
+            table_name = f"redpanda.{self.topic_name}"
+
+            def assert_location_prefix(rows, prefix: str):
+                assert len(
+                    rows
+                ) > 0, "Expected at least one row to be able to validate the location prefix invariant"
+
+                for row in rows:
+                    assert row[0].startswith(
+                        prefix), f"Expected {row[0]} to start with {prefix}"
+
+            files = spark.run_query_fetch_all(
+                f"select file_path from {table_name}.files")
+            assert_location_prefix(files, table.location())
+
+            manifests = spark.run_query_fetch_all(
+                f"select path from {table_name}.manifests")
+            assert_location_prefix(manifests, table.location())
+
+    @cluster(num_nodes=3)
+    @matrix(cloud_storage_type=supported_storage_types(),
+            catalog_type=supported_catalog_types(),
+            custom_partition_spec=[None, "(timestamp_us)", "(number)"])
+    def test_iceberg_partition_key_file_location(self, cloud_storage_type,
+                                                 catalog_type,
+                                                 custom_partition_spec: str):
+        """
+        Test that the data file location includes the partition key
+        """
+        count = 100
+        with DatalakeServices(self.test_ctx,
+                              redpanda=self.redpanda,
+                              catalog_type=catalog_type,
+                              include_query_engines=[QueryEngineType.SPARK
+                                                     ]) as dl:
+            config = {}
+            if custom_partition_spec:
+                config[
+                    "redpanda.iceberg.partition.spec"] = custom_partition_spec
+
+            dl.create_iceberg_enabled_topic(
+                self.topic_name,
+                partitions=2,
+                iceberg_mode="value_schema_id_prefix",
+                config=config)
+
+            schema = avro.loads(avro_schema_str)
+            producer = AvroProducer(
+                {
+                    'bootstrap.servers': self.redpanda.brokers(),
+                    'schema.registry.url':
+                    self.redpanda.schema_reg().split(",")[0]
+                },
+                default_value_schema=schema)
+            current_date = datetime.datetime.now()
+            for _ in range(count):
+                t = time.time()
+                record = {"number": int(t), "timestamp_us": int(t * 1000000)}
+                producer.produce(topic=self.topic_name, value=record)
+
+            producer.flush()
+            dl.wait_for_translation(self.topic_name, msg_count=count)
+
+            spark = dl.spark()
+            table_name = f"redpanda.{self.topic_name}"
+            uri_pattern = re.compile(
+                r"(?P<scheme>.*?)://(?P<bucket>.*?)/(?P<key>.*)")
+
+            def validate_data_file_path(file_url):
+                m = uri_pattern.match(file_url)
+                assert m, f"Expected file url to match URI pattern: {file_url}"
+                assert m['bucket'].startswith(
+                    self.si_settings.cloud_storage_bucket
+                ), f"Expected bucket {m['bucket']} to be {self.si_settings.cloud_storage_bucket}"
+
+                path_parts = m['key'].split("/")
+                partition_key = path_parts[4]
+
+                if custom_partition_spec is None:
+                    assert f"redpanda.timestamp_hour={current_date.year}" in partition_key, f"Expected default partition key in data file location {partition_key}"
+                elif custom_partition_spec == "(timestamp_us)":
+                    assert f"timestamp_us={current_date.year}" in partition_key, f"Expected timestamp_us partition key in data file location {partition_key}"
+                elif custom_partition_spec == "(number)":
+                    assert "number=" in partition_key, f"Expected number partition key in data file location {partition_key}"
+
+            files = spark.run_query_fetch_all(
+                f"select file_path from {table_name}.files")
+            assert len(files) > 0, "Expected at least one file"
+            for f_tuple in files:
+                f_name = f_tuple[0]
+                validate_data_file_path(f_name)
+
 
 class DatalakeMetricsTest(RedpandaTest):
 
