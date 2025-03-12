@@ -229,6 +229,14 @@ public:
         return nullptr;
     }
 
+    /// Returns the log meta for the specified ntp.
+    log_housekeeping_meta* get_log_meta(const model::ntp& ntp) {
+        if (auto it = _logs.find(ntp); it != _logs.end()) {
+            return it->second.get();
+        }
+        return nullptr;
+    }
+
     /// Returns all ntp's managed by this instance
     absl::flat_hash_set<model::ntp> get_all_ntps() const;
 
