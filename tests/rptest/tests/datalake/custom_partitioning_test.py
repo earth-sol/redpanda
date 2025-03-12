@@ -21,11 +21,14 @@ from ducktape.mark import matrix
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.cluster import cluster
 from rptest.services.redpanda import SISettings, SchemaRegistryConfig
+from rptest.services.redpanda_connect import RedpandaConnectService
 from rptest.tests.datalake.datalake_services import DatalakeServices
+from rptest.tests.datalake.datalake_verifier import DatalakeVerifier
 from rptest.tests.datalake.query_engine_base import QueryEngineType
 from rptest.tests.datalake.utils import supported_storage_types
 from rptest.tests.redpanda_test import RedpandaTest
 from rptest.tests.datalake.catalog_service_factory import supported_catalog_types
+from rptest.utils.rpcn_utils import counter_stream_config
 
 
 class DatalakeCustomPartitioningConfigTest(RedpandaTest):
@@ -399,3 +402,107 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
                 ('Part 0', 'days(redpanda.timestamp)', ''),
             ]
             assert describe_partitioning == expected_partitioning
+
+    @cluster(num_nodes=7)
+    @matrix(cloud_storage_type=supported_storage_types(),
+            catalog_type=supported_catalog_types())
+    def test_spec_evolution_rpcn(self, cloud_storage_type, catalog_type):
+        """
+        Test changing the partition spec with uninterrupted produce load
+        coming from redpanda connect.
+        """
+
+        with DatalakeServices(self.test_context,
+                              redpanda=self.redpanda,
+                              catalog_type=catalog_type,
+                              include_query_engines=[QueryEngineType.SPARK
+                                                     ]) as dl:
+            avro_schema = """
+{
+    "type": "record",
+    "namespace": "com.redpanda.examples.avro",
+    "name": "ClickEvent",
+    "fields": [
+        {"name": "event_type", "type": "int"},
+        {"name": "number", "type": "long"},
+        {"name": "timestamp", "type": {"type": "long", "logicalType": "timestamp-millis"}},
+        {"name": "verifier_string", "type": "string"}
+    ]
+}
+            """
+
+            rpk = RpkTool(self.redpanda)
+            rpk.create_schema_from_str("verifier_schema", avro_schema)
+
+            topic_name = "foo"
+            partitions = 5
+            dl.create_iceberg_enabled_topic(
+                topic_name,
+                partitions=partitions,
+                iceberg_mode="value_schema_id_prefix",
+                config={
+                    "redpanda.iceberg.partition.spec": "(hour(timestamp))"
+                })
+
+            connect = RedpandaConnectService(self.test_context, self.redpanda)
+            connect.start()
+
+            # Use stream config that will produce events until we stop it explicitly
+            timestamp = time.time()
+            num_event_types = 3
+            avro_stream_config = counter_stream_config(
+                self.redpanda,
+                topic_name,
+                "verifier_schema",
+                dict(
+                    event_type=f"random_int(min:1, max:{num_event_types})",
+                    number="this",
+                    timestamp=f"{int(timestamp * 1000)}",
+                    verifier_string="uuid_v4()",
+                ),
+                1_000_000,
+                interval_ms=1)
+            connect.start_stream(name="ducky_stream",
+                                 config=avro_stream_config)
+
+            verifier = DatalakeVerifier(self.redpanda, topic_name, dl.spark())
+            verifier.start()
+
+            dl.wait_for_iceberg_table("redpanda",
+                                      topic_name,
+                                      timeout=60,
+                                      backoff_sec=5)
+            self.redpanda.wait_until(
+                lambda: dl.spark().count_table("redpanda", topic_name) >= 1000,
+                timeout_sec=60,
+                backoff_sec=2)
+
+            def num_partitions():
+                partitions = set(dl.spark().run_query_fetch_all(
+                    f"select partition from redpanda.{topic_name}.files"))
+                self.logger.info(f"iceberg files partitions: {partitions}")
+                return len(partitions)
+
+            assert num_partitions() == 1
+
+            self.logger.info("altering topic partition spec...")
+            rpk.alter_topic_config(topic_name,
+                                   "redpanda.iceberg.partition.spec",
+                                   "(event_type)")
+
+            self.redpanda.wait_until(
+                lambda: num_partitions() == 1 + num_event_types,
+                timeout_sec=60,
+                backoff_sec=5,
+                err_msg="failed to wait for new partitions to appear")
+
+            expected_partitioning = [
+                ('# Partition Information', '', ''),
+                ('# col_name', 'data_type', 'comment'),
+                ('event_type', 'int', None),
+            ]
+            assert self.describe_partitioning(
+                dl, topic_name) == expected_partitioning
+
+            connect.stop_stream("ducky_stream", should_finish=False)
+            verifier.wait()
