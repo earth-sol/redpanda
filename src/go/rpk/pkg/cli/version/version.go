@@ -47,7 +47,7 @@ type redpandaVersion struct {
 type redpandaVersions []redpandaVersion
 
 func Pretty() string {
-	return fmt.Sprintf("%s (rev %s)", version, rev)
+	return fmt.Sprintf("(Redpanda CLI): %s (rev %s)", version, rev)
 }
 
 func NewCommand(fs afero.Fs, p *config.Params) *cobra.Command {
@@ -119,11 +119,11 @@ To get only the rpk version, use 'rpk --version'.`,
 }
 
 func printRpkVersion(rv rpkVersion) {
-	fmt.Printf(`Version:     %s
-Git ref:     %s
-Build date:  %s
-OS/Arch:     %s
-Go version:  %s
+	fmt.Printf(`rpk version:  %s
+Git ref:      %s
+Build date:   %s
+OS/Arch:      %s
+Go version:   %s
 `, rv.Version, rv.GitRef, rv.BuildTime, rv.OsArch, rv.GoVersion)
 }
 
