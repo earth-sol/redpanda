@@ -52,7 +52,7 @@ delete any ACLs that may exist for this user.
 				out.Die("missing required username argument")
 			}
 
-			if p.FromCloud {
+			if p.FromCloud && !p.CloudCluster.IsServerless() {
 				cl, err := p.DataplaneClient()
 				out.MaybeDie(err, "unable to initialize cloud client: %v", err)
 
