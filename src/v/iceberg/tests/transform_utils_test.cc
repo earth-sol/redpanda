@@ -200,20 +200,24 @@ struct primitive_test_values {
     value timestamptz_val = primitive_value{
       timestamptz_value{1741177530000000}};
     value string_val = primitive_value{
-      string_value{iobuf::from("hello Iceberg")}};
+      string_value{iobuf::from("non-latin to test UTF-8: Алексей")}};
     value uuid_val = primitive_value{
       uuid_value{uuid_t::from_string("ab4ed576-b638-424f-89d8-4ea602393772")}};
     value fixed_val = primitive_value{
-      fixed_value{iobuf::from("fixed Iceberg")}};
-    value binary_val = primitive_value{binary_value{iobuf::from("bytes ?")}};
+      fixed_value{iobuf::from("\xDE\xAD\xBE\xEF")}};
+    value binary_val = primitive_value{
+      binary_value{iobuf::from("\xDE\xAD\xBE\xEF")}};
     value decimal_val = primitive_value{
       decimal_value{absl::MakeInt128(0, 123)}};
     value decimal_val_2 = primitive_value{
       decimal_value{absl::MakeInt128(1, 123)}};
     value decimal_val_3 = primitive_value{
       decimal_value{absl::MakeInt128(6321412421, 53441242)}};
-    value decimal_val_4 = primitive_value{
-      decimal_value{absl::MakeInt128(0, 123)}};
+    value decimal_val_4 = primitive_value{decimal_value{absl::int128(-1012)}};
+    value decimal_val_5 = primitive_value{
+      decimal_value{absl::MakeInt128(-1, 123)}};
+    value decimal_val_6 = primitive_value{
+      decimal_value{absl::MakeInt128(-321123321, 123)}};
 };
 
 TEST(TestTransformApplication, IdentityTransform) {
@@ -238,4 +242,51 @@ TEST(TestTransformApplication, IdentityTransform) {
     test_transform(test_values.fixed_val);
     test_transform(test_values.binary_val);
     test_transform(test_values.decimal_val);
+}
+
+TEST(TestTransformApplication, BucketTransform) {
+    primitive_test_values test_values;
+    auto test_transform =
+      [](const value& val, uint32_t buckets, int32_t expected) {
+          auto transformed = apply_transform(
+            val, bucket_transform{.n = buckets});
+          ASSERT_TRUE(std::holds_alternative<primitive_value>(transformed));
+          const auto& p_val = std::get<primitive_value>(transformed);
+          ASSERT_TRUE(std::holds_alternative<int_value>(p_val));
+          auto bucket = std::get<int_value>(p_val).val;
+          ASSERT_EQ(expected, bucket) << fmt::format(
+            "Bucket {} for value: {} expected to be equal to {} (bucket count: "
+            "{})",
+            bucket,
+            val,
+            expected,
+            buckets);
+      };
+
+    auto test_transform_3 = [&](
+                              const value& val,
+                              int32_t expected_bucket_16,
+                              int32_t expected_bucket_128,
+                              int32_t expected_bucket_2025) {
+        test_transform(val, 16, expected_bucket_16);
+        test_transform(val, 128, expected_bucket_128);
+        test_transform(val, 2025, expected_bucket_2025);
+    };
+
+    test_transform_3(test_values.int_val, 13, 93, 976);
+    test_transform_3(test_values.long_val, 6, 118, 1283);
+    test_transform_3(test_values.date_val, 12, 12, 1270);
+    test_transform_3(test_values.time_val, 2, 66, 19);
+    test_transform_3(test_values.timestamp_val, 15, 15, 603);
+    test_transform_3(test_values.timestamptz_val, 15, 15, 603);
+    test_transform_3(test_values.string_val, 12, 28, 1337);
+    test_transform_3(test_values.uuid_val, 12, 108, 975);
+    test_transform_3(test_values.fixed_val, 10, 74, 197);
+    test_transform_3(test_values.binary_val, 10, 74, 197);
+    test_transform_3(test_values.decimal_val, 1, 49, 287);
+    test_transform_3(test_values.decimal_val_2, 5, 69, 439);
+    test_transform_3(test_values.decimal_val_3, 5, 21, 872);
+    test_transform_3(test_values.decimal_val_4, 2, 50, 355);
+    test_transform_3(test_values.decimal_val_5, 11, 123, 342);
+    test_transform_3(test_values.decimal_val_6, 3, 3, 603);
 }
