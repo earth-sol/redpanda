@@ -17,6 +17,7 @@ from typing import Dict, List
 
 from rptest.clients.default import DefaultClient
 from rptest.clients.offline_log_viewer import OfflineLogViewer
+from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 
 from rptest.clients.kcl import RawKCL
@@ -1064,6 +1065,44 @@ class ConsumerGroupTest(RedpandaTest):
             # Check redpanda_kafka_consumer_group_lag_max
             assert expected_lag_max == lag_max, f"Expected {expected_lag_max}, got {lag_max}"
 
+        check_metrics()
+
+        admin = Admin(self.redpanda)
+
+        def move_partition(topic, partition):
+            moved = admin.transfer_leadership_to(namespace="kafka",
+                                                 topic=topic,
+                                                 partition=partition,
+                                                 target_id=None)
+            assert moved, "Failed to move leader"
+            return moved
+
+        def get_coordinator():
+            return self.admin_client.describe_consumer_groups(
+                group_ids=[group])[group].result().coordinator
+
+        coordinator = get_coordinator()
+        moved = move_partition(topic="__consumer_offsets", partition=0)
+        assert moved, "Failed to move coordinator"
+        wait_until(lambda: self.admin_client
+                   .describe_consumer_groups(group_ids=[group])[group].result(
+                   ).state == ConsumerGroupState.STABLE,
+                   20,
+                   1,
+                   retry_on_exc=True,
+                   err_msg="Timeout waiting on group to reach stable state")
+
+        assert get_coordinator() != coordinator, "Coordinator did not change"
+
+        self.logger.info("Waiting for lag_metrics after coordinator move")
+        time.sleep(lag_collection_interval + 1)
+        check_metrics()
+
+        moved = move_partition(topic=topics[0], partition=0)
+        assert moved, "Failed to move partition leader"
+
+        self.logger.info("Waiting for lag_metrics after partition leader move")
+        time.sleep(lag_collection_interval + 1)
         check_metrics()
 
         for consumer in consumers:
