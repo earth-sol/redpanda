@@ -1044,6 +1044,22 @@ redpanda_cc_library(
 )
 
 redpanda_cc_library(
+    name = "bucket_transform_hashing_visitor",
+    srcs = [
+        "bucket_transform_hashing_visitor.cc",
+    ],
+    hdrs = [
+        "bucket_transform_hashing_visitor.h",
+    ],
+    include_prefix = "iceberg",
+    deps = [
+        ":values",
+        "//src/v/hashing:murmur",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
     name = "transform_utils",
     srcs = [
         "transform_utils.cc",
@@ -1053,6 +1069,7 @@ redpanda_cc_library(
     ],
     include_prefix = "iceberg",
     deps = [
+        ":bucket_transform_hashing_visitor",
         ":datatypes",
         ":time_transform_visitor",
         ":transform",

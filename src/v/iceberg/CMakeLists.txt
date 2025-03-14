@@ -40,6 +40,7 @@ v_cc_library(
   SRCS
     ${avro_hdrs}
     action.cc
+    bucket_transform_hashing_visitor.cc
     catalog.cc
     compatibility.cc
     compatibility_types.cc
