@@ -101,7 +101,7 @@ acl help text for more info.
 				out.Die("unsupported mechanism %q", mechanism)
 			}
 
-			if p.FromCloud {
+			if p.FromCloud && !p.CloudCluster.IsServerless() {
 				cl, err := p.DataplaneClient()
 				out.MaybeDie(err, "unable to initialize cloud client: %v", err)
 				req := connect.NewRequest(
