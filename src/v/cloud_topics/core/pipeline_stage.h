@@ -12,6 +12,8 @@
 
 #include "utils/named_type.h"
 
+#include <vector>
+
 namespace experimental::cloud_topics::core {
 
 class pipeline_stage_id {
