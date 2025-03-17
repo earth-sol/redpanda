@@ -44,11 +44,15 @@ inline __attribute__((always_inline)) uint64_t fmix64(uint64_t k) {
 // handle aligned reads, do the conversion here
 inline __attribute__((always_inline)) uint32_t
 getblock32(const uint32_t* p, int i) {
-    return p[i];
+    uint32_t k;
+    std::memcpy(&k, reinterpret_cast<const char*>(p + i), sizeof(k));
+    return k;
 }
 inline __attribute__((always_inline)) uint64_t
 getblock64(const uint64_t* p, int i) {
-    return p[i];
+    uint64_t k;
+    std::memcpy(&k, reinterpret_cast<const char*>(p + i), sizeof(k));
+    return k;
 }
 
 } // namespace internal
@@ -129,7 +133,7 @@ void murmurhash3_x86_128(
     //----------
     // body
 
-    const uint32_t* blocks = (const uint32_t*)(data + nblocks * 16);
+    auto blocks = reinterpret_cast<const uint32_t*>(data + nblocks * 16);
 
     for (int i = -nblocks; i; i++) {
         uint32_t k1 = internal::getblock32(blocks, i * 4 + 0);
