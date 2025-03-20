@@ -540,6 +540,12 @@ ss::future<> log_manager::gc_loop() {
                  * applying segment.ms will make reclaimable data from the
                  * active segment visible.
                  */
+                auto housekeeping_lock_holder
+                  = co_await log_meta.housekeeping_lock.get_units();
+                if (!log_meta.link.is_linked()) {
+                    continue;
+                }
+
                 co_await log_meta.handle->apply_segment_ms();
                 if (!log_meta.link.is_linked()) {
                     continue;
