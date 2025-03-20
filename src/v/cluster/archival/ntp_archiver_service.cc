@@ -3324,8 +3324,10 @@ ntp_archiver::find_reupload_candidate(manifest_scanner_t scanner) {
                 std::move(units), std::move(upload_candidate));
           },
           [this](skip_offset_range& skip_offsets) -> ret_t {
-              vlog(
-                _rtclog.warn,
+              const auto log_level = log_level_for_error(skip_offsets.reason);
+              vlogl(
+                _rtclog,
+                log_level,
                 "Failed to make reupload candidate: {}",
                 skip_offsets.reason);
               return std::make_pair(std::nullopt, std::nullopt);
