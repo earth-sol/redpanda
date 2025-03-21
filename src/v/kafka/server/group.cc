@@ -75,7 +75,7 @@ group::group(
   , _catchup_lock(std::move(catchup_lock))
   , _partition(std::move(partition))
   , _probe(_members, _static_members, _offsets)
-  , _ctxlog(klog, *this)
+  , _ctxlog(cg_klog, *this)
   , _ctx_txlog(cluster::txlog, *this)
   , _md_serializer(std::move(serializer))
   , _term(term)
@@ -118,7 +118,7 @@ group::group(
   , _catchup_lock(std::move(catchup_lock))
   , _partition(std::move(partition))
   , _probe(_members, _static_members, _offsets)
-  , _ctxlog(klog, *this)
+  , _ctxlog(cg_klog, *this)
   , _ctx_txlog(cluster::txlog, *this)
   , _md_serializer(std::move(serializer))
   , _term(term)
@@ -2574,18 +2574,18 @@ ss::future<error_code> group::remove() {
           raft::replicate_options(raft::consistency_level::quorum_ack));
         if (result) {
             vlog(
-              klog.trace,
+              cg_klog.trace,
               "Replicated group delete record {} at offset {}",
               _id,
               result.value().last_offset);
         } else if (result.error() == raft::errc::shutting_down) {
             vlog(
-              klog.debug,
+              cg_klog.debug,
               "Cannot replicate group {} delete records due to shutdown",
               _id);
         } else {
             vlog(
-              klog.warn,
+              cg_klog.warn,
               "Error occurred replicating group {} delete records {} ({})",
               _id,
               result.error().message(),
@@ -2593,7 +2593,7 @@ ss::future<error_code> group::remove() {
         }
     } catch (const std::exception& e) {
         vlog(
-          klog.error,
+          cg_klog.error,
           "Exception occurred replicating group {} delete records {}",
           _id,
           e);
@@ -2620,7 +2620,7 @@ ss::future<> group::remove_topic_partitions(
       in_state(group_state::empty) && _pending_offset_commits.empty()
       && _offsets.empty()) {
         vlog(
-          klog.debug,
+          cg_klog.debug,
           "Marking group {} as dead at {} generation",
           _id,
           generation());
@@ -2642,7 +2642,10 @@ ss::future<> group::remove_topic_partitions(
     // create deletion records for offsets from deleted partitions
     for (auto& offset : removed) {
         vlog(
-          klog.trace, "Removing offset for group {} tp {}", _id, offset.first);
+          cg_klog.trace,
+          "Removing offset for group {} tp {}",
+          _id,
+          offset.first);
         add_offset_tombstone_record(_id, offset.first, builder);
     }
 
@@ -2661,19 +2664,19 @@ ss::future<> group::remove_topic_partitions(
           raft::replicate_options(raft::consistency_level::quorum_ack));
         if (result) {
             vlog(
-              klog.trace,
+              cg_klog.trace,
               "Replicated group cleanup record {} at offset {}",
               _id,
               result.value().last_offset);
         } else if (result.error() == raft::errc::shutting_down) {
             vlog(
-              klog.debug,
+              cg_klog.debug,
               "Cannot replicate group {} cleanup records due to shutdown",
               _id);
         } else {
             // TODO: consider adding retries in this case
             vlog(
-              klog.warn,
+              cg_klog.warn,
               "Error occurred replicating group {} cleanup records {} ({})",
               _id,
               result.error().message(),
@@ -2681,7 +2684,7 @@ ss::future<> group::remove_topic_partitions(
         }
     } catch (const std::exception& e) {
         vlog(
-          klog.error,
+          cg_klog.error,
           "Exception occurred replicating group {} cleanup records {}",
           _id,
           e);
@@ -3378,7 +3381,7 @@ void group::update_subscriptions() {
             subs.merge(decode_consumer_subscriptions(std::move(data)));
         } catch (const std::out_of_range& e) {
             vlog(
-              klog.warn,
+              cg_klog.warn,
               "Parsing consumer:{} data for group {} member {} failed: {}",
               _protocol.value(),
               _id,
