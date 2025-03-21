@@ -268,6 +268,9 @@ model::record_batch make_tx_fence_batch(
     return make_tx_batch(
       batch_type, group::fence_control_record_version, pid, std::move(cmd));
 }
+
+bool need_lag_metrics(group_state s) { return s != group_state::dead; };
+
 } // namespace
 
 group_state group::set_state(group_state s) {
@@ -279,6 +282,9 @@ group_state group::set_state(group_state s) {
       s);
     vlog(_ctxlog.trace, "Changing state from {} to {}", _state, s);
     _state_timestamp = model::timestamp::now();
+    if (need_lag_metrics(s) != need_lag_metrics(_state)) {
+        setup_metrics();
+    }
     return std::exchange(_state, s);
 }
 
@@ -3630,7 +3636,7 @@ void group::setup_metrics() {
             _probe.deregister_group_metrics();
         }
 
-        if (_enable_group_metrics().consumer_lag) {
+        if (_enable_group_metrics().consumer_lag && need_lag_metrics(_state)) {
             _probe.register_consumer_lag_metrics(_id);
         } else {
             _probe.deregister_consumer_lag_metrics();
