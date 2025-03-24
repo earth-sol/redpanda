@@ -134,7 +134,7 @@ ss::future<std::vector<self_test_result>> cloudcheck::run_benchmarks() {
       = (is_uploaded) ? self_test_prefix
                       : std::optional<cloud_storage_clients::object_key>{};
     auto list_test_result_pair = co_await do_run_test(
-      &cloudcheck::verify_list, bucket, list_prefix, num_default_objects);
+      &cloudcheck::verify_list, bucket, list_prefix, 1);
     auto& [object_list, list_test_result] = list_test_result_pair;
     if (is_uploaded && object_list) {
         // Check that uploaded object exists in object_list contents.
