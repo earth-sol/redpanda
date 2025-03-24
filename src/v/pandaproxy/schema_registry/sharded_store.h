@@ -25,8 +25,10 @@ class store;
 class sharded_store {
 public:
     explicit sharded_store(
-      protobuf_renderer_v2 v2_renderer = protobuf_renderer_v2::no)
-      : _v2_renderer(v2_renderer) {}
+      protobuf_renderer_v2 v2_renderer = protobuf_renderer_v2::no,
+      normalize always_normalize = normalize::no)
+      : _v2_renderer(v2_renderer)
+      , _always_normalize(always_normalize) {}
     ~sharded_store() = default;
     ss::future<> start(is_mutable mut, ss::smp_service_group sg);
     ss::future<> stop();
@@ -241,6 +243,7 @@ private:
     ///\brief Access must occur only on shard 0.
     schema_id _next_schema_id{1};
     protobuf_renderer_v2 _v2_renderer;
+    normalize _always_normalize;
 };
 
 } // namespace pandaproxy::schema_registry
