@@ -435,6 +435,7 @@ ss::future<> group_manager::do_detach_partition(model::ntp ntp) {
     for (auto g_it = _groups.begin(); g_it != _groups.end();) {
         if (g_it->second->partition()->ntp() == p->partition->ntp()) {
             groups_for_shutdown.push_back(g_it->second);
+            g_it->second->pre_shutdown();
             _groups.erase(g_it++);
             continue;
         }
@@ -491,6 +492,7 @@ ss::future<> group_manager::cleanup_removed_topic_partitions(
                         return ss::now();
                     }
                     vlog(klog.trace, "Removed group {}", g);
+                    it->second->pre_shutdown();
                     _groups.erase(it);
                     _groups.rehash(0);
                     return ss::now();
@@ -605,6 +607,7 @@ group_manager::gc_partition_state(ss::lw_shared_ptr<attached_partition> p) {
         if (it->second->partition()->ntp() == p->partition->ntp()) {
             groups_for_shutdown.push_back(it->second);
             vlog(klog.trace, "Removed group {}", it->second);
+            it->second->pre_shutdown();
             _groups.erase(it++);
             continue;
         }
@@ -1630,6 +1633,7 @@ ss::future<std::vector<deletable_group_result>> group_manager::delete_groups(
         // - batch tombstones same backing partition
         error = co_await group->remove();
         if (error == error_code::none) {
+            group->pre_shutdown();
             _groups.erase(group_info.second);
         }
         results.push_back(deletable_group_result{
