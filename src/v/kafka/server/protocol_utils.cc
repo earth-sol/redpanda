@@ -12,6 +12,7 @@
 #include "bytes/iobuf.h"
 #include "bytes/iobuf_parser.h"
 #include "kafka/protocol/flex_versions.h"
+#include "strings/utf8.h"
 
 #include <seastar/core/temporary_buffer.hh>
 
@@ -19,6 +20,25 @@
 #include <vector>
 
 namespace kafka {
+
+namespace {
+struct header_parsing_error_utf8 : public default_control_character_thrower {
+    using default_control_character_thrower::default_control_character_thrower;
+
+    [[noreturn]] [[gnu::cold]] void conversion_error() override {
+        throw invalid_utf8_exception("Invalid UTF8 in header");
+    }
+};
+
+struct header_parsing_error_control : public default_control_character_thrower {
+    using default_control_character_thrower::default_control_character_thrower;
+
+    [[noreturn]] [[gnu::cold]] void conversion_error() override {
+        throw control_character_present_exception(
+          "Control character in header");
+    }
+};
+} // namespace
 
 static ss::future<std::optional<request_header>>
 parse_v1_header(ss::input_stream<char>& src) {
@@ -71,8 +91,8 @@ parse_v1_header(ss::input_stream<char>& src) {
     header.client_id_buffer = std::move(buf);
     header.client_id = std::string_view(
       header.client_id_buffer.get(), header.client_id_buffer.size());
-    validate_utf8(*header.client_id);
-    validate_no_control(*header.client_id);
+    validate_utf8(*header.client_id, header_parsing_error_utf8{});
+    validate_no_control(*header.client_id, header_parsing_error_control{});
     co_return header;
 }
 
