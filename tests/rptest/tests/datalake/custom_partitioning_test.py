@@ -6,7 +6,9 @@
 #
 # https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
 
+from collections import defaultdict
 import itertools
+import re
 import time
 import random
 import re
@@ -22,7 +24,7 @@ from ducktape.mark import matrix
 from rptest.services.catalog_service import CatalogType
 from rptest.clients.rpk import RpkTool, RpkException
 from rptest.services.cluster import cluster
-from rptest.services.redpanda import SISettings, SchemaRegistryConfig
+from rptest.services.redpanda import SISettings, SchemaRegistryConfig, MetricsEndpoint
 from rptest.services.redpanda_connect import RedpandaConnectService
 from rptest.tests.datalake.datalake_services import DatalakeServices
 from rptest.tests.datalake.datalake_verifier import DatalakeVerifier
@@ -268,21 +270,53 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
             table_name = f"redpanda.{topic_name}"
             spark = dl.spark()
 
-            files_before = set(
-                spark.run_query_fetch_all(
-                    f"select file_path from {table_name}.files"))
             # The translator for each partition should produce a file for
             # each of 2 event types.
-            assert len(files_before) == partitions * 2
+            partitions_before = self.partition_paths_from_files(
+                spark, table_name)
 
+            assert len(partitions_before) == 2
+            self.assert_at_least_n_files_per_iceberg_partition(
+                partitions_before, partitions)
             spark.make_client().cursor().execute(
                 f"delete from {table_name} where event_type='type_A'")
 
-            files_after = set(
-                spark.run_query_fetch_all(
-                    f"select file_path from {table_name}.files"))
-            assert len(files_after) == partitions
-            assert files_after.issubset(files_before)
+            partitions_after = self.partition_paths_from_files(
+                spark, table_name)
+            assert len(partitions_after) == 1
+            self.assert_at_least_n_files_per_iceberg_partition(
+                partitions_after, partitions)
+            assert set(partitions_after.keys()).issubset(
+                set(partitions_before.keys()))
+
+            # Sanity-check translation metrics
+            metric_patterns = [
+                "translation_translations_finished",
+                "translation_files_created", "translation_parquet_rows_added",
+                "translation_parquet_bytes_added"
+            ]
+            metric2samples = self.redpanda.metrics_samples(
+                metric_patterns, self.redpanda.nodes,
+                MetricsEndpoint.PUBLIC_METRICS)
+            assert len(metric2samples) == len(metric_patterns)
+            metric2value_sum = dict()
+            for metric, samples in metric2samples.items():
+                value_sum = sum(
+                    s.value
+                    for s in samples.label_filter({
+                        "redpanda_topic": topic_name
+                    }).samples)
+                self.logger.info(f"metric {metric} {value_sum=}")
+                metric2value_sum[metric] = value_sum
+
+            num_files_created = sum(partitions_before.values())
+            assert metric2value_sum[
+                "translation_files_created"] == num_files_created
+            assert metric2value_sum[
+                "translation_translations_finished"] == num_files_created / 2
+            assert metric2value_sum[
+                "translation_parquet_rows_added"] == msg_count
+            assert metric2value_sum["translation_parquet_bytes_added"] > 0
 
     @cluster(num_nodes=6)
     @matrix(cloud_storage_type=supported_storage_types(),
@@ -321,10 +355,10 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
             spark = dl.spark()
 
             # The translator for each partition should produce one file.
-            files1 = set(
-                spark.run_query_fetch_all(
-                    f"select file_path from {table_name}.files"))
-            assert len(files1) == partitions
+            partitions_1 = self.partition_paths_from_files(spark, table_name)
+            assert len(partitions_1) == 1
+            self.assert_at_least_n_files_per_iceberg_partition(
+                partitions_1, partitions)
 
             # partition spec should reflect the original value
             describe_partitioning = self.describe_partitioning(dl, topic_name)
@@ -340,10 +374,10 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
 
             # The translator for each partition should produce one file
             # for each event type.
-            files2 = set(
-                spark.run_query_fetch_all(
-                    f"select file_path from {table_name}.files"))
-            assert len(files2) == partitions * 3
+            partitions_2 = self.partition_paths_from_files(spark, table_name)
+            assert len(partitions_2) == 3
+            self.assert_at_least_n_files_per_iceberg_partition(
+                partitions_2, partitions)
 
             # partition spec should reflect the altered value
             describe_partitioning = self.describe_partitioning(dl, topic_name)
@@ -363,11 +397,10 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
 
             # The translator for each partition should produce one file
             # for each event type.
-            files3 = set(
-                spark.run_query_fetch_all(
-                    f"select file_path from {table_name}.files"))
-            assert len(files3) == partitions * 5
-
+            partitions_3 = self.partition_paths_from_files(spark, table_name)
+            assert len(partitions_3) == 5
+            self.assert_at_least_n_files_per_iceberg_partition(
+                partitions_3, partitions)
             describe_partitioning = self.describe_partitioning(dl, topic_name)
             expected_partitioning = [
                 ('# Partition Information', '', ''),
@@ -531,8 +564,8 @@ class DatalakeCustomPartitioningTest(RedpandaTest):
                 backoff_sec=2)
 
             def num_partitions():
-                partitions = set(dl.spark().run_query_fetch_all(
-                    f"select partition from redpanda.{topic_name}.files"))
+                partitions = self.partition_paths_from_files(
+                    dl.spark(), f"redpanda.{topic_name}")
                 self.logger.info(f"iceberg files partitions: {partitions}")
                 return len(partitions)
 
