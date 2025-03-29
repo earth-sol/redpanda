@@ -390,15 +390,30 @@ func startCluster(
 	fmt.Println("Waiting for the cluster to be ready...")
 	err = waitForCluster(check(nodes), retries)
 	if err != nil {
-		state, sErr := common.GetState(c, nodes[0].id, false)
-		if sErr != nil {
-			return false, fmt.Errorf("%v\nunable to get Docker container logs: %v", err, sErr)
+		var failedNodeState *common.NodeState
+		for _, n := range nodes {
+			state, sErr := common.GetState(c, n.id, false)
+			if sErr != nil {
+				return false, fmt.Errorf("%v\nunable to get Docker container (%v) logs: %v", n.id, err, sErr)
+			}
+			if !state.Running {
+				failedNodeState = state
+			}
 		}
-		errStr, cErr := getContainerErr(state, c)
+		// Sanity check: If the cluster didn't start but all the containers are
+		// running. Maybe the cluster is not ready yet and the user needs to
+		// increase the retries.
+		if failedNodeState == nil {
+			return false, fmt.Errorf("unable to start the cluster on time: %v; you may run 'rpk container purge' and start again increasing the number of retries with the '--retries' flag", err)
+		}
+
+		errStr, cErr := getContainerErr(failedNodeState, c)
 		if cErr != nil {
 			return false, fmt.Errorf("%v\nunable to get Docker container logs: %v", err, cErr)
 		}
-		return false, fmt.Errorf("%v\n\nErrors reported from the Docker container:\n\n%v", err, errStr)
+		// Docker usually truncates the container ID to 12 characters.
+		shortID := fmt.Sprintf("%.*s", 12, failedNodeState.ContainerID)
+		return false, fmt.Errorf("%v\n\nErrors reported from the Docker container with ID %v:\n\n%v", err, shortID, errStr)
 	}
 	fmt.Println("Cluster ready!")
 
