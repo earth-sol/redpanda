@@ -19,6 +19,8 @@
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/gate.hh>
 
+#include <absl/container/btree_map.h>
+
 namespace datalake::translation::scheduling {
 
 using clock = ss::lowres_clock;
@@ -298,6 +300,13 @@ using translators = chunked_hash_map<translator_id, translator_executable>;
  *
  * For the most part there is no reason to loop through this map as all
  * operations are scoped to a particular translator instance.
+ *
+ * translators for immediate finish
+ *
+ * Set of translatored requested to immedidately finish. This is currently only
+ * used by the disk usage monitor. The key is an opaque priority (lower is
+ * higher priority) and identifier. See `on_resource_exhaustion` for how it's
+ * used for optimization.
  */
 struct executor {
     void start_translation(translator_executable&, clock::duration time_slice);
@@ -307,6 +316,15 @@ struct executor {
       running;
     intrusive_list<translator_executable, &translator_executable::_waiting_hook>
       waiting;
+
+    /*
+     * finish_priority captures the priority in which translators should be
+     * finished with lowest value being highest priority.
+     */
+    using finish_priority = size_t;
+    absl::btree_map<finish_priority, translator_id>
+      translators_for_immediate_finish;
+
     ss::gate gate;
     ss::abort_source as;
 };
@@ -380,6 +398,16 @@ public:
         return _mem_tracker;
     }
     const translators& all_translators() const { return _executor.translators; }
+
+    /*
+     * Request the scheduler to immediately finish and reclaim disk space for
+     * the provided scheduler. The scheduler will treat the ordering of vector
+     * as roughly highest to lowest priority. The second element of the pair is
+     * the total size of the translator which can be used to avoid requerying
+     * for the same information from the translator status API.
+     */
+    void request_immediate_finish(
+      chunked_vector<std::pair<translator_id, size_t>>);
 
 private:
     ss::future<> main();

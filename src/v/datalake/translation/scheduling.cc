@@ -407,6 +407,19 @@ size_t scheduler::running_translators() const {
     return _executor.running.size();
 }
 
+void scheduler::request_immediate_finish(
+  chunked_vector<std::pair<translator_id, size_t>> translators) {
+    _executor.translators_for_immediate_finish.clear();
+    // `i` captures both priority (lowest is highest), and serves as a unique
+    // identifer. see `on_resource_exhaustion` for how this property is used.
+    for (size_t i = 0; i < translators.size(); ++i) {
+        // the flush size of the translator is thrown away here, but preserved
+        // at the scheduler API level for future use by the scheduler.
+        _executor.translators_for_immediate_finish.emplace(
+          i, std::move(translators[i].first));
+    }
+}
+
 ss::future<> scheduler::main() {
     vlog(datalake_log.trace, "Starting scheduling loop");
     auto holder = _executor.gate.hold();
