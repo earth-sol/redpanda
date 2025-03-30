@@ -141,6 +141,13 @@ public:
     index_lower_bound(model::offset o) const = 0;
 
     /**
+     * Returns a max base offset of the indexed batch that is smaller than or
+     * equal to the requested offset.
+     */
+    virtual std::optional<model::offset>
+    index_batch_base_offset_lower_bound(model::offset o) const = 0;
+
+    /**
      * \brief Returns a future that resolves when log eviction is scheduled
      *
      * Important note: The api may throw ss::abort_requested_exception when
