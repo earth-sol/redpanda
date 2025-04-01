@@ -16,6 +16,7 @@
 #include "iceberg/values.h"
 #include "ssx/future-util.h"
 
+#include <seastar/util/defer.hh>
 #include <seastar/util/log.hh>
 #include <seastar/util/variant_utils.hh>
 
@@ -324,7 +325,9 @@ ss::future<optional_value_outcome> message_to_value(
           "Reached maximum recursion depth. Descriptor: {}",
           descriptor.DebugString()));
     }
+
     stack.push_back(&descriptor);
+    auto pop_stack = ss::defer([&stack] { stack.pop_back(); });
     auto ret = std::make_unique<iceberg::struct_value>();
     ret->fields.reserve(descriptor.field_count());
     /**
@@ -347,7 +350,6 @@ ss::future<optional_value_outcome> message_to_value(
         }
         ret->fields.push_back(std::move(result.value()));
     }
-    stack.pop_back();
     co_return ret;
 }
 } // namespace
