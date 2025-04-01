@@ -20,6 +20,7 @@
 #include <seastar/util/log.hh>
 #include <seastar/util/variant_utils.hh>
 
+#include <absl/time/time.h>
 #include <fmt/core.h>
 
 namespace datalake {
@@ -209,6 +210,25 @@ ss::future<optional_value_outcome> convert_map(
     co_return ret;
 }
 
+ss::future<optional_value_outcome>
+convert_timestamp(std::unique_ptr<parsed::message> message) {
+    if (message == nullptr) {
+        co_return std::nullopt;
+    }
+    constexpr int seconds_tag = 1;
+    constexpr int nanos_tag = 2;
+    auto it = message->fields.find(seconds_tag);
+    absl::Time ts = absl::UnixEpoch();
+    if (it != message->fields.end()) {
+        ts += absl::Seconds(std::get<int64_t>(std::move(it->second)));
+    }
+    it = message->fields.find(nanos_tag);
+    if (it != message->fields.end()) {
+        ts += absl::Nanoseconds(std::get<int32_t>(std::move(it->second)));
+    }
+    co_return value_outcome{iceberg::timestamp_value{absl::ToUnixMicros(ts)}};
+}
+
 ss::future<optional_value_outcome> message_field_to_value(
   std::optional<parsed::message::field> field,
   const pb::FieldDescriptor& field_descriptor,
@@ -291,7 +311,11 @@ ss::future<optional_value_outcome> single_field_to_value(
             msg_field = std::get<std::unique_ptr<parsed::message>>(
               std::move(field.value()));
         }
-
+        if (
+          field_descriptor.message_type()->well_known_type()
+          == pb::Descriptor::WELLKNOWNTYPE_TIMESTAMP) {
+            co_return co_await convert_timestamp(std::move(msg_field));
+        }
         co_return co_await message_to_value(
           std::move(msg_field), *field_descriptor.message_type(), stack);
     }
