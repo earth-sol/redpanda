@@ -9,6 +9,7 @@
 import datetime
 import re
 import time
+import random
 from rptest.clients.rpk import RpkTool
 from rptest.services.cluster import cluster
 from random import randint
@@ -55,6 +56,32 @@ avro_schema_str = """
 }
 """
 
+avro_schema_with_enum_str = """
+{
+    "type": "record",
+    "namespace": "com.redpanda.examples.avro",
+    "name": "ClickEvent",
+    "fields": [
+        {"name": "number", "type": "long"},
+        {"name": "timestamp_us", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        {"name": "suit", "type": {"name": "suit", "type": "enum", "symbols": ["SPADES", "HEARTS", "DIAMONDS", "CLUBS"]}}
+    ]
+}
+"""
+
+avro_schema_with_array_str = """
+{
+    "type": "record",
+    "namespace": "com.redpanda.examples.avro",
+    "name": "ClickEvent",
+    "fields": [
+        {"name": "number", "type": "long"},
+        {"name": "timestamp_us", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        {"name": "arr", "type": {"type": "array", "items": "long"}}
+    ]
+}
+"""
+
 avro_schema_with_map_str = """
 {
     "type": "record",
@@ -64,6 +91,32 @@ avro_schema_with_map_str = """
         {"name": "number", "type": "long"},
         {"name": "timestamp_us", "type": {"type": "long", "logicalType": "timestamp-micros"}},
         {"name": "kv", "type": {"type": "map", "values": "long"}}
+    ]
+}
+"""
+
+avro_schema_with_union_str = """
+{
+    "type": "record",
+    "namespace": "com.redpanda.examples.avro",
+    "name": "ClickEvent",
+    "fields": [
+        {"name": "number", "type": "long"},
+        {"name": "timestamp_us", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        {"name": "str_or_long", "type": ["string", "long"]}
+    ]
+}
+"""
+
+avro_schema_with_null_union_str = """
+{
+    "type": "record",
+    "namespace": "com.redpanda.examples.avro",
+    "name": "ClickEvent",
+    "fields": [
+        {"name": "number", "type": "long"},
+        {"name": "timestamp_us", "type": {"type": "long", "logicalType": "timestamp-micros"}},
+        {"name": "optional_long", "type": ["null", "long"]}
     ]
 }
 """
@@ -88,7 +141,49 @@ AVRO_SCHEMA_TEST_CASES = {
          ('timestamp_us', 'timestamp_ntz', None), ('', '', ''),
          ('# Partitioning', '', ''),
          ('Part 0', 'hours(redpanda.timestamp)', '')]),
-    "with_map":
+    "enum":
+    AvroSchema(
+        schema_str=avro_schema_with_enum_str,
+        record_generator=lambda t: {
+            "number": int(t),
+            "timestamp_us": int(t * 1000000),
+            "suit": random.choice(["SPADES", "HEARTS", "DIAMONDS", "CLUBS"])
+        },
+        expected_trino=
+        [('redpanda',
+          'row(partition integer, offset bigint, timestamp timestamp(6), headers array(row(key varbinary, value varbinary)), key varbinary)',
+          '', ''), ('number', 'bigint', '', ''),
+         ('timestamp_us', 'timestamp(6)', '', ''), ('suit', 'bigint', '', '')],
+        expected_spark=
+        [('redpanda',
+          'struct<partition:int,offset:bigint,timestamp:timestamp_ntz,headers:array<struct<key:binary,value:binary>>,key:binary>',
+          None), ('number', 'bigint', None),
+         ('timestamp_us', 'timestamp_ntz', None), ('suit', 'bigint', None),
+         ('', '', ''), ('# Partitioning', '', ''),
+         ('Part 0', 'hours(redpanda.timestamp)', '')]),
+    "array":
+    AvroSchema(
+        schema_str=avro_schema_with_array_str,
+        record_generator=lambda t: {
+            "number": int(t),
+            "timestamp_us": int(t * 1000000),
+            "arr": [int(t) + i for i in range(random.randint(0, 10))]
+        },
+        expected_trino=
+        [('redpanda',
+          'row(partition integer, offset bigint, timestamp timestamp(6), headers array(row(key varbinary, value varbinary)), key varbinary)',
+          '', ''), ('number', 'bigint', '', ''),
+         ('timestamp_us', 'timestamp(6)', '', ''),
+         ('arr', 'array(bigint)', '', '')],
+        expected_spark=
+        [('redpanda',
+          'struct<partition:int,offset:bigint,timestamp:timestamp_ntz,headers:array<struct<key:binary,value:binary>>,key:binary>',
+          None), ('number', 'bigint', None),
+         ('timestamp_us', 'timestamp_ntz', None),
+         ('arr', 'array<bigint>', None), ('', '', ''),
+         ('# Partitioning', '', ''),
+         ('Part 0', 'hours(redpanda.timestamp)', '')]),
+    "map":
     AvroSchema(
         schema_str=avro_schema_with_map_str,
         record_generator=lambda t: {
@@ -110,6 +205,51 @@ AVRO_SCHEMA_TEST_CASES = {
           None), ('number', 'bigint', None),
          ('timestamp_us', 'timestamp_ntz', None),
          ('kv', 'map<string,bigint>', None), ('', '', ''),
+         ('# Partitioning', '', ''),
+         ('Part 0', 'hours(redpanda.timestamp)', '')]),
+    "union":
+    AvroSchema(
+        schema_str=avro_schema_with_union_str,
+        record_generator=lambda t: {
+            "number": int(t),
+            "timestamp_us": int(t * 1000000),
+            "str_or_long": random.choice([str(t), int(t)])
+        },
+        expected_trino=
+        [('redpanda',
+          'row(partition integer, offset bigint, timestamp timestamp(6), headers array(row(key varbinary, value varbinary)), key varbinary)',
+          '', ''), ('number', 'bigint', '', ''),
+         ('timestamp_us', 'timestamp(6)', '', ''),
+         ('str_or_long', 'row(union_opt_0 varchar, union_opt_1 bigint)', '',
+          '')],
+        expected_spark=
+        [('redpanda',
+          'struct<partition:int,offset:bigint,timestamp:timestamp_ntz,headers:array<struct<key:binary,value:binary>>,key:binary>',
+          None), ('number', 'bigint', None),
+         ('timestamp_us', 'timestamp_ntz', None),
+         ('str_or_long', 'struct<union_opt_0:string,union_opt_1:bigint>',
+          None), ('', '', ''), ('# Partitioning', '', ''),
+         ('Part 0', 'hours(redpanda.timestamp)', '')]),
+    "null_union":
+    AvroSchema(
+        schema_str=avro_schema_with_null_union_str,
+        record_generator=lambda t: {
+            "number": int(t),
+            "timestamp_us": int(t * 1000000),
+            "optional_long": random.choice([None, int(t)])
+        },
+        expected_trino=
+        [('redpanda',
+          'row(partition integer, offset bigint, timestamp timestamp(6), headers array(row(key varbinary, value varbinary)), key varbinary)',
+          '', ''), ('number', 'bigint', '', ''),
+         ('timestamp_us', 'timestamp(6)', '', ''),
+         ('optional_long', 'row(union_opt_1 bigint)', '', '')],
+        expected_spark=
+        [('redpanda',
+          'struct<partition:int,offset:bigint,timestamp:timestamp_ntz,headers:array<struct<key:binary,value:binary>>,key:binary>',
+          None), ('number', 'bigint', None),
+         ('timestamp_us', 'timestamp_ntz', None),
+         ('optional_long', 'struct<union_opt_1:bigint>', None), ('', '', ''),
          ('# Partitioning', '', ''),
          ('Part 0', 'hours(redpanda.timestamp)', '')]),
 }
@@ -165,6 +305,8 @@ class DatalakeE2ETests(RedpandaTest):
                               include_query_engines=[query_engine],
                               catalog_type=catalog_type) as dl:
             for test_case, schema in AVRO_SCHEMA_TEST_CASES.items():
+                self.redpanda.logger.debug(
+                    f"Running avro schema test case {test_case}")
                 test_case_topic_name = f"{test_case}_test_case"
                 table_name = f"redpanda.{test_case_topic_name}"
                 dl.create_iceberg_enabled_topic(
