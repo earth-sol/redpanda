@@ -53,8 +53,9 @@ static constexpr auto despam_interval = std::chrono::minutes(5);
 static void fill_response_with_errors(
   produce_request::topic_cit topics_begin,
   produce_request::topic_cit topics_end,
+  produce_response& response,
   error_code error,
-  produce_response& response) {
+  const std::optional<ss::sstring>& error_msg = std::nullopt) {
     size_t cnt = std::distance(topics_begin, topics_end);
     response.data.responses.reserve(response.data.responses.size() + cnt);
     for (const auto& topic : std::views::counted(topics_begin, cnt)) {
@@ -65,15 +66,17 @@ static void fill_response_with_errors(
         for (const auto& partition : topic.partitions) {
             t.partitions.push_back(produce_response::partition{
               .partition_index = partition.partition_index,
-              .error_code = error});
+              .error_code = error,
+              .error_message = error_msg});
         }
     }
 }
 
-produce_response produce_request::make_error_response(error_code error) const {
+produce_response produce_request::make_error_response(
+  error_code error, const std::optional<ss::sstring>& error_msg) const {
     produce_response response;
     fill_response_with_errors(
-      data.topics.cbegin(), data.topics.cend(), error, response);
+      data.topics.cbegin(), data.topics.cend(), response, error, error_msg);
     return response;
 }
 
@@ -750,8 +753,8 @@ produce_handler::handle(request_context ctx, ss::smp_service_group ssg) {
     fill_response_with_errors(
       unauthorized_it,
       request.data.topics.cend(),
-      error_code::topic_authorization_failed,
-      resp);
+      resp,
+      error_code::topic_authorization_failed);
     request.data.topics.erase_to_end(unauthorized_it);
 
     // Make sure to not write into migrated-from topics in their critical stages
@@ -765,8 +768,8 @@ produce_handler::handle(request_context ctx, ss::smp_service_group ssg) {
     fill_response_with_errors(
       migrated_it,
       request.data.topics.cend(),
-      error_code::invalid_topic_exception,
-      resp);
+      resp,
+      error_code::invalid_topic_exception);
     request.data.topics.erase_to_end(migrated_it);
 
     ss::promise<> dispatched_promise;
