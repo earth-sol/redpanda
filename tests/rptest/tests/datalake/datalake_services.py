@@ -231,6 +231,10 @@ class DatalakeServices():
         self.wait_for_iceberg_table("redpanda", topic, timeout, backoff_sec)
 
         def translation_done():
+            assert len(
+                self.query_engines
+            ) > 0, "At least one query engine is required to check translation status"
+
             offsets = dict(
                 map(
                     lambda e: (e.engine_name(
@@ -267,6 +271,10 @@ class DatalakeServices():
                                     backoff_sec)
 
         def translation_done():
+            assert len(
+                self.query_engines
+            ) > 0, "At least one query engine is required to check translation status"
+
             counts = dict(
                 map(
                     lambda e:
