@@ -38,8 +38,7 @@ bool check_compatible(
 }
 
 pps::compatibility_result check_compatible_verbose(
-  const pps::canonical_schema_definition& r,
-  const pps::canonical_schema_definition& w) {
+  const pps::schema_definition& r, const pps::schema_definition& w) {
     pps::sharded_store s;
     return check_compatible(
       pps::make_json_schema_definition(
@@ -223,15 +222,15 @@ SEASTAR_THREAD_TEST_CASE(test_make_valid_json_schema) {
 
 struct test_references_data {
     struct data {
-        pps::unparsed_schema schema;
+        pps::subject_schema schema;
         pps::error_info result;
     };
     std::array<data, 2> _schemas;
 };
 
-const auto referenced = pps::unparsed_schema{
+const auto referenced = pps::subject_schema{
   pps::subject{"referenced"},
-  pps::unparsed_schema_definition{
+  pps::schema_definition{
     R"({
   "description": "A base schema that defines a number",
   "type": "object",
@@ -244,9 +243,9 @@ const auto referenced = pps::unparsed_schema{
     pps::schema_type::json,
     {}}};
 
-const auto referencer = pps::unparsed_schema{
+const auto referencer = pps::subject_schema{
   pps::subject{"referencer"},
-  pps::unparsed_schema_definition{
+  pps::schema_definition{
     R"({
   "description": "A schema that references the base schema",
   "type": "object",
@@ -262,9 +261,9 @@ const auto referencer = pps::unparsed_schema{
       .sub{referenced.sub()},
       .version = pps::schema_version{1}}}}};
 
-const auto referencer_wrong_sub = pps::unparsed_schema{
+const auto referencer_wrong_sub = pps::subject_schema{
   referencer.sub(),
-  pps::unparsed_schema_definition{
+  pps::schema_definition{
     referencer.def().shared_raw(),
     referencer.def().type(),
     {pps::schema_reference{
@@ -297,7 +296,7 @@ SEASTAR_THREAD_TEST_CASE(test_json_schema_references) {
 
         for (const auto& [schema, result] : test._schemas) {
             pps::schema_version ver{0};
-            pps::canonical_schema canonical{};
+            pps::subject_schema canonical{};
             auto make_canonical = [&]() {
                 canonical = f.store.make_canonical_schema(schema.share()).get();
             };
@@ -315,7 +314,7 @@ SEASTAR_THREAD_TEST_CASE(test_json_schema_references) {
             f.store
               .upsert(
                 pps::seq_marker{},
-                pps::to_unparsed(canonical.share()),
+                canonical.share(),
                 ++id,
                 ++ver,
                 pps::is_deleted::no)
@@ -1467,7 +1466,7 @@ SEASTAR_THREAD_TEST_CASE(test_compatibility_check) {
 
 namespace {
 
-const auto schema_old = pps::canonical_schema_definition({
+const auto schema_old = pps::schema_definition({
   R"(
 {
   "type": "object",
@@ -1487,7 +1486,7 @@ const auto schema_old = pps::canonical_schema_definition({
 })",
   pps::schema_type::json});
 
-const auto schema_new = pps::canonical_schema_definition({
+const auto schema_new = pps::schema_definition({
   R"(
 {
   "type": "object",

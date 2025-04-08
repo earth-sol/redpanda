@@ -30,7 +30,7 @@ SEASTAR_THREAD_TEST_CASE(test_validation) {
     const pps::schema_version ver1{1};
 
     // Insert simple
-    auto referenced_schema = pps::canonical_schema{
+    auto referenced_schema = pps::subject_schema{
       pps::subject{"simple.proto"}, simple};
     store
       .upsert(
@@ -43,7 +43,7 @@ SEASTAR_THREAD_TEST_CASE(test_validation) {
       .get();
 
     // Insert referenced
-    auto importing_schema = pps::canonical_schema{
+    auto importing_schema = pps::subject_schema{
       pps::subject{"imported.proto"},
       imported,
       {{"simple", pps::subject{"simple.proto"}, ver1}}};
