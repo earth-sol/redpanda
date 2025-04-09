@@ -2603,7 +2603,6 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
         valid_entries = [
             (1, "schema_a"),
-            (2, "schema_c"),
             (3, "schema_b"),
             (5, "schema_f_v1"),
             (6, "schema_f_v3"),
@@ -2611,6 +2610,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             (8, "schema_g_v1"),
             (10, "schema_g_v3"),
         ]
+        #These are schemas that having missing dependencies at startup
         invalid_entries = [
             (4, "schema_d"),
             (9, "schema_g_v2"),
@@ -2618,6 +2618,13 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             (12, "schema_i"),
             (13, "schema_j"),
             (14, "schema_k"),
+        ]
+        #These are schemas whose references are loaded after them during startup
+        forward_references_entries = [
+            (2, "schema_c"),
+        ]
+        forward_references_entries_new_ids = [
+            (15, "schema_c"),
         ]
 
         #Test /schemas/ids/{id}
@@ -2639,7 +2646,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                 assert_request_code(result_raw, 422, endpoint)
 
         #These schemas are valid. We should be able to retrieve them.
-        for id, _ in valid_entries:
+        for id, _ in valid_entries + forward_references_entries:
             test_schemas_ids_id(id, expected_successful=True)
 
         #These schemas are invalid. Tryint to retrieve them should return an error.
@@ -2657,7 +2664,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             else:
                 assert_request_code(result_raw, 422, endpoint)
 
-        for id, _ in valid_entries:
+        for id, _ in valid_entries + forward_references_entries:
             test_schemas_ids_id_versions(id, expected_successful=True)
         for id, _ in invalid_entries:
             test_schemas_ids_id_versions(id, expected_successful=False)
@@ -2673,7 +2680,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             else:
                 assert_request_code(result_raw, 422, endpoint)
 
-        for id, _ in valid_entries:
+        for id, _ in valid_entries + forward_references_entries:
             test_schemas_ids_id_subjects(id, expected_successful=True)
         for id, _ in invalid_entries:
             test_schemas_ids_id_subjects(id, expected_successful=False)
@@ -2721,7 +2728,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                 assert_request_code(result_raw, 422, endpoint)
 
         #Test /subjects/{subject}
-        for _, s in valid_entries:
+        for _, s in valid_entries + forward_references_entries:
             test_subjects_subject(s, expected_successful=True)
 
         #These schemas should fail, as the *input* schema has an unsatisfied dependency
@@ -2760,6 +2767,13 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                                            expected_id=id,
                                            expected_successful=True)
 
+        #forward_references will fail the lookup, as they didn't get canonicallized.
+        #Each will create a new entree.
+        for id, s in forward_references_entries_new_ids:
+            test_subjects_subject_versions(s,
+                                           expected_id=id,
+                                           expected_successful=True)
+
         #These schemas should fail, as the *input* schema has an unsatisfied dependencies
         for id, s in invalid_entries:
             test_subjects_subject_versions(s,
@@ -2786,7 +2800,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             else:
                 assert_request_code(result_raw, 422, endpoint)
 
-        for _, s in valid_entries:
+        for _, s in valid_entries + forward_references_entries:
             test_subjects_subject_versions_version(s, expected_successful=True)
         for _, s in invalid_entries:
             test_subjects_subject_versions_version(s,
@@ -2815,7 +2829,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             else:
                 assert_request_code(result_raw, 422, endpoint)
 
-        for _, s in valid_entries:
+        for _, s in valid_entries + forward_references_entries:
             test_subjects_subject_versions_version_schema(
                 s, expected_successful=True)
         for _, s in invalid_entries:
@@ -2838,7 +2852,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                 f"for request 'GET subjects/{subject}/versions/{version}/referencedby'"
 
         test_referenced_by("schema_a", [3])
-        test_referenced_by("schema_b", [2])
+        test_referenced_by("schema_b", [15])
         test_referenced_by("schema_c", [])
         test_referenced_by("schema_d", [])
         test_referenced_by("schema_f_v1", [8])
@@ -2859,15 +2873,19 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         assert_request_code(result_raw, requests.codes.ok,
                             "POST subjects/schema_e/versions")
 
-        #Validate that schema_d is recognized as a referee
+        #Validate that schema_d is now accepted as a referee
         test_referenced_by("schema_e", [4])
 
         test_schemas_ids_id(4, expected_successful=True)
         test_schemas_ids_id_versions(4, expected_successful=True)
         test_schemas_ids_id_subjects(4, expected_successful=True)
         test_subjects_subject("schema_d", expected_successful=True)
+        #Validate that schema_d can now be posted anew.
+        #Note that a new version will be created, as the old one was invalid at
+        #startup and it was not in canonical form. Thus it cannot be found and a
+        #new version is created.
         test_subjects_subject_versions("schema_d",
-                                       expected_id=4,
+                                       expected_id=17,
                                        expected_successful=True)
         test_subjects_subject_versions_version("schema_d",
                                                expected_successful=True)
@@ -2881,7 +2899,7 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
         #Fix problematic schemas by adding missing dependency for g_v2 and deleting g_v4.
         test_subjects_subject_versions("schema_f_v2",
-                                       expected_id=16,
+                                       expected_id=18,
                                        expected_successful=True)
 
         result_raw = self._delete_subject_version("schema_g", version=4)
@@ -2889,12 +2907,12 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
                             "DELETE subjects/schema_g/versions/4")
 
         test_subjects_subject_versions("schema_g_v5",
-                                       expected_id=17,
+                                       expected_id=19,
                                        expected_successful=True)
 
         #Fix problematic dependency chain by adding base schema.
         test_subjects_subject_versions("schema_h",
-                                       expected_id=18,
+                                       expected_id=20,
                                        expected_successful=True)
         test_schemas_ids_id(12, expected_successful=True)
         test_schemas_ids_id(13, expected_successful=True)
@@ -3000,6 +3018,8 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             "for request 'POST subjects/imported/versions'"
 
         #Normalization:on - /subjects/{subject}/versions
+        #This should fail to find it and create a new one, as the schema was
+        #not normalized when stored.
         result_raw = self._post_subjects_subject_versions(subject="imported",
                                                           data=json.dumps({
                                                               "schema":
@@ -3012,8 +3032,8 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
             f"Expected {requests.codes.ok} but got {result_raw.status_code}, "\
             "for request 'POST subjects/imported/versions?normalize=true'"
         result_id = result_raw.json()["id"]
-        assert result_id == 1, \
-            f"Expected id 1 but got {result_id}, "\
+        assert result_id == 2, \
+            f"Expected id 2 but got {result_id}, "\
             "for request 'POST subjects/imported/versions?normalize=true'"
 
     @cluster(num_nodes=4)
