@@ -29,6 +29,7 @@ enum class writer_error {
     oom_error,
     time_limit_exceeded,
     shutting_down,
+    out_of_disk,
     unknown_error,
 };
 std::ostream& operator<<(std::ostream&, const writer_error&);
@@ -59,7 +60,8 @@ enum reservation_error {
     shutting_down = 1,
     out_of_memory = 2,
     time_quota_exceeded = 3,
-    unknown = 4,
+    out_of_disk = 4,
+    unknown = 5,
 };
 
 writer_error map_to_writer_error(reservation_error);

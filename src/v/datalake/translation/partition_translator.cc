@@ -299,6 +299,9 @@ partition_translator::run_one_translation_iteration(
         vlog(
           _logger.debug,
           "Translation attempt exceeded scheduler time limit quota");
+    } catch (const translator_out_of_disk_error&) {
+        // Finishing will free up scratch space on disk
+        result = finish_immediately::yes;
     } catch (...) {
         // unknown exception or shutdown exception.
         unexpected_ex = std::current_exception();
@@ -580,6 +583,10 @@ void partition_translator::stop_translation(translator::stop_reason reason) {
     case stop_reason::oom:
         _inflight_translation_state->as.request_abort_ex(
           translator_out_of_memory_error{});
+        break;
+    case stop_reason::out_of_disk:
+        _inflight_translation_state->as.request_abort_ex(
+          translator_out_of_disk_error{});
         break;
     }
 }
