@@ -45,6 +45,8 @@ map_error_code(datalake::translation_task::errc errc) {
         return translation_errc::time_limit_exceeded;
     case datalake::translation_task::errc::shutting_down:
         return translation_errc::shutting_down;
+    case datalake::translation_task::errc::out_of_disk:
+        return translation_errc::out_of_disk;
     }
 }
 } // namespace
@@ -97,6 +99,8 @@ ss::future<reservation_error> translator_mem_tracker::reserve_bytes(
         co_return reservation_error::shutting_down;
     } catch (const translator_time_quota_exceeded_error&) {
         co_return reservation_error::time_quota_exceeded;
+    } catch (const translator_out_of_disk_error&) {
+        co_return reservation_error::out_of_disk;
     } catch (...) {
         co_return reservation_error::unknown;
     }
@@ -405,6 +409,8 @@ std::ostream& operator<<(std::ostream& o, translation_errc ec) {
         return o << "translation_errc::time_limit_exceeded";
     case shutting_down:
         return o << "translation_errc::shutting_down";
+    case out_of_disk:
+        return o << "translation_errc::out_of_disk";
     }
 }
 

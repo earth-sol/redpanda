@@ -45,6 +45,12 @@ public:
       : std::runtime_error("translator_time_quota_exceeded") {}
 };
 
+class translator_out_of_disk_error final : public std::runtime_error {
+public:
+    explicit translator_out_of_disk_error()
+      : std::runtime_error("translator_out_of_disk") {}
+};
+
 class noop_mem_tracker : public writer_mem_tracker {
 public:
     ss::future<reservation_error>
@@ -183,6 +189,7 @@ enum translation_errc {
     oom_error,
     time_limit_exceeded,
     shutting_down,
+    out_of_disk,
 };
 
 std::ostream& operator<<(std::ostream&, translation_errc);

@@ -185,6 +185,7 @@ public:
      */
     enum class stop_reason {
         oom,
+        out_of_disk,
     };
 
     virtual void stop_translation(stop_reason) = 0;
