@@ -206,7 +206,9 @@ public:
 
     constexpr schema_type type() const { return schema_type::avro; }
 
-    explicit operator schema_definition() const { return {raw(), type()}; }
+    explicit operator schema_definition() const {
+        return {raw(), type(), refs()};
+    }
 
     ss::sstring name() const;
 
