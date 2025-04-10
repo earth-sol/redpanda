@@ -75,8 +75,10 @@ ss::future<writer_error> local_parquet_file_writer::add_data_struct(
     auto write_result = co_await _writer->add_data_struct(
       std::move(data), sz, as);
     if (write_result != writer_error::ok) {
-        vlog(
-          datalake_log.warn,
+        vlogl(
+          datalake_log,
+          is_recoverable_error(write_result) ? ss::log_level::debug
+                                             : ss::log_level::warn,
           "Error writing data to file {} - {}",
           _output_file_path,
           write_result);

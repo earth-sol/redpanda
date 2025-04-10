@@ -275,8 +275,10 @@ ss::future<ss::stop_iteration> record_multiplexer::do_multiplex(
           std::move(record_data_res.value()), estimated_size, as);
 
         if (add_data_result != writer_error::ok) {
-            vlog(
-              _log.warn,
+            vlogl(
+              _log,
+              is_recoverable_error(add_data_result) ? ss::log_level::debug
+                                                    : ss::log_level::warn,
               "Error adding data to writer for record {}: {}",
               offset,
               add_data_result);
