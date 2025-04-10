@@ -132,10 +132,10 @@ local_parquet_file_writer::finish() {
           _output_file_path);
         writer_ec = writer_error::file_io_error;
     }
-    if (_error == writer_error::ok && writer_ec != writer_error::ok) {
+    if (is_recoverable_error(_error) && !is_recoverable_error(writer_ec)) {
         _error = writer_ec;
     }
-    if (_error != writer_error::ok) {
+    if (!is_recoverable_error(_error)) {
         auto exists = co_await ss::file_exists(_output_file_path().string());
         if (exists) {
             co_await ss::remove_file(_output_file_path().string());
