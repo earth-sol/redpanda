@@ -39,14 +39,14 @@ public:
 
     virtual bool is_enabled() const = 0;
 
-    virtual ss::future<pandaproxy::schema_registry::canonical_schema_definition>
+    virtual ss::future<pandaproxy::schema_registry::schema_definition>
       get_schema_definition(pandaproxy::schema_registry::schema_id) const = 0;
-    virtual ss::future<pandaproxy::schema_registry::subject_schema>
+    virtual ss::future<pandaproxy::schema_registry::stored_schema>
       get_subject_schema(
         pandaproxy::schema_registry::subject,
         std::optional<pandaproxy::schema_registry::schema_version>) const
       = 0;
     virtual ss::future<pandaproxy::schema_registry::schema_id>
-      create_schema(pandaproxy::schema_registry::unparsed_schema) = 0;
+      create_schema(pandaproxy::schema_registry::subject_schema) = 0;
 };
 } // namespace wasm

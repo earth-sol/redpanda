@@ -52,7 +52,7 @@ class fake_schema_registry : public wasm::schema_registry {
 public:
     bool is_enabled() const override { return true; };
 
-    ss::future<ppsr::canonical_schema_definition>
+    ss::future<ppsr::schema_definition>
     get_schema_definition(ppsr::schema_id id) const override {
         for (const auto& s : _schemas) {
             if (s.id == id) {
@@ -61,10 +61,10 @@ public:
         }
         throw std::runtime_error("unknown schema id");
     }
-    ss::future<ppsr::subject_schema> get_subject_schema(
+    ss::future<ppsr::stored_schema> get_subject_schema(
       ppsr::subject sub,
       std::optional<ppsr::schema_version> version) const override {
-        std::optional<ppsr::subject_schema> found;
+        std::optional<ppsr::stored_schema> found;
         for (const auto& s : _schemas) {
             if (s.schema.sub() != sub) {
                 continue;
@@ -81,7 +81,7 @@ public:
     }
 
     ss::future<ppsr::schema_id>
-    create_schema(ppsr::unparsed_schema unparsed) override {
+    create_schema(ppsr::subject_schema unparsed) override {
         // This is wrong, but simple for our testing.
         for (const auto& s : _schemas) {
             if (s.schema.def().raw()() == unparsed.def().raw()()) {
@@ -98,10 +98,10 @@ public:
         auto [sub, unparsed_def] = std::move(unparsed).destructure();
         auto [def, type, refs] = std::move(unparsed_def).destructure();
         _schemas.push_back({
-          .schema = ppsr::canonical_schema(
+          .schema = ppsr::subject_schema(
             std::move(sub),
-            ppsr::canonical_schema_definition(
-              ppsr::canonical_schema_definition::raw_string{std::move(def)()},
+            ppsr::schema_definition(
+              ppsr::schema_definition::raw_string{std::move(def)()},
               type,
               std::move(refs))),
           .version = version + 1,
@@ -111,10 +111,10 @@ public:
         co_return _schemas.back().id;
     }
 
-    const std::vector<ppsr::subject_schema>& get_all() { return _schemas; }
+    const std::vector<ppsr::stored_schema>& get_all() { return _schemas; }
 
 private:
-    std::vector<ppsr::subject_schema> _schemas;
+    std::vector<ppsr::stored_schema> _schemas;
 };
 
 void WasmTestFixture::SetUpTestSuite() {
@@ -232,7 +232,7 @@ model::record_batch WasmTestFixture::make_tiny_batch(iobuf record_value) {
     b.add_raw_kv(model::test::make_iobuf(), std::move(record_value));
     return std::move(b).build();
 }
-const std::vector<pandaproxy::schema_registry::subject_schema>&
+const std::vector<pandaproxy::schema_registry::stored_schema>&
 WasmTestFixture::registered_schemas() const {
     return _sr->get_all();
 }
