@@ -18,6 +18,7 @@
 #include "kafka/client/client.h"
 #include "pandaproxy/json/types.h"
 #include "pandaproxy/kafka_client_cache.h"
+#include "pandaproxy/logger.h"
 #include "pandaproxy/types.h"
 #include "security/request_auth.h"
 #include "utils/adjustable_semaphore.h"
@@ -121,7 +122,8 @@ public:
       const ss::sstring& header,
       const ss::sstring& definitions,
       context_t& ctx,
-      json::serialization_format exceptional_mime_type);
+      json::serialization_format exceptional_mime_type,
+      ss::logger& log = plog);
 
     void route(route_t route);
     void routes(routes_t&& routes);
@@ -141,6 +143,7 @@ private:
     context_t& _ctx;
     json::serialization_format _exceptional_mime_type;
     std::unique_ptr<server_probe> _probe;
+    ss::logger& _log;
 };
 
 template<typename service_t>
