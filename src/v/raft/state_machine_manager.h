@@ -178,6 +178,7 @@ private:
 
     ss::future<> apply_raft_snapshot();
     ss::future<> do_apply_raft_snapshot(
+      std::vector<entry_ptr> state_machines,
       raft::snapshot_metadata metadata,
       storage::snapshot_reader& reader,
       std::vector<ssx::semaphore_units> background_apply_units);
@@ -186,6 +187,9 @@ private:
 
     ss::future<std::vector<ssx::semaphore_units>>
     acquire_background_apply_mutexes();
+
+    std::vector<entry_ptr> all_state_machines() const;
+    model::offset max_next_offset() const;
     /**
      * Simple data structure allowing manager to store independent snapshot
      * for each of the STMs
