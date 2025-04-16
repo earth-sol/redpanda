@@ -103,14 +103,18 @@ struct handler_adaptor : ss::httpd::handler_base {
           };
         auto inflight_units = _ctx.inflight_sem.try_get_units(1);
         if (!inflight_units) {
-            set_reply_too_many_requests(*rp.rep);
+            auto er = err_reply_builder{std::move(rp.rep)};
+            er.set_reply_too_many_requests();
+            rp.rep = std::move(er).build();
             rp.mime_type = _exceptional_mime_type;
             set_and_measure_response(rp);
             co_return std::move(rp.rep);
         }
         auto req_size = get_request_size(*rq.req);
         if (req_size > _ctx.max_memory) {
-            set_reply_payload_too_large(*rp.rep);
+            auto er = err_reply_builder{std::move(rp.rep)};
+            er.set_reply_payload_too_large();
+            rp.rep = std::move(er).build();
             rp.mime_type = _exceptional_mime_type;
             set_and_measure_response(rp);
             co_return std::move(rp.rep);
@@ -126,7 +130,9 @@ struct handler_adaptor : ss::httpd::handler_base {
         vlog(_log.trace, "{} handling {}", prefix, req_line);
 
         if (_ctx.as.abort_requested()) {
-            set_reply_unavailable(*rp.rep);
+            auto er = err_reply_builder{std::move(rp.rep)};
+            er.set_reply_unavailable();
+            rp.rep = std::move(er).build();
             rp.mime_type = _exceptional_mime_type;
             set_and_measure_response(rp);
             co_return std::move(rp.rep);
@@ -143,8 +149,8 @@ struct handler_adaptor : ss::httpd::handler_base {
               method,
               url,
               std::current_exception());
-            rp = server::reply_t{
-              exception_reply(_log, ex), _exceptional_mime_type};
+            auto er = exception_reply(_log, ex);
+            rp = server::reply_t{std::move(er).build(), _exceptional_mime_type};
         }
         set_and_measure_response(rp);
         vlog(

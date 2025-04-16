@@ -257,7 +257,7 @@ create_consumer(server::request_t rq, server::reply_t rp) {
                 auto ec = make_error_condition(
                   reply_error_code::consumer_already_exists);
                 server::reply_t rp;
-                rp.rep = errored_body(ec, ec.message());
+                rp.rep = errored_body(ec, ec.message()).build();
                 return ss::make_ready_future<server::reply_t>(std::move(rp));
             })
             .handle_exception_type(
