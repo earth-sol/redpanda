@@ -42,7 +42,6 @@
 #include <seastar/coroutine/parallel_for_each.hh>
 #include <seastar/http/api_docs.hh>
 #include <seastar/http/exception.hh>
-#include <seastar/util/log.hh>
 #include <seastar/util/noncopyable_function.hh>
 
 #include <boost/algorithm/string/predicate.hpp>
@@ -50,7 +49,6 @@
 namespace pandaproxy::schema_registry {
 
 static constexpr auto audit_svc_name = "Redpanda Schema Registry Service";
-ss::logger schema_registry_access{"schema_registry_access"};
 
 using server = ctx_server<service>;
 const security::acl_principal principal{
@@ -631,8 +629,7 @@ service::service(
       "schema_registry_header",
       "/schema_registry_definitions",
       _ctx,
-      json::serialization_format::schema_registry_v1_json,
-      schema_registry_access)
+      json::serialization_format::schema_registry_v1_json)
   , _store(store)
   , _writer(sequencer)
   , _controller(controller)
