@@ -29,8 +29,6 @@
 #include <seastar/core/future.hh>
 #include <seastar/core/sstring.hh>
 
-#include <absl/strings/escaping.h>
-
 #include <limits>
 
 namespace ppj = pandaproxy::json;
@@ -149,7 +147,7 @@ std::invoke_result_t<F> get_or_load(server::request_t& rq, F f) {
     }
 
     // Load latest writes and retry
-    vlog(plog.debug, "get_or_load: refreshing schema store on missing item");
+    vlog(srlog.debug, "get_or_load: refreshing schema store on missing item");
     co_await rq.service().writer().read_sync();
     co_return co_await f();
 }
@@ -417,7 +415,7 @@ post_subject(server::request_t rq, server::reply_t rp) {
     auto norm{parse::query_param<std::optional<normalize>>(*rq.req, "normalize")
                 .value_or(normalize::no)};
     vlog(
-      plog.debug,
+      srlog.debug,
       "post_subject subject='{}', normalize='{}', deleted='{}'",
       sub,
       norm,
@@ -432,7 +430,6 @@ post_subject(server::request_t rq, server::reply_t rp) {
     try {
         auto unparsed = co_await ppj::rjson_parse(
           std::move(rq.req), post_subject_versions_request_handler<>{sub});
-        vlog(rq.service().access_logger().trace, "{}", unparsed.def);
         schema = co_await rq.service().schema_store().make_canonical_schema(
           std::move(unparsed.def), norm);
     } catch (const exception& e) {
@@ -464,7 +461,7 @@ post_subject_versions(server::request_t rq, server::reply_t rp) {
     auto norm{parse::query_param<std::optional<normalize>>(*rq.req, "normalize")
                 .value_or(normalize::no)};
     vlog(
-      plog.debug,
+      srlog.debug,
       "post_subject_versions subject='{}', normalize='{}'",
       sub,
       norm);
@@ -473,7 +470,6 @@ post_subject_versions(server::request_t rq, server::reply_t rp) {
 
     auto unparsed = co_await ppj::rjson_parse(
       std::move(rq.req), post_subject_versions_request_handler<>{sub});
-    vlog(rq.service().access_logger().trace, "{}", unparsed.def);
 
     // If presented with a non-positive integer for version, set it to
     // invalid_schema_version so that the version number can be projected
@@ -531,9 +527,6 @@ ss::future<ctx_server<service>::reply_t> get_subject_versions_version(
           sub, version, inc_del);
     });
 
-    auto str = fmt::format("{}", get_res.schema);
-    vlog(rq.service().access_logger().trace, "{}", absl::CEscape(str));
-
     rp.rep->write_body(
       "json",
       ppj::rjson_serialize(post_subject_versions_version_response{
@@ -559,9 +552,6 @@ ss::future<ctx_server<service>::reply_t> get_subject_versions_version_schema(
 
     auto get_res = co_await rq.service().schema_store().get_subject_schema(
       sub, version, inc_del);
-
-    auto str = fmt::format("{}", get_res.schema);
-    vlog(rq.service().access_logger().trace, "{}", absl::CEscape(str));
 
     rp.rep->write_body(
       "json", ppj::as_body_writer(std::move(get_res.schema).def().raw()()));
@@ -668,13 +658,12 @@ compatibility_subject_version(server::request_t rq, server::reply_t rp) {
         .value_or(verbose::no)};
     auto unparsed = co_await ppj::rjson_parse(
       std::move(rq.req), post_subject_versions_request_handler<>{sub});
-    vlog(rq.service().access_logger().trace, "{}", unparsed.def);
 
     // Must read, in case we have the subject in cache with an outdated config
     co_await rq.service().writer().read_sync();
 
     vlog(
-      plog.info,
+      srlog.info,
       "compatibility_subject_version: subject: {}, version: {}",
       unparsed.def.sub(),
       ver);

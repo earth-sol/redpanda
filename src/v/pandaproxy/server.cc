@@ -22,7 +22,6 @@
 #include <seastar/http/function_handlers.hh>
 #include <seastar/http/reply.hh>
 #include <seastar/net/tls.hh>
-#include <seastar/util/log.hh>
 
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>
@@ -30,7 +29,6 @@
 #include <charconv>
 #include <exception>
 #include <memory>
-#include <type_traits>
 
 namespace pandaproxy {
 
@@ -117,14 +115,13 @@ struct handler_adaptor : ss::httpd::handler_base {
         }
         auto sem_units = co_await ss::get_units(_ctx.mem_sem, req_size);
 
-        // Username is empty 'cos auth wrapper happens later :'()
-        auto access_log = ssx::sformat(
-          R"("{} {} {} {} HTTP/{}")",
+        auto prefix = ssx::sformat(
+          "[{}:{}]",
           rq.req->get_client_address().addr(),
-          rq.user.name,
-          rq.req->_method,
-          rq.req->_url,
-          rq.req->_version);
+          rq.req->get_client_address().port());
+        auto req_line = ssx::sformat(
+          "{} {} HTTP/{}", rq.req->_method, rq.req->_url, rq.req->_version);
+        vlog(_log.trace, "{} handling {}", prefix, req_line);
 
         if (_ctx.as.abort_requested()) {
             set_reply_unavailable(*rp.rep);
@@ -139,18 +136,20 @@ struct handler_adaptor : ss::httpd::handler_base {
         } catch (...) {
             auto ex = std::current_exception();
             vlog(
-              plog.warn,
+              _log.warn,
               "Request: {} {} failed: {}",
               method,
               url,
               std::current_exception());
-            rp = server::reply_t{exception_reply(ex), _exceptional_mime_type};
+            rp = server::reply_t{
+              exception_reply(_log, ex), _exceptional_mime_type};
         }
         set_and_measure_response(rp);
         vlog(
           _log.trace,
-          "{} {} {}",
-          access_log,
+          "{} responding to {}: status={} resp_size={}",
+          prefix,
+          req_line,
           static_cast<std::underlying_type_t<ss::http::reply::status_type>>(
             rp.rep->_status),
           rp.rep->_content.size());
@@ -227,7 +226,7 @@ ss::future<> server::start(
   const std::vector<config::endpoint_tls_config>& endpoints_tls,
   const std::vector<model::broker_endpoint>& advertised) {
     _server._routes.register_exeption_handler(
-      exception_replier{ss::sstring{name(_exceptional_mime_type)}});
+      exception_replier{ss::sstring{name(_exceptional_mime_type)}, _log});
 
     _probe = std::make_unique<server_probe>(_ctx, _public_metrics_group_name);
 
@@ -261,11 +260,11 @@ ss::future<> server::start(
               it->config,
               _public_metrics_group_name,
               it->name,
-              [](
+              [&log = _log](
                 const std::unordered_set<ss::sstring>& updated,
                 const std::exception_ptr& eptr) {
                   rpc::log_certificate_reload_event(
-                    plog, "API TLS", updated, eptr);
+                    log, "API TLS", updated, eptr);
               });
         }
         co_await _server.listen(addr, cred);
