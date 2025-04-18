@@ -173,7 +173,7 @@ partition_translator::fetch_translation_offsets(retry_chain_node& rcn) {
                                : _data_source->min_offset_for_translation();
 
     // Replicate an initialized last translated offset to unblock the max
-    // collectible offset while pinning this Kafka offset from
+    // removable offset while pinning this Kafka offset from
     // application-facing retention or compaction.
     //
     // NOTE: kafka::prev_offset(0) is kafka::offset::min() (uninitialized).
@@ -359,7 +359,7 @@ ss::future<bool> partition_translator::finish_inflight_translation(
     if (expected_begin != translation_result.start_offset) {
         // This is possible if there is a gap in offsets range, eg from
         // compaction. Normally that shouldn't be the case, as translation
-        // enforces max_collectible_offset which prevents compaction or
+        // enforces max_removable_local_log_offset which prevents compaction or
         // other forms of retention from kicking in before translation
         // actually happens. However there could be a sequence of enabling /
         // disabling iceberg configuration on the topic that can temporarily

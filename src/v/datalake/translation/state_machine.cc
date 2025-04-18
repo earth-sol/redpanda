@@ -170,7 +170,7 @@ ss::future<std::error_code> translation_stm::reset_highest_translated_offset(
     co_return error;
 }
 
-model::offset translation_stm::max_collectible_offset() {
+model::offset translation_stm::max_removable_local_log_offset() {
     if (!_raft->log_config().iceberg_enabled()) {
         return model::offset::max();
     }
