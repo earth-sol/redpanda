@@ -102,7 +102,7 @@ public:
     //
     // For example, this can be used to ensure local data is not removed before
     // first uploading it to tiered storage.
-    virtual model::offset max_collectible_offset() = 0;
+    virtual model::offset max_removable_local_log_offset() = 0;
 
     // Lets the STM limit application-facing removal or compaction of data by
     // limiting GC or compaction attempts to offsets exclusively below this
@@ -186,7 +186,7 @@ public:
         }
     }
 
-    model::offset max_collectible_offset();
+    model::offset max_removable_local_log_offset();
     std::optional<kafka::offset> lowest_pinned_data_offset() const;
 
     ss::future<fragmented_vector<model::tx_range>>
@@ -496,7 +496,7 @@ struct compaction_config {
       std::optional<size_t> max_keys = std::nullopt,
       hash_key_offset_map* key_map = nullptr,
       scoped_file_tracker::set_t* to_clean = nullptr)
-      : max_collectible_offset(max_collect_offset)
+      : max_removable_local_log_offset(max_collect_offset)
       , tombstone_retention_ms(tombstone_ret_ms)
       , iopc(p)
       , sanitizer_config(std::move(san_cfg))
@@ -507,7 +507,7 @@ struct compaction_config {
 
     // Cannot delete or compact past this offset (i.e. for unresolved txn
     // records): that is, only offsets <= this may be compacted.
-    model::offset max_collectible_offset;
+    model::offset max_removable_local_log_offset;
 
     // The retention time for tombstones. Tombstone removal occurs only for
     // "clean" compacted segments past the tombstone deletion horizon timestamp,

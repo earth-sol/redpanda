@@ -426,14 +426,14 @@ log_manager::housekeeping_scan(model::timestamp collection_threshold) {
             }
         }
         model::offset max_compactible_offset
-          = current_log.handle->stm_manager()->max_collectible_offset();
+          = current_log.handle->stm_manager()->max_removable_local_log_offset();
         if (
           max_unpinned_offset
           && *max_unpinned_offset < max_compactible_offset) {
             vlog(
               gclog.debug,
               "{}: Compaction is pinned by offset: pinned Kafka offset: {}, "
-              "log offsets max unpinned {} < max collectible {}",
+              "log offsets max unpinned {} < max removable {}",
               ntp,
               *pinned_kafka_offset,
               *max_unpinned_offset,

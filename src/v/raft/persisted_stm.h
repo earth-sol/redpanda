@@ -208,7 +208,7 @@ public:
       std::optional<std::reference_wrapper<ss::abort_source>>
       = std::nullopt) const noexcept;
 
-    model::offset max_collectible_offset() override;
+    model::offset max_removable_local_log_offset() override;
     std::optional<kafka::offset> lowest_pinned_data_offset() const override {
         return std::nullopt;
     }

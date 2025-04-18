@@ -136,7 +136,7 @@ TEST_F(ManualFixture, TestSizeEstimationWithCloud) {
     ASSERT_TRUE(archiver.sync_for_tests().get());
     archiver.apply_spillover().get();
 
-    // Aggressively GC, relying on max collectible to preserve local segments
+    // Aggressively GC, relying on max removable to preserve local segments
     // not yet in tiered storage.
     auto log = partition->log();
     auto& manifest = partition->archival_meta_stm()->manifest();
@@ -232,12 +232,12 @@ TEST_P(EndToEndFixture, TestProduceConsumeFromCloud) {
     ASSERT_EQ(2, log->segments().size());
     ASSERT_EQ(1, archiver.manifest().size());
 
-    // Compact the local log to GC to the collectible offset.
+    // Compact the local log to GC to the removable offset.
     ss::abort_source as;
     storage::housekeeping_config housekeeping_conf(
       model::timestamp::min(),
       1,
-      log->stm_manager()->max_collectible_offset(),
+      log->stm_manager()->max_removable_local_log_offset(),
       std::nullopt,
       ss::default_priority_class(),
       as);
@@ -661,7 +661,7 @@ TEST_P(CloudStorageEndToEndManualTest, TestTimequeryAfterArchivalGC) {
     storage::housekeeping_config housekeeping_conf(
       model::timestamp::min(),
       1, // max_bytes_in_log
-      log->stm_manager()->max_collectible_offset(),
+      log->stm_manager()->max_removable_local_log_offset(),
       std::nullopt,
       ss::default_priority_class(),
       as);
@@ -958,7 +958,7 @@ TEST_P(EndToEndFixture, TestCloudStorageTimequery) {
     storage::housekeeping_config housekeeping_conf(
       model::timestamp::max(),
       0,
-      log->stm_manager()->max_collectible_offset(),
+      log->stm_manager()->max_removable_local_log_offset(),
       std::nullopt,
       ss::default_priority_class(),
       as);
