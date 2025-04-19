@@ -766,6 +766,7 @@ struct configuration final : public config_store {
     bounded_property<double, numeric_bounds>
       datalake_scratch_space_soft_limit_size_percent;
     property<double> datalake_disk_usage_overage_coeff;
+    bounded_property<size_t> datalake_scheduler_disk_reservation_block_size;
 
     configuration();
 

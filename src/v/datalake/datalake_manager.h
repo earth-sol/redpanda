@@ -141,6 +141,21 @@ private:
     ss::future<> check_and_manage_disk_space();
 
     /*
+     * Returns the disk soft limit, which is the threshold above which disk
+     * utilization will trigger asynchronous requests to translators to finish
+     * their translations and release on disk resources.
+     */
+    size_t disk_space_soft_limit();
+
+    /*
+     * Returns true if the disk space soft limit were breached.
+     */
+    bool disk_space_soft_limit_exceeded();
+
+    friend class core_0_disk_manager;
+    ss::future<size_t> reserve_disk(ss::shard_id);
+
+    /*
      * A helper that can be called when disk limit configuration values change
      * which will recompute the active configuration.
      */
