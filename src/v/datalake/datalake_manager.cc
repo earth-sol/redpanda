@@ -201,8 +201,6 @@ datalake_manager::datalake_manager(
             "unexpected error in managing translator: {}",
             ex);
       })
-  , _disk_usage_interval(
-      config::shard_local_cfg().datalake_disk_space_monitor_interval.bind())
   , _core0_disk_bytes_reservable{0, "datalake::core0_disk_bytes_reservable"}
   , _disk_space_manager_enable(
       config::shard_local_cfg().datalake_disk_space_monitor_enable.bind())
@@ -345,29 +343,15 @@ ss::future<> datalake_manager::start() {
 
         ssx::spawn_with_gate(_gate, [this] { return disk_space_monitor(); });
     }
-
-    _disk_usage_interval.watch([this] { _disk_space_monitor_sem.signal(); });
 }
 
 ss::future<> datalake_manager::disk_space_monitor() {
     while (!_gate.is_closed()) {
-        const auto interval = _disk_usage_interval();
-        try {
-            co_await _disk_space_monitor_sem.wait(
-              interval, std::max(_disk_space_monitor_sem.current(), size_t(1)));
-        } catch (const ss::semaphore_timed_out& ex) {
-            std::ignore = ex;
-            // drop through to perform work
-        }
-
-        if (_disk_usage_interval() != interval) {
-            // configuration change
-            continue;
-        }
-
-        if (!config::shard_local_cfg().datalake_disk_space_monitor_enable()) {
-            continue;
-        }
+        co_await _disk_space_monitor_cv.wait([this] {
+            return config::shard_local_cfg()
+                     .datalake_disk_space_monitor_enable()
+                   && disk_space_soft_limit_exceeded();
+        });
 
         try {
             co_await check_and_manage_disk_space();
@@ -377,6 +361,12 @@ ss::future<> datalake_manager::disk_space_monitor() {
               "Recoverable error checking datalake disk space: {}",
               std::current_exception());
         }
+
+        /*
+         * even when we the system is driven to high disk space utilization
+         * frequently, we don't want to go too hard with the reclaim loop.
+         */
+        co_await ss::sleep_abortable(1s, _as->local());
     }
 }
 
@@ -552,7 +542,7 @@ ss::future<size_t> datalake_manager::reserve_disk(ss::shard_id shard) {
     }
 
     if (disk_space_soft_limit_exceeded()) {
-        _disk_space_monitor_sem.signal();
+        _disk_space_monitor_cv.signal();
     }
 
     vlog(
@@ -618,7 +608,7 @@ datalake_manager::prepare_staging_directory(std::filesystem::path path) {
 
 ss::future<> datalake_manager::shutdown() {
     vlog(datalake_log.debug, "Stopping datalake manager...");
-    _disk_space_monitor_sem.broken();
+    _disk_space_monitor_cv.broken();
     auto f = _gate.close();
     co_await _queue.shutdown();
     if (_backlog_controller) {
@@ -829,6 +819,11 @@ void datalake_manager::update_disk_limits() {
         _disk_bytes_reservable_total = new_total_size;
         _core0_disk_bytes_reservable.consume(units);
     }
+
+    /*
+     * let the monitor see if anything needs to be done based on the changes
+     */
+    _disk_space_monitor_cv.signal();
 
     /*
      * when shrinking the size of the scratch space the semaphore tracking

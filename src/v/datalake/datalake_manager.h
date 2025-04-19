@@ -193,8 +193,7 @@ private:
     std::unique_ptr<core_0_disk_manager> _disk_manager;
     translation::scheduling::scheduler _scheduler;
     ssx::work_queue _queue;
-    ssx::semaphore _disk_space_monitor_sem{0, "datalake::disk_space_monitor"};
-    config::binding<std::chrono::milliseconds> _disk_usage_interval;
+    ss::condition_variable _disk_space_monitor_cv;
     /*
      * _disk_bytes_reservable_total
      *
