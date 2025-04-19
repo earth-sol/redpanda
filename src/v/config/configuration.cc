@@ -4108,17 +4108,7 @@ configuration::configuration()
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       true)
   , datalake_disk_space_monitor_interval(
-      *this,
-      "datalake_disk_space_monitor_interval",
-      "The amount of time between invocations of the datalake disk space usage "
-      "monitor which examines disk usage and dispatches requests to "
-      "translators to reduce their usage if it is above the configured "
-      "threshold.",
-      {.needs_restart = needs_restart::no,
-       .example = "3600000",
-       .visibility = visibility::tunable},
-      30s,
-      {.min = 2s})
+      *this, "datalake_disk_space_monitor_interval")
   , datalake_scratch_space_size_bytes(
       *this,
       "datalake_scratch_space_size_bytes",
