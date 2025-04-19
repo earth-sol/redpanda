@@ -4145,6 +4145,17 @@ configuration::configuration()
        .example = "1.8",
        .visibility = visibility::tunable},
       2.0)
+  , datalake_scheduler_disk_reservation_block_size(
+      *this,
+      "datalake_scheduler_disk_reservation_block_size",
+      "The size, in bytes, of the block of disk reservation that the datalake "
+      "manager will assign to each datalake scheduler when it runs out of "
+      "local reservation.",
+      {.needs_restart = needs_restart::no,
+       .example = "10000000",
+       .visibility = visibility::tunable},
+      50_MiB,
+      {.min = 1_MiB})
   , development_enable_cloud_topics(
       *this,
       "development_enable_cloud_topics",
