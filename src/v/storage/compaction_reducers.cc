@@ -166,7 +166,9 @@ copy_data_segment_reducer::filter(model::record_batch batch) {
             batch, r, batch.record_count() == records_seen, offset_deltas);
       });
 
-    if (batch.last_offset() == _segment_last_offset && offset_deltas.empty()) {
+    if (
+      _compaction_placeholder_enabled
+      && batch.last_offset() == _segment_last_offset && offset_deltas.empty()) {
         // last batch in the segment has been compacted away.
         // This is most likely caused by aborted data batches getting compacted
         // away during self compaction of the segment if they are the last batch
