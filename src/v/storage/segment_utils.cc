@@ -388,6 +388,9 @@ ss::future<storage::index_state> do_copy_segment_data(
       "copying compacted segment data from {} to {}",
       seg->reader().filename(),
       tmpname);
+
+    auto compaction_placeholder_enabled = feature_table.local().is_active(
+      features::feature::compaction_placeholder_batch);
     bool may_have_tombstone_records = false;
     auto should_keep =
       [compacted_list = std::move(compacted_offsets),
@@ -422,6 +425,7 @@ ss::future<storage::index_state> do_copy_segment_data(
       seg->path().is_internal_topic(),
       apply_offset,
       segment_last_offset,
+      compaction_placeholder_enabled,
       /*cidx=*/nullptr,
       /*inject_failure=*/false,
       cfg.asrc);
