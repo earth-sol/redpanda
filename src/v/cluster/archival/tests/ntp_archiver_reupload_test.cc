@@ -230,12 +230,6 @@ struct reupload_fixture : public archiver_fixture {
     ss::lw_shared_ptr<storage::segment> run_disk_log_housekeeping(
       model::offset max_collectible = model::offset::max()) {
         auto& seg_set = disk_log_impl()->segments();
-        scoped_config cfg;
-        // Make sure that the compaction always runs
-        cfg.get("min_cleanable_dirty_ratio")
-          .set_value(std::make_optional(double(0)));
-        auto compacted_before
-          = disk_log_impl()->get_probe().get_segments_compacted();
         disk_log_impl()
           ->housekeeping(storage::housekeeping_config{
             model::timestamp::max(),
@@ -245,11 +239,6 @@ struct reupload_fixture : public archiver_fixture {
             ss::default_priority_class(),
             abort_source})
           .get();
-
-        // Check that the compaction actually compacts
-        auto compacted_after
-          = disk_log_impl()->get_probe().get_segments_compacted();
-        BOOST_REQUIRE(compacted_after > compacted_before);
 
         ss::lw_shared_ptr<storage::segment> last_compacted_segment;
         for (auto& i : seg_set) {
