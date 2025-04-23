@@ -120,13 +120,9 @@ public:
     }
 
     /**
-     * Returns state machine configured initial recovery policy. The default
-     * policy is to read everything as this is the basic behavior of the state
-     * machine
+     * Returns state machine configured initial recovery policy.
      */
-    virtual stm_initial_recovery_policy get_initial_recovery_policy() const {
-        return stm_initial_recovery_policy::read_everything;
-    }
+    virtual stm_initial_recovery_policy get_initial_recovery_policy() const = 0;
 
 protected:
     /**

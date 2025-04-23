@@ -291,6 +291,11 @@ public:
         throw_on_apply = should_throw;
     }
 
+    raft::stm_initial_recovery_policy
+    get_initial_recovery_policy() const override {
+        return raft::stm_initial_recovery_policy::read_everything;
+    }
+
     bool throw_on_apply = false;
     kv_state state;
     kv_operation last_operation;
@@ -527,6 +532,11 @@ public:
         co_await validate_applied_offsets(applied_offset_before);
         co_return stm_snapshot::create(
           0, last_applied_offset(), serde::to_iobuf(_last_stm_applied));
+    }
+
+    raft::stm_initial_recovery_policy
+    get_initial_recovery_policy() const final {
+        return raft::stm_initial_recovery_policy::read_everything;
     }
 
 private:
