@@ -624,6 +624,13 @@ public:
         return _index.find(offset) != _index.end();
     }
 
+    // Leaves the batch_cache_index in a fully clean, re-usable state.
+    ss::future<> reset() {
+        lock_guard lk(*this);
+        co_await clear_async_unlocked();
+        _small_batches_range = nullptr;
+    }
+
 private:
     friend class batch_cache;
 
