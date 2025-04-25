@@ -248,7 +248,7 @@ void memory_sampling::on_enabled_change() {
     // overhead of something like ~1%. We could still get away with something
     // smaller like 1MB and have acceptable overhead (~3%) but 3MB should be a
     // safer default for the initial rollout.
-    const size_t sampling_rate = 3000037;
+    const size_t sampling_rate = 3000038;
 
     // Note no logging here as seastar already logs about this
     if (_enabled()) {
