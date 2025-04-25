@@ -14,6 +14,7 @@ from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from random import randint
+import time
 
 from rptest.services.redpanda import PandaproxyConfig, SchemaRegistryConfig, SISettings
 from rptest.services.serde_client import SerdeClient
@@ -337,17 +338,14 @@ class DatalakeDelayedEnablementTest(RedpandaTest):
         return True
 
     @cluster(num_nodes=6)
-    # this test doesn't have to run with different catalog types
-    @matrix(cloud_storage_type=supported_storage_types(),
-            catalog_type=[CatalogType.REST_JDBC])
+    @matrix(cloud_storage_type=supported_storage_types())
     @skip_debug_mode
-    def test_enabling_iceberg_in_existing_cluster(self, cloud_storage_type,
-                                                  catalog_type):
+    def test_enabling_iceberg_in_existing_cluster(self, cloud_storage_type):
         count = 100
         with DatalakeServices(self.test_ctx,
                               redpanda=self.redpanda,
-                              include_query_engines=[QueryEngineType.SPARK],
-                              catalog_type=catalog_type) as dl:
+                              include_query_engines=[QueryEngineType.SPARK
+                                                     ]) as dl:
 
             topic = TopicSpec(name="delayed-iceberg-topic",
                               partition_count=3,
