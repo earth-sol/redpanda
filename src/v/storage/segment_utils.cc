@@ -411,6 +411,7 @@ ss::future<storage::index_state> do_copy_segment_data(
         segment_last_offset = seg->offsets().get_committed_offset();
     }
     auto copy_reducer = copy_data_segment_reducer(
+      seg->path().get_ntp(),
       std::move(should_keep),
       appender.get(),
       seg->path().is_internal_topic(),
@@ -590,7 +591,8 @@ ss::future<> build_compaction_index(
   storage_resources& resources) {
     auto w = co_await make_compacted_index_writer(
       p, cfg.iopc, resources, cfg.sanitizer_config);
-    auto reducer = tx_reducer(stm_manager, std::move(aborted_txs), &w);
+    auto reducer = tx_reducer(
+      p.get_ntp(), stm_manager, std::move(aborted_txs), &w);
     auto index_builder = co_await ss::coroutine::as_future<tx_reducer::stats>(
       std::move(rdr)
         .consume(std::move(reducer), model::no_timeout)

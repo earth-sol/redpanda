@@ -198,6 +198,7 @@ ss::future<index_state> deduplicate_segment(
     auto compaction_placeholder_enabled = feature_table.local().is_active(
       features::feature::compaction_placeholder_batch);
     auto copy_reducer = internal::copy_data_segment_reducer(
+      seg->path().get_ntp(),
       [&map,
        segment_last_offset = seg->offsets().get_committed_offset(),
        compaction_placeholder_enabled](
