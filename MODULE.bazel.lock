@@ -201,7 +201,7 @@
   "moduleExtensions": {
     "//bazel:extensions.bzl%non_module_dependencies": {
       "general": {
-        "bzlTransitiveDigest": "YA64kzfEoBibr8F1Y14l6D2ukhdTl5w7ypC/9VajjyA=",
+        "bzlTransitiveDigest": "+fcNQVnLOI5iivykMgnTGZjuCSYDWvUv2CHmv12MqGc=",
         "usagesDigest": "8eEn6X1e7HKkx2OPWUwQBOEnT9TIkMhEcXbu/wRjGno=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
@@ -378,9 +378,9 @@
             "ruleClassName": "http_archive",
             "attributes": {
               "build_file": "@@//bazel/thirdparty:seastar.BUILD",
-              "sha256": "cf0ea1788629c8897bcb9cec077c82646f0c2bc3e8bed493428c9ad213bb656c",
-              "strip_prefix": "seastar-a37824fb2a5c47c5d69099d66ea21e1fef7c5550",
-              "url": "https://github.com/redpanda-data/seastar/archive/a37824fb2a5c47c5d69099d66ea21e1fef7c5550.tar.gz"
+              "sha256": "6e1dadc1f005d96fbc5abe886a2a5da5f7794c8390eab02868baf1a567ba475a",
+              "strip_prefix": "seastar-8403fc6200ce8ffd51cc44c74738fd3491ce7296",
+              "url": "https://github.com/redpanda-data/seastar/archive/8403fc6200ce8ffd51cc44c74738fd3491ce7296.tar.gz"
             }
           },
           "unordered_dense": {
@@ -5471,7 +5471,7 @@
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/rustc": "241027b94ad67beb36d0356f7cc05180daaa9966b2958cfba1d4de089d2e521c",
           "@@//bazel/thirdparty/Cargo.lock": "931fa1bc55d0e5d2e5b6d96da399569a4c2254a4bb1d99c98f71bb4b98eead73",
           "@@//bazel/thirdparty/Cargo.toml": "cb23768a6e7edc8f97215921e956f5be06521ad93cc0ecf64a932e3a8caada54",
-          "@@//MODULE.bazel": "2681cdb2e8a77b00541d5ce12f75851eb3dbddc81a91510b5d3969487d8734eb",
+          "@@//MODULE.bazel": "64f2c3e2bd9bcf25a46b9bf23e7ba854d334830bbb99a2ae061e2e35544c2e82",
           "@@//bazel/thirdparty/wasmtime.BUILD": "4b55deaf51f5b8be25fc3592f9bcf3d732f99632cd793c685436ddca9a177534",
           "@@rules_rust~~rust_host_tools~rust_host_tools//bin/cargo": "35099f3b7b9497b3ae95aa00886ac6839343488e5cdb958e69c16c9b58c3afb2"
         },
