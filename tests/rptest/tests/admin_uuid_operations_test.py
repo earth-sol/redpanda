@@ -21,7 +21,7 @@ from rptest.services.cluster import cluster
 from rptest.util import expect_exception
 from ducktape.cluster.cluster import ClusterNode
 from ducktape.errors import TimeoutError
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 
 from rptest.services.utils import LogSearchLocal
 from rptest.util import wait_until_result, wait_until
@@ -185,10 +185,23 @@ class AdminUUIDOperationsTest(RedpandaTest):
                 backoff_s=1))
 
     @cluster(num_nodes=3)
-    @parametrize(mode=TestMode.CFG_OVERRIDE)
-    @parametrize(mode=TestMode.NO_OVERRIDE)
-    @parametrize(mode=TestMode.CLI_OVERRIDE)
-    def test_force_uuid_override(self, mode):
+    @matrix(
+        mode=[
+            TestMode.CFG_OVERRIDE,
+            TestMode.NO_OVERRIDE,
+            TestMode.CLI_OVERRIDE,
+        ],
+        force=[
+            True,
+            False,
+        ],
+    )
+    def test_uuid_override(self, mode, force):
+        if mode == TestMode.NO_OVERRIDE and force is True:
+            self.logger.debug(
+                "Force flag doesn't apply if we're not overriding anything")
+            return
+
         # create a topic so that the cluster is not completely empty
         RpkTool(self.redpanda).create_topic("foo", 10, 3)
 
@@ -238,7 +251,8 @@ class AdminUUIDOperationsTest(RedpandaTest):
                 dict(node_id_overrides=[
                     dict(current_uuid=current_uuid,
                          new_uuid=old_uuid,
-                         new_id=initial_to_stop_id)
+                         new_id=initial_to_stop_id,
+                         ignore_existing_node_id=force)
                 ], ),
                 drop_disk=False,
             )
@@ -250,7 +264,7 @@ class AdminUUIDOperationsTest(RedpandaTest):
                 to_stop,
                 extra_cli=[
                     "--node-id-overrides",
-                    f"{current_uuid}:{old_uuid}:{initial_to_stop_id}",
+                    f"{current_uuid}:{old_uuid}:{initial_to_stop_id}{'/ignore_existing_node_id' if force else ''}",
                 ],
                 drop_disk=False,
             )
@@ -312,9 +326,17 @@ class AdminUUIDOperationsTest(RedpandaTest):
                    retry_on_exc=True)
 
     @cluster(num_nodes=3)
-    @parametrize(mode=TestMode.CFG_OVERRIDE)
-    @parametrize(mode=TestMode.CLI_OVERRIDE)
-    def test_force_uuid_override_multinode(self, mode):
+    @matrix(
+        mode=[
+            TestMode.CFG_OVERRIDE,
+            TestMode.CLI_OVERRIDE,
+        ],
+        force=[
+            True,
+            False,
+        ],
+    )
+    def test_uuid_override_multinode(self, mode, force):
         # create a topic so that the cluster is not completely empty
         RpkTool(self.redpanda).create_topic("foo", 10, 3)
 
@@ -361,7 +383,8 @@ class AdminUUIDOperationsTest(RedpandaTest):
                 override_cfg_params=dict(node_id_overrides=[
                     dict(current_uuid=current_uuids[n],
                          new_uuid=old_uuids[initial_to_stop_ids[n]],
-                         new_id=initial_to_stop_ids[n])
+                         new_id=initial_to_stop_ids[n],
+                         ignore_existing_node_id=force)
                     for n in range(0, len(to_stop))
                 ]),
                 auto_assign_node_id=True,
@@ -372,7 +395,7 @@ class AdminUUIDOperationsTest(RedpandaTest):
                 extra_cli=[
                     "--node-id-overrides",
                 ] + [
-                    f"{current_uuids[n]}:{old_uuids[initial_to_stop_ids[n]]}:{initial_to_stop_ids[n]}"
+                    f"{current_uuids[n]}:{old_uuids[initial_to_stop_ids[n]]}:{initial_to_stop_ids[n]}{'/ignore_existing_node_id' if force else '' }"
                     for n in range(0, len(to_stop))
                 ],
                 auto_assign_node_id=True,
