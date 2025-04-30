@@ -8,6 +8,7 @@
 // by the Apache License, Version 2.0
 
 #include "base/vlog.h"
+#include "container/fragmented_vector.h"
 #include "gtest/gtest.h"
 #include "kafka/server/tests/produce_consume_utils.h"
 #include "model/namespace.h"
@@ -1335,3 +1336,71 @@ INSTANTIATE_TEST_SUITE_P(
   RandomDistributionMultiPass,
   CompactionFixtureTombstonesMultiPassRandomParamTest,
   ::testing::Combine(::testing::Bool(), ::testing::Values(10, 25, 100)));
+
+TEST_F(CompactionFixtureTest, TestSegmentIndexReconstructed) {
+    constexpr auto num_segments = 5;
+    constexpr auto cardinality
+      = 1000000; // Large enough to ensure no duplicates- segment index relative
+                 // offsets _should_ be the same before and after compaction.
+    size_t batches_per_segment = 100;
+    size_t records_per_batch = 10;
+    generate_data(
+      num_segments, cardinality, batches_per_segment, records_per_batch)
+      .get();
+
+    auto& disk_log = dynamic_cast<storage::disk_log_impl&>(*log);
+    auto& segs = disk_log.segments();
+
+    for (const auto& seg : segs) {
+        if (!seg->has_appender()) {
+            auto pre_compact_relative_offset_index
+              = seg->index()
+                  .get_index_state()
+                  .index.copy_relative_offset_index();
+            // Self compact the segment
+            do_segment_self_compact(seg, model::offset::max()).get();
+            auto post_compact_relative_offset_index
+              = seg->index()
+                  .get_index_state()
+                  .index.copy_relative_offset_index();
+
+            ASSERT_EQ(
+              pre_compact_relative_offset_index,
+              post_compact_relative_offset_index);
+            ASSERT_EQ(
+              seg->offsets().get_base_offset(), seg->index().base_offset());
+        }
+    }
+
+    std::vector<chunked_vector<uint32_t>>
+      pre_sliding_window_index_relative_offsets;
+    for (const auto& seg : segs) {
+        if (!seg->has_appender()) {
+            pre_sliding_window_index_relative_offsets.push_back(
+              seg->index()
+                .get_index_state()
+                .index.copy_relative_offset_index());
+        }
+    }
+
+    bool did_compact
+      = do_sliding_window_compact(model::offset::max(), std::nullopt).get();
+    ASSERT_TRUE(did_compact);
+
+    std::vector<chunked_vector<uint32_t>>
+      post_sliding_window_index_relative_offsets;
+    for (const auto& seg : segs) {
+        if (!seg->has_appender()) {
+            post_sliding_window_index_relative_offsets.push_back(
+              seg->index()
+                .get_index_state()
+                .index.copy_relative_offset_index());
+            ASSERT_EQ(
+              seg->offsets().get_base_offset(), seg->index().base_offset());
+        }
+    }
+
+    ASSERT_EQ(
+      pre_sliding_window_index_relative_offsets,
+      post_sliding_window_index_relative_offsets);
+}
