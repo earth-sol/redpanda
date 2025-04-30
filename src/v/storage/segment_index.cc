@@ -202,7 +202,16 @@ segment_index::find_nearest(model::offset o) {
     if (o < _state.base_offset || _state.empty()) {
         return std::nullopt;
     }
-    const uint32_t needle = o() - _state.base_offset();
+    int64_t query_offset_delta = o() - base_offset();
+    int64_t seg_offset_delta = _state.max_offset - _state.base_offset;
+    static constexpr int64_t uint32_max = std::numeric_limits<uint32_t>::max();
+    if (query_offset_delta > uint32_max || seg_offset_delta > uint32_max) {
+        // TODO: this is a major hack! Older versions of Redpanda may index
+        // this segment incorrectly. Conservatively return the first entry.
+        return translate_index_entry(_state, _state.get_entry(0));
+    }
+    const auto needle = static_cast<uint32_t>(query_offset_delta);
+
     auto it = std::lower_bound(
       std::begin(_state.relative_offset_index),
       std::end(_state.relative_offset_index),
