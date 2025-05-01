@@ -532,8 +532,7 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                 self.toggle_license(on=False)
             self.check_migrations(in_migration_id, len(inbound_topics), 2)
 
-            self.log_topics(t.source_topic_reference.topic
-                            for t in inbound_topics)
+            self.log_topics(t.topic_name.topic for t in inbound_topics)
 
             self.execute_data_migration_action_flaky(in_migration_id,
                                                      MigrationAction.prepare)
@@ -601,9 +600,9 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
         # mount and consume from them in random order
         cluster_uuid = self.admin.get_cluster_uuid(self.redpanda.nodes[0])
         for i in sorted(range(3), key=lambda element: random.random()):
-            hinted_ns_topic = make_namespaced_topic(
-                f"{ns_topic.topic}/{cluster_uuid}/{revisions[i]}")
-            in_topic = InboundTopic(hinted_ns_topic)
+            in_topic = InboundTopic(ns_topic,
+                                    cluster_uuid=cluster_uuid,
+                                    remote_revision=revisions[i])
             in_migr_id = self.admin.mount_topics([in_topic]).json()["id"]
             self.wait_partitions_appear([topic])
             self.wait_migration_disappear(in_migr_id)
@@ -653,7 +652,7 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
             for i, t in enumerate(topics[:3])
         ]
         inbound_topics_spec = [
-            TopicSpec(name=(it.alias or it.source_topic_reference).topic,
+            TopicSpec(name=(it.alias or it.topic_name).topic,
                       partition_count=3) for it in inbound_topics
         ]
         reply = self.admin.mount_topics(inbound_topics).json()
@@ -972,8 +971,7 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
             # two cycles max: to cancel halfway and to complete + check e2e
             while not remounted:
                 in_migration = InboundDataMigration(topics=[
-                    InboundTopic(source_topic_reference=workload_ns_topic,
-                                 alias=alias)
+                    InboundTopic(topic_name=workload_ns_topic, alias=alias)
                 ],
                                                     consumer_groups=[])
                 in_migration_id = self.create_and_wait(in_migration)
