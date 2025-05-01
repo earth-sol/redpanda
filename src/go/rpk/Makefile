@@ -11,6 +11,13 @@ GOCMD=go
 GOLANGCILINTCMD=golangci-lint
 GOFUMPTCMD=gofumpt
 BAZELCMD=bazel
+ifeq ($(shell uname),Darwin)
+    BAZELCMD := bazelisk
+    GOFUMPT_OS_CMD := $(shell find . -type f -name '*.go' -print0 | xargs -0 -n 1 $(GOFUMPTCMD) -w)
+else
+	BAZELCMD := bazel
+    GOFUMPT_OS_CMD := 	$(shell find -type f -name '*.go' | xargs -n1 $(GOFUMPTCMD) -w)
+endif
 
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
