@@ -55,16 +55,21 @@ model::record_batch make_ghost_batch(
     return batch;
 }
 
+} // anonymous namespace
+
+namespace storage {
+using records_t = ss::circular_buffer<model::record_batch>;
+
 /**
  * makes multiple ghost batches required to fill the gap in a way that max batch
  * size (max of int32_t) is not exceeded
  */
-std::vector<model::record_batch> make_ghost_batches(
+std::vector<model::record_batch> log_reader::make_ghost_batches(
   model::offset start_offset, model::offset end_offset, model::term_id term) {
     std::vector<model::record_batch> batches;
     while (start_offset <= end_offset) {
         static constexpr model::offset max_batch_size{
-          std::numeric_limits<int32_t>::max()};
+          std::numeric_limits<int32_t>::max() - 1};
         // limit max batch size
         const model::offset delta = std::min<model::offset>(
           max_batch_size, end_offset - start_offset);
@@ -76,11 +81,6 @@ std::vector<model::record_batch> make_ghost_batches(
 
     return batches;
 }
-
-} // anonymous namespace
-
-namespace storage {
-using records_t = ss::circular_buffer<model::record_batch>;
 
 batch_consumer::consume_result skipping_consumer::accept_batch_start(
   const model::record_batch_header& header) const {
