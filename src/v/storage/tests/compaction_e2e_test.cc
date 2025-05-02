@@ -243,6 +243,25 @@ public:
         co_return co_await disk_log.sliding_window_compact(cfg);
     }
 
+    ss::future<storage::compaction_result> do_segment_self_compact(
+      ss::lw_shared_ptr<storage::segment> seg,
+      model::offset max_collect_offset,
+      std::optional<std::chrono::milliseconds> tombstone_ret_ms = std::nullopt,
+      std::optional<size_t> max_keys = std::nullopt) {
+        ss::abort_source never_abort;
+        storage::compaction_config cfg(
+          max_collect_offset,
+          tombstone_ret_ms,
+          ss::default_priority_class(),
+          never_abort,
+          std::nullopt,
+          max_keys,
+          nullptr,
+          nullptr);
+        auto& disk_log = dynamic_cast<storage::disk_log_impl&>(*log);
+        co_return co_await disk_log.segment_self_compact(cfg, seg);
+    }
+
 protected:
     const model::topic topic_name{"compaction_e2e_test_topic"};
     const model::ntp ntp{model::kafka_namespace, topic_name, 0};
