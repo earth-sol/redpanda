@@ -230,6 +230,7 @@ ss::future<index_state> deduplicate_segment(
       &appender,
       seg->path().is_internal_topic(),
       should_offset_delta_times,
+      seg->index().base_offset(),
       seg->offsets().get_committed_offset(),
       &cmp_idx_writer,
       inject_reader_failure,

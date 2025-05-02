@@ -160,6 +160,7 @@ public:
       segment_appender* a,
       bool internal_topic,
       offset_delta_time apply_offset,
+      model::offset index_base_offset,
       model::offset segment_last_offset,
       compacted_index_writer* cidx = nullptr,
       bool inject_failure = false,
@@ -168,7 +169,7 @@ public:
       , _segment_last_offset(segment_last_offset)
       , _appender(a)
       , _compacted_idx(cidx)
-      , _idx(index_state::make_empty_index(apply_offset))
+      , _idx(index_state::make_empty_index(index_base_offset, apply_offset))
       , _internal_topic(internal_topic)
       , _inject_failure(inject_failure)
       , _as(as) {}
