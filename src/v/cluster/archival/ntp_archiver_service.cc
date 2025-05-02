@@ -2069,7 +2069,7 @@ ntp_archiver::schedule_single_upload(const upload_context& upload_ctx) {
 
     auto log = _parent.log();
 
-    candidate_creation_result candidate_result;
+    segment_collector_stream_result candidate_result{};
 
     switch (upload_ctx.upload_kind) {
     case segment_upload_kind::non_compacted:
@@ -2093,13 +2093,11 @@ ntp_archiver::schedule_single_upload(const upload_context& upload_ctx) {
     co_return co_await ss::visit(
       candidate_result,
       [](std::monostate) -> ss::future<scheduled_upload> {
-          vassert(false, "Unexpected default upload candidate creation result");
+          vassert(false, "Unexpected monostate in candidate stream result");
       },
-      [this, &upload_ctx](upload_candidate_with_locks& candidate_with_locks) {
-          return do_schedule_single_upload(
-            std::move(candidate_with_locks),
-            upload_ctx.archiver_term,
-            upload_ctx.upload_kind);
+      [this, &upload_ctx](segment_collector_stream& strm) {
+          return do_schedule_single_upload_streaming(
+            std::move(strm), upload_ctx.archiver_term, upload_ctx.upload_kind);
       },
       [this, &upload_ctx, start_upload_offset, last_stable_offset](
         skip_offset_range& skip_offsets) {

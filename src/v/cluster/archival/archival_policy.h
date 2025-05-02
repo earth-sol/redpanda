@@ -30,13 +30,13 @@ public:
     explicit archival_policy(
       model::ntp ntp, std::optional<segment_time_limit> limit = std::nullopt);
 
-    ss::future<candidate_creation_result> get_next_compacted_segment(
+    ss::future<segment_collector_stream_result> get_next_compacted_segment(
       model::offset begin_inclusive,
       ss::shared_ptr<storage::log> log,
       const cloud_storage::partition_manifest& manifest,
       ss::lowres_clock::duration segment_lock_duration);
 
-    ss::future<candidate_creation_result> get_next_segment(
+    ss::future<segment_collector_stream_result> get_next_segment(
       model::offset begin_inclusive,
       model::offset end_exclusive,
       std::optional<model::offset> flush_offset,

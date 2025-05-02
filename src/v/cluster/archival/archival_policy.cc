@@ -50,7 +50,7 @@ bool archival_policy::upload_deadline_reached() {
     return _upload_deadline < now;
 }
 
-ss::future<candidate_creation_result> archival_policy::get_next_segment(
+ss::future<segment_collector_stream_result> archival_policy::get_next_segment(
   model::offset begin_inclusive,
   model::offset end_exclusive,
   std::optional<model::offset> flush_offset,
@@ -91,11 +91,11 @@ ss::future<candidate_creation_result> archival_policy::get_next_segment(
     if (_upload_limit) {
         _upload_deadline = ss::lowres_clock::now() + _upload_limit.value()();
     }
-    co_return co_await segment_collector.make_upload_candidate(
+    co_return co_await segment_collector.make_upload_candidate_stream(
       segment_lock_duration);
 }
 
-ss::future<candidate_creation_result>
+ss::future<segment_collector_stream_result>
 archival_policy::get_next_compacted_segment(
   model::offset begin_inclusive,
   ss::shared_ptr<storage::log> log,
@@ -120,7 +120,7 @@ archival_policy::get_next_compacted_segment(
         co_return candidate_creation_error::cannot_replace_manifest_entry;
     }
 
-    co_return co_await compacted_segment_collector.make_upload_candidate(
+    co_return co_await compacted_segment_collector.make_upload_candidate_stream(
       segment_lock_duration);
 }
 
