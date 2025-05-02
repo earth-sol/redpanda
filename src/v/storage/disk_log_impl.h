@@ -201,6 +201,16 @@ public:
 
     storage_resources& resources();
 
+    // Finds a range of adjacent segments that can be compacted together.
+    // A valid segment range consists of segments with the same raft term, a
+    // combined size less than max_compacted_segment_size, and spanning
+    // a range of offsets that fits in a uint32_t.
+    //
+    // Returns std::nullopt if a valid range of two segments could not be found.
+    // Otherwise, a pair of iterators to the segments.
+    std::optional<std::pair<segment_set::iterator, segment_set::iterator>>
+    find_compaction_range(const compaction_config& cfg);
+
     ss::future<> adjacent_merge_compact(
       compaction_config, std::optional<model::offset> = std::nullopt);
 
@@ -250,8 +260,6 @@ private:
     ss::future<compaction_result> compact_adjacent_segments(
       std::pair<segment_set::iterator, segment_set::iterator>,
       storage::compaction_config cfg);
-    std::optional<std::pair<segment_set::iterator, segment_set::iterator>>
-    find_compaction_range(const compaction_config&);
 
     ss::future<std::optional<model::offset>> do_gc(gc_config);
     ss::future<> do_compact(
