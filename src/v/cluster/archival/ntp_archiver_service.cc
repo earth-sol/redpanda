@@ -2995,8 +2995,7 @@ flush_result ntp_archiver::flush() {
       "Accepted flush, flush offset is {}",
       _flush_uploads_offset.value());
     return flush_result{
-      .response = flush_response::accepted,
-      .offset = _flush_uploads_offset.value()};
+      .response = flush_response::accepted, .offset = _flush_uploads_offset};
 }
 
 ss::future<wait_result> ntp_archiver::wait(model::offset o) {
