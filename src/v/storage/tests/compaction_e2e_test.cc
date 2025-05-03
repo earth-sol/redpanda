@@ -218,6 +218,10 @@ TEST_P(CompactionFixtureParamTest, TestDedupeOnePass) {
                                       model::offset(0))
                                     .get();
     ASSERT_EQ(consumed_kvs, consumed_kvs_restarted);
+
+    for (const auto& seg : log->segments()) {
+        ASSERT_EQ(seg->offsets().get_base_offset(), seg->index().base_offset());
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -258,6 +262,10 @@ TEST_F(CompactionFixtureTest, TestDedupeMultiPass) {
     ASSERT_EQ(segments_compacted_2, segments_compacted_3);
 
     ASSERT_NO_FATAL_FAILURE(check_records(cardinality, num_segments - 1).get());
+
+    for (const auto& seg : disk_log.segments()) {
+        ASSERT_EQ(seg->offsets().get_base_offset(), seg->index().base_offset());
+    }
 }
 
 class CompactionFixtureBatchSizeParamTest

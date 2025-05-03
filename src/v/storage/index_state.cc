@@ -35,8 +35,10 @@
 
 namespace storage {
 
-index_state index_state::make_empty_index(offset_delta_time with_offset) {
+index_state index_state::make_empty_index(
+  model::offset base_offset, offset_delta_time with_offset) {
     index_state idx{};
+    idx.base_offset = base_offset;
     idx.with_offset = with_offset;
 
     return idx;
