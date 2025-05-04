@@ -9,9 +9,9 @@
 
 static storage::index_state make_random_index_state(
   storage::offset_delta_time apply_offset = storage::offset_delta_time::yes) {
-    auto st = storage::index_state::make_empty_index(apply_offset);
+    auto base_offset = model::offset(random_generators::get_int<int64_t>());
+    auto st = storage::index_state::make_empty_index(base_offset, apply_offset);
     st.bitflags = random_generators::get_int<uint32_t>();
-    st.base_offset = model::offset(random_generators::get_int<int64_t>());
     st.max_offset = model::offset(random_generators::get_int<int64_t>());
     st.base_timestamp = model::timestamp(random_generators::get_int<int64_t>());
     st.max_timestamp = model::timestamp(random_generators::get_int<int64_t>());

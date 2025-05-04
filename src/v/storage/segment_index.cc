@@ -51,9 +51,8 @@ segment_index::segment_index(
   , _step(step)
   , _feature_table(std::ref(feature_table))
   , _state(index_state::make_empty_index(
-      storage::internal::should_apply_delta_time_offset(_feature_table)))
+      base, storage::internal::should_apply_delta_time_offset(_feature_table)))
   , _sanitizer_config(std::move(sanitizer_config)) {
-    _state.base_offset = base;
     _state.broker_timestamp = broker_timestamp;
 }
 
@@ -67,10 +66,8 @@ segment_index::segment_index(
   , _step(step)
   , _feature_table(std::ref(feature_table))
   , _state(index_state::make_empty_index(
-      storage::internal::should_apply_delta_time_offset(_feature_table)))
-  , _mock_file(mock_file) {
-    _state.base_offset = base;
-}
+      base, storage::internal::should_apply_delta_time_offset(_feature_table)))
+  , _mock_file(mock_file) {}
 
 ss::future<ss::file> segment_index::open() {
     if (_mock_file) {
@@ -88,8 +85,7 @@ ss::future<ss::file> segment_index::open() {
 void segment_index::reset() {
     auto base = _state.base_offset;
     _state = index_state::make_empty_index(
-      storage::internal::should_apply_delta_time_offset(_feature_table));
-    _state.base_offset = base;
+      base, storage::internal::should_apply_delta_time_offset(_feature_table));
 
     _acc = 0;
 }

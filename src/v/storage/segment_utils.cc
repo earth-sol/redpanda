@@ -362,7 +362,8 @@ ss::future<storage::index_state> do_copy_segment_data(
   storage_resources& resources,
   offset_delta_time apply_offset,
   ss::sharded<features::feature_table>& feature_table) {
-    // preserve broker_timestamp from the segment's index
+    // preserve base_offset, and broker_timestamp from the segment's index
+    auto old_base_offset = seg->index().base_offset();
     auto old_broker_timestamp = seg->index().broker_timestamp();
 
     // find out which offsets will survive compaction
@@ -415,6 +416,7 @@ ss::future<storage::index_state> do_copy_segment_data(
       appender.get(),
       seg->path().is_internal_topic(),
       apply_offset,
+      old_base_offset,
       segment_last_offset,
       /*cidx=*/nullptr,
       /*inject_failure=*/false,

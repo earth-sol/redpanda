@@ -96,7 +96,8 @@ struct index_state
     static constexpr auto broker_timestamp_version = 6;
     static constexpr auto num_compactible_records_version = 7;
 
-    static index_state make_empty_index(offset_delta_time with_offset);
+    static index_state
+    make_empty_index(model::offset base_offset, offset_delta_time with_offset);
 
     index_state() = default;
 
