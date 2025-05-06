@@ -31,6 +31,7 @@
 #include "storage/key_offset_map.h"
 #include "storage/kvstore.h"
 #include "storage/log_manager.h"
+#include "storage/log_reader.h"
 #include "storage/logger.h"
 #include "storage/offset_assignment.h"
 #include "storage/offset_to_filepos.h"
@@ -2260,12 +2261,16 @@ ss::future<size_t> disk_log_impl::get_file_offset(
       .boundary = boundary,
     };
 
-    storage::log_reader_config reader_cfg(index_entry.offset, target, priority);
+    auto reader_start_offset = index_entry.offset;
+
+    storage::log_reader_config reader_cfg(
+      reader_start_offset, target, priority);
 
     reader_cfg.skip_batch_cache = true;
     reader_cfg.skip_readers_cache = true;
 
-    auto reader = co_await make_reader(reader_cfg);
+    auto reader = model::make_record_batch_reader<single_segment_reader>(
+      s, co_await s->read_lock(), reader_cfg, *_probe);
 
     try {
         co_await std::move(reader).consume(acc, model::no_timeout);
