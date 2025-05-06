@@ -114,6 +114,60 @@ bool deletion_exempt(const model::ntp& ntp) {
            || (is_consumer_offsets_ntp && !config::shard_local_cfg().unsafe_enable_consumer_offsets_delete_retention());
 }
 
+// Meant for reading batches from a single `segment`. This does not consider any
+// other `log` state- meaning, the `log` could have been prefix truncated and
+// batches read from the `segment` could be ahead of the new `_start_offset`.
+//
+// This class should only be used when it is necessary to consider the batches
+// still physically stored in a `segment` on disk, e.g for file position
+// calculations. For all other applications, the `log_reader` should be used.
+class single_segment_reader final : public model::record_batch_reader::impl {
+public:
+    using storage_t = model::record_batch_reader::storage_t;
+    single_segment_reader(
+      ss::lw_shared_ptr<segment> seg,
+      ss::rwlock::holder seg_read_lock,
+      log_reader_config reader_cfg,
+      probe& pb)
+      : _seg(seg)
+      , _seg_read_lock(std::move(seg_read_lock))
+      , _config(reader_cfg)
+      , _rdr(*_seg, _config, pb) {}
+
+    ~single_segment_reader() final = default;
+
+    bool is_end_of_stream() const final { return _is_end_of_stream; }
+
+    ss::future<storage_t>
+    do_load_slice(model::timeout_clock::time_point timeout) final {
+        auto recs = co_await _rdr.read_some(timeout);
+        if (!recs.has_value() || recs.value().empty()) {
+            _is_end_of_stream = true;
+            co_return storage_t{};
+        }
+
+        auto& batches = recs.value();
+        co_return std::move(batches);
+    }
+
+    ss::future<> finally() noexcept final { return _rdr.close(); }
+
+    void print(std::ostream& os) final {
+        fmt::print(
+          os,
+          "storage::single_segment_reader for {}, config {}",
+          _seg->filename(),
+          _config);
+    }
+
+private:
+    ss::lw_shared_ptr<segment> _seg;
+    ss::rwlock::holder _seg_read_lock;
+    log_reader_config _config;
+    log_segment_batch_reader _rdr;
+    bool _is_end_of_stream{false};
+};
+
 disk_log_impl::disk_log_impl(
   ntp_config cfg,
   raft::group_id group,
