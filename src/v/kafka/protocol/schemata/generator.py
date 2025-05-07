@@ -433,6 +433,9 @@ sensitive_map = {
 # mapping to the new type name.
 # yapf: disable
 struct_renames = {
+    ("ApiVersionsResponseData", "ApiKeys"):
+        ("ApiVersion", "ApiVersionsResponseKey"),
+
     ("IncrementalAlterConfigsRequestData", "Resources"):
         ("AlterConfigsResource", "IncrementalAlterConfigsResource"),
 
@@ -524,8 +527,7 @@ def make_context_field(path):
 
 # a listing of expected struct types
 STRUCT_TYPES = [
-    "ApiVersionsRequestKey",
-    "ApiVersionsResponseKey",
+    "ApiVersion",
     "OffsetFetchRequestTopic",
     "OffsetFetchResponseTopic",
     "OffsetFetchResponsePartition",
