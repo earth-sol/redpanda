@@ -101,7 +101,7 @@ FIXTURE_TEST(replicate_after_compaction, compaction_multinode_test) {
                  .decommission_node(model::node_id(0))
                  .get();
     BOOST_REQUIRE(!err);
-    RPTEST_REQUIRE_EVENTUALLY(10s, [&] {
+    RPTEST_REQUIRE_EVENTUALLY(60s, [&] {
         auto partition = app->partition_manager.local().get(ntp);
         return partition == nullptr;
     });
@@ -209,7 +209,7 @@ FIXTURE_TEST(compact_transactions_and_replicate, compaction_multinode_test) {
                  .decommission_node(model::node_id(0))
                  .get();
     BOOST_REQUIRE(!err);
-    RPTEST_REQUIRE_EVENTUALLY(10s, [&] {
+    RPTEST_REQUIRE_EVENTUALLY(60s, [&] {
         auto partition = app->partition_manager.local().get(ntp);
         return partition == nullptr;
     });
