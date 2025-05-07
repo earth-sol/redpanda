@@ -45,6 +45,7 @@
 #include "net/dns.h"
 #include "pandaproxy/rest/configuration.h"
 #include "pandaproxy/schema_registry/configuration.h"
+#include "random/generators.h"
 #include "redpanda/application.h"
 #include "resource_mgmt/cpu_scheduling.h"
 #include "security/acl.h"
@@ -86,11 +87,12 @@ using namespace std::chrono_literals;
 inline ss::sstring test_directory() {
     char* tmpdir = std::getenv("TEST_TMPDIR");
     if (!tmpdir) {
-        return ss::format("test.dir_{}", absl::HashOf(time(nullptr)));
+        return ss::format(
+          "test.dir_{}", random_generators::gen_alphanum_string(6));
     }
     return {
       std::filesystem::path(tmpdir)
-      / fmt::format("test.dir_{}", absl::HashOf(time(nullptr)))};
+      / fmt::format("test.dir_{}", random_generators::gen_alphanum_string(6))};
 }
 
 class redpanda_thread_fixture {
