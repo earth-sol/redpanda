@@ -41,10 +41,15 @@ class NodesDecommissioningTest(PreallocNodesTest):
     def __init__(self, test_context):
         self._topic = None
 
-        super(NodesDecommissioningTest,
-              self).__init__(test_context=test_context,
-                             num_brokers=5,
-                             node_prealloc_count=1)
+        super(NodesDecommissioningTest, self).__init__(
+            test_context=test_context,
+            num_brokers=5,
+            node_prealloc_count=1,
+            extra_rp_conf={
+                # lower space management loop interval to make partition balancing
+                # start faster after node (re)start.
+                "retention_local_trim_interval": 5_000,
+            })
 
     def setup(self):
         # defer starting redpanda to test body
@@ -311,6 +316,14 @@ class NodesDecommissioningTest(PreallocNodesTest):
 
         self.redpanda.start(auto_assign_node_id=new_bootstrap,
                             omit_seeds_on_idx_one=not new_bootstrap)
+
+        admin = Admin(self.redpanda)
+
+        # wait for (trivial) balancing caused by adding the initial set of nodes to finish
+        def initial_balancing_done():
+            return admin.get_partition_balancer_status()["status"] == "ready"
+
+        wait_until(initial_balancing_done, timeout_sec=60, backoff_sec=2)
 
     @cluster(
         num_nodes=6,
@@ -665,11 +678,6 @@ class NodesDecommissioningTest(PreallocNodesTest):
     @parametrize(shutdown_decommissioned=True)
     @parametrize(shutdown_decommissioned=False)
     def test_decommissioning_rebalancing_node(self, shutdown_decommissioned):
-        # lower space management loop interval to make partition balancing
-        # start faster after node restart.
-        self.redpanda.add_extra_rp_conf(
-            {"retention_local_trim_interval": 5_000})
-
         # start 4 nodes
         self.redpanda.start(nodes=self.redpanda.nodes[0:4])
         self._client = DefaultClient(self.redpanda)
