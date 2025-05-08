@@ -2314,20 +2314,14 @@ bool disk_log_impl::log_contains_offset_range(
 ss::future<std::optional<log::offset_range_size_result_t>>
 disk_log_impl::offset_range_size(
   model::offset first, model::offset last, ss::io_priority_class io_priority) {
-    auto log_offsets = offsets();
     vlog(
       stlog.debug,
       "Offset range size, first: {}, last: {}, lstat: {}",
       first,
       last,
-      log_offsets);
-    auto log_interval = model::bounded_offset_interval::optional(
-      log_offsets.start_offset, log_offsets.committed_offset);
-    if (!log_interval.has_value()) {
-        vlog(stlog.debug, "Log is empty, returning early");
-        co_return std::nullopt;
-    }
-    if (!log_interval->contains(first) || !log_interval->contains(last)) {
+      offsets());
+
+    if (!log_contains_offset_range(first, last)) {
         vlog(stlog.debug, "Log does not include entire range");
         co_return std::nullopt;
     }
@@ -2485,21 +2479,15 @@ disk_log_impl::offset_range_size(
   model::offset first,
   offset_range_size_requirements_t target,
   ss::io_priority_class io_priority) {
-    auto log_offsets = offsets();
     vlog(
       stlog.debug,
       "Offset range size, first: {}, target size: {}/{}, lstat: {}",
       first,
       target.target_size,
       target.min_size,
-      log_offsets);
-    auto log_interval = model::bounded_offset_interval::optional(
-      log_offsets.start_offset, log_offsets.committed_offset);
-    if (!log_interval.has_value()) {
-        vlog(stlog.debug, "Log is empty, returning early");
-        co_return std::nullopt;
-    }
-    if (!log_interval->contains(first)) {
+      offsets());
+
+    if (!log_contains_offset(first)) {
         vlog(stlog.debug, "Log does not include offset {}", first);
         co_return std::nullopt;
     }
