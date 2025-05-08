@@ -2284,6 +2284,33 @@ ss::future<size_t> disk_log_impl::get_file_offset(
     co_return size_bytes;
 }
 
+bool disk_log_impl::log_contains_offset(model::offset o) const noexcept {
+    auto log_offsets = offsets();
+    auto log_interval = model::bounded_offset_interval::optional(
+      log_offsets.start_offset, log_offsets.committed_offset);
+
+    if (!log_interval.has_value()) {
+        // Log is empty
+        return false;
+    }
+
+    return log_interval->contains(o);
+}
+
+bool disk_log_impl::log_contains_offset_range(
+  model::offset first, model::offset last) const noexcept {
+    auto log_offsets = offsets();
+    auto log_interval = model::bounded_offset_interval::optional(
+      log_offsets.start_offset, log_offsets.committed_offset);
+
+    if (!log_interval.has_value()) {
+        // Log is empty
+        return false;
+    }
+
+    return log_interval->contains(first) && log_interval->contains(last);
+}
+
 ss::future<std::optional<log::offset_range_size_result_t>>
 disk_log_impl::offset_range_size(
   model::offset first, model::offset last, ss::io_priority_class io_priority) {
