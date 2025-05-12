@@ -363,6 +363,7 @@ redpanda_cc_library(
     ],
     implementation_deps = [
         ":log_manager_probe",
+        "//src/v/ssx:when_all",
         "//src/v/syschecks",
     ],
     include_prefix = "storage",
