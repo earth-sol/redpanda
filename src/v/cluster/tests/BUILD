@@ -793,6 +793,28 @@ redpanda_cc_btest(
     ],
 )
 
+redpanda_cc_gtest(
+    name = "tm_stm_tests",
+    timeout = "short",
+    srcs = ["tm_stm_tests.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        ":raft_fixture_retry_policy",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/raft/tests:raft_fixture",
+        "//src/v/test_utils:gtest",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@fmt",
+        "@googletest//:gtest",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
 redpanda_cc_bench(
     name = "health_report_rpbench",
     srcs = ["health_bench.cc"],
