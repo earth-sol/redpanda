@@ -491,7 +491,6 @@ model::record_batch_reader create_segment_full_reader(
       o.get_base_offset(), o.get_dirty_offset(), cfg.iopc);
     reader_cfg.skip_batch_cache = true;
     segment_set::underlying_t set;
-    set.reserve(1);
     set.push_back(s);
     auto lease = std::make_unique<lock_manager::lease>(
       segment_set(std::move(set)));

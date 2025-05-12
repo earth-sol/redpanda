@@ -1570,17 +1570,13 @@ offset_stats disk_log_impl::offsets() const {
         }
         return ret;
     }
-    // NOTE: we have to do this because ss::circular_buffer<> does not provide
-    // with reverse iterators, so we manually find the iterator
-    segment_set::type end;
-    for (int i = (int)_segs.size() - 1; i >= 0; --i) {
-        auto& seg = _segs[i];
-        if (!seg->empty()) {
-            end = seg;
-            break;
-        }
-    }
-    if (!end) {
+
+    auto it = std::find_if(
+      _segs.rbegin(), _segs.rend(), [](const segment_set::type& s) {
+          return !s->empty();
+      });
+
+    if (it == _segs.rend()) {
         offset_stats ret;
         ret.start_offset = _start_offset;
         if (ret.start_offset > model::offset(0)) {
@@ -1591,7 +1587,7 @@ offset_stats disk_log_impl::offsets() const {
     }
     // we have valid begin and end
     const auto& bof = _segs.front()->offsets();
-    const auto& eof = end->offsets();
+    const auto& eof = (*it)->offsets();
 
     const auto start_offset = _start_offset() >= 0 ? _start_offset
                                                    : bof.get_base_offset();
@@ -1614,8 +1610,8 @@ model::offset disk_log_impl::find_last_term_start_offset() const {
 
     segment_set::type end;
     segment_set::type term_start;
-    for (int i = (int)_segs.size() - 1; i >= 0; --i) {
-        auto& seg = _segs[i];
+    for (auto it = _segs.rbegin(); it != _segs.rend(); ++it) {
+        auto& seg = *it;
         if (!seg->empty()) {
             if (!end) {
                 end = seg;
@@ -1755,8 +1751,8 @@ uint64_t disk_log_impl::size_bytes_after_offset(model::offset o) const {
         return 0;
     }
     uint64_t size = 0;
-    for (size_t i = _segs.size(); i-- > 0;) {
-        auto& seg = _segs[i];
+    for (auto it = _segs.rbegin(); it != _segs.rend(); ++it) {
+        auto& seg = *it;
         if (seg->offsets().get_base_offset() < o) {
             break;
         }
