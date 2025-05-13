@@ -766,6 +766,146 @@ redpanda_cc_btest(
     ],
 )
 
+redpanda_cc_btest(
+    name = "autocreate_test",
+    timeout = "short",
+    srcs = ["autocreate_test.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/test_utils:seastar_boost",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "cluster_tests",
+    timeout = "short",
+    srcs = ["cluster_tests.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/features",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/test_utils:seastar_boost",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "configuration_change_test",
+    timeout = "short",
+    srcs = ["configuration_change_test.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/config",
+        "//src/v/features",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "controller_api_tests",
+    timeout = "short",
+    srcs = ["controller_api_tests.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/ssx:future_util",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "idempotency_tests",
+    timeout = "short",
+    srcs = ["idempotency_tests.cc"],
+    deps = [
+        ":rm_stm_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/model/tests:random",
+        "//src/v/raft",
+        "//src/v/ssx:future_util",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_btest(
+    name = "metadata_dissemination_test",
+    timeout = "short",
+    srcs = ["metadata_dissemination_test.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@boost//:test",
+        "@fmt",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_gtest(
+    name = "tm_stm_tests",
+    timeout = "short",
+    srcs = ["tm_stm_tests.cc"],
+    deps = [
+        ":cluster_test_fixture",
+        ":raft_fixture_retry_policy",
+        "//src/v/base",
+        "//src/v/cluster",
+        "//src/v/model",
+        "//src/v/raft",
+        "//src/v/raft/tests:raft_fixture",
+        "//src/v/test_utils:gtest",
+        "//src/v/test_utils:seastar_boost",
+        "//src/v/utils:unresolved_address",
+        "@fmt",
+        "@googletest//:gtest",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
 redpanda_cc_bench(
     name = "health_report_rpbench",
     srcs = ["health_bench.cc"],
