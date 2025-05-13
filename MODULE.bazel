@@ -136,7 +136,7 @@ COMPILE_FLAGS = {
 }
 
 COMPILERS = {
-    "18": {
+    "previous": {
         "tars": {
             "aarch64": {
                 "build_date": "2025-03-10",
@@ -149,7 +149,7 @@ COMPILERS = {
         },
         "version": "18.1.8",
     },
-    "19": {
+    "current": {
         "tars": {
             "aarch64": {
                 "build_date": "2025-03-15",
@@ -167,7 +167,7 @@ COMPILERS = {
 [
     (
         llvm.toolchain(
-            name = "llvm_{version}_toolchain".format(version = major_version),
+            name = "{version}_llvm_toolchain".format(version = major_version),
             compile_flags = COMPILE_FLAGS,
             cxx_standard = {"": CXX_STANDARD},
             llvm_version = compiler["version"],
@@ -191,17 +191,17 @@ COMPILERS = {
             },
         ),
         llvm.sysroot(
-            name = "llvm_{version}_toolchain".format(version = major_version),
+            name = "{version}_llvm_toolchain".format(version = major_version),
             label = "@x86_64_sysroot//:sysroot",
             targets = ["linux-x86_64"],
         ),
         llvm.sysroot(
-            name = "llvm_{version}_toolchain".format(version = major_version),
+            name = "{version}_llvm_toolchain".format(version = major_version),
             label = "@aarch64_sysroot//:sysroot",
             targets = ["linux-aarch64"],
         ),
-        use_repo(llvm, "llvm_{version}_toolchain".format(version = major_version)),
-        register_toolchains("@llvm_{version}_toolchain//:all".format(version = major_version)),
+        use_repo(llvm, "{version}_llvm_toolchain".format(version = major_version)),
+        register_toolchains("@{version}_llvm_toolchain//:all".format(version = major_version)),
     )
     for (major_version, compiler) in COMPILERS.items()
 ]
@@ -347,6 +347,7 @@ crate.from_cargo(
     ],
 )
 use_repo(crate, "crates")
+
 crate.annotation(
     additive_build_file = "//bazel/thirdparty:wasmtime.BUILD",
     crate = "wasmtime-c-api-impl",

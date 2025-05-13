@@ -7371,12 +7371,12 @@
     "@@toolchains_llvm+//toolchain/extensions:llvm.bzl%llvm": {
       "general": {
         "bzlTransitiveDigest": "A+u2LOTdHfpDgS94zRvkPJu/Zdu++ZN5a8ruhZFRcRI=",
-        "usagesDigest": "GzeQzelwFWsBOYriOseI293vPcj0dqEskMujaM64SxA=",
+        "usagesDigest": "OWoG4szE/NIXRlLr7A9He/Ae8VE/8Bi94RigtjyRWGI=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
         "generatedRepoSpecs": {
-          "llvm_18_toolchain_llvm": {
+          "previous_llvm_toolchain_llvm": {
             "repoRuleId": "@@toolchains_llvm+//toolchain:rules.bzl%llvm",
             "attributes": {
               "alternative_llvm_sources": [],
@@ -7404,7 +7404,7 @@
               }
             }
           },
-          "llvm_18_toolchain": {
+          "previous_llvm_toolchain": {
             "repoRuleId": "@@toolchains_llvm+//toolchain:rules.bzl%toolchain",
             "attributes": {
               "absolute_paths": false,
@@ -7463,7 +7463,7 @@
               }
             }
           },
-          "llvm_19_toolchain_llvm": {
+          "current_llvm_toolchain_llvm": {
             "repoRuleId": "@@toolchains_llvm+//toolchain:rules.bzl%llvm",
             "attributes": {
               "alternative_llvm_sources": [],
@@ -7491,7 +7491,7 @@
               }
             }
           },
-          "llvm_19_toolchain": {
+          "current_llvm_toolchain": {
             "repoRuleId": "@@toolchains_llvm+//toolchain:rules.bzl%toolchain",
             "attributes": {
               "absolute_paths": false,
