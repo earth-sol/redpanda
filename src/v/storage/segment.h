@@ -36,6 +36,9 @@ struct segment_closed_exception final : std::exception {
         return "segment_closed exception";
     }
 };
+namespace testing_details {
+class offset_tracker_accessor;
+};
 
 class segment {
 public:
@@ -110,6 +113,7 @@ public:
         model::offset _dirty_offset;
 
         friend std::ostream& operator<<(std::ostream&, const offset_tracker&);
+        friend class testing_details::offset_tracker_accessor;
     };
     enum class bitflags : uint32_t {
         none = 0,
