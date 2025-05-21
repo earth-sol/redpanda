@@ -1132,6 +1132,8 @@ ss::future<compaction_result> disk_log_impl::do_compact_adjacent_segments(
           segments.back(), "compact_adjacent_segments");
     }
 
+    _probe->add_adjacent_segments_compacted(segments.size() - 1);
+
     co_return ret;
 }
 
