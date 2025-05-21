@@ -42,6 +42,7 @@
 #include "test_utils/async.h"
 #include "test_utils/random_bytes.h"
 #include "test_utils/randoms.h"
+#include "test_utils/scoped_config.h"
 #include "test_utils/test_macros.h"
 #include "utils/directory_walker.h"
 #include "utils/tristate.h"
@@ -5881,12 +5882,14 @@ struct sliding_ranges_test_case {
     ss::sstring desc;
     std::vector<segment_fields> segment_fields;
     std::optional<model::offset> new_start_offset{std::nullopt};
+    std::optional<uint32_t> max_segment_count{std::nullopt};
     // These ranges have the same inclusivity as the iterator
     // constructor for std::vector, i.e [first, last).
     std::vector<std::pair<size_t, size_t>> expected_ranges;
 };
 
 TEST_F(storage_test_fixture, find_sliding_ranges) {
+    scoped_config test_local_cfg;
     auto log_cfg = default_log_config(test_dir);
     log_cfg.max_compacted_segment_size = config::mock_binding<size_t>(1_MiB);
     storage::ntp_config::default_overrides overrides;
@@ -6052,6 +6055,42 @@ TEST_F(storage_test_fixture, find_sliding_ranges) {
 	                                                             // 6   - (Active)
 	  .new_start_offset=model::offset{100},
 	  .expected_ranges = {{3, 6}}},
+      sliding_ranges_test_case{
+	  .desc="All mergeable segments, but number of max segments is limited to 0 via cluster config.",
+	  .segment_fields={
+	    {1_KiB, model::term_id{0}, true},  // 0 -
+	    {1_KiB, model::term_id{0}, true},  // 1 -
+	    {1_KiB, model::term_id{0}, true},  // 2 -
+	    {1_KiB, model::term_id{0}, true},  // 3 -
+	    {1_KiB, model::term_id{0}, true},  // 4 -
+	    {1_KiB, model::term_id{0}, true}}, // 5 -
+	                                       // 6 - (Active)
+	  .max_segment_count = 0,
+	  .expected_ranges = {}},
+      sliding_ranges_test_case{
+	  .desc="All mergeable segments, but number of max segments is limited to 1 via cluster config.",
+	  .segment_fields={
+	    {1_KiB, model::term_id{0}, true},  // 0 -
+	    {1_KiB, model::term_id{0}, true},  // 1 -
+	    {1_KiB, model::term_id{0}, true},  // 2 -
+	    {1_KiB, model::term_id{0}, true},  // 3 -
+	    {1_KiB, model::term_id{0}, true},  // 4 -
+	    {1_KiB, model::term_id{0}, true}}, // 5 -
+	                                       // 6 - (Active)
+	  .max_segment_count = 1,
+	  .expected_ranges = {}},
+      sliding_ranges_test_case{
+	  .desc="All mergeable segments, but number of max segments is limited to 2 via cluster config.",
+	  .segment_fields={
+	    {1_KiB, model::term_id{0}, true},  // 0 A
+	    {1_KiB, model::term_id{0}, true},  // 1 A
+	    {1_KiB, model::term_id{0}, true},  // 2  B
+	    {1_KiB, model::term_id{0}, true},  // 3  B
+	    {1_KiB, model::term_id{0}, true},  // 4   C
+	    {1_KiB, model::term_id{0}, true}}, // 5   C
+	                                       // 6    - (Active)
+	  .max_segment_count = 2,
+	  .expected_ranges = {{0, 2}, {2, 4}, {4, 6}}},
     };
     // clang-format on
 
@@ -6059,6 +6098,8 @@ TEST_F(storage_test_fixture, find_sliding_ranges) {
         vlog(e2e_test_log.info, "Running test case: {}", test_case.desc);
         const auto& segment_fields = test_case.segment_fields;
         const auto& expected_ranges = test_case.expected_ranges;
+        test_local_cfg.get("log_compaction_merge_max_segments_per_range")
+          .set_value(test_case.max_segment_count);
         auto ntp = model::ntp(
           "default", fmt::format("test-{}", test_case_index++), 0);
         auto log = mgr

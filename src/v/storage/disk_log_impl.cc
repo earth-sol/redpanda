@@ -860,6 +860,17 @@ std::optional<
   std::vector<std::pair<segment_set::iterator, segment_set::iterator>>>
 disk_log_impl::find_adjacent_compaction_ranges(
   const compaction_config& cfg, std::optional<model::offset> new_start_offset) {
+    {
+        // Early return if cluster configured value effectively disables
+        // adjacent merge compaction.
+        auto max_segments_in_range
+          = config::shard_local_cfg()
+              .log_compaction_merge_max_segments_per_range();
+        if (max_segments_in_range.has_value() && max_segments_in_range < 2) {
+            return std::nullopt;
+        }
+    }
+
     if (_segs.size() < 2) {
         return std::nullopt;
     }
@@ -925,12 +936,18 @@ disk_log_impl::find_adjacent_compaction_ranges(
         bool size_boundary = current_size
                              > _manager.config().max_compacted_segment_size();
         bool is_unstable = unstable(seg);
+        auto max_segments_in_range
+          = config::shard_local_cfg()
+              .log_compaction_merge_max_segments_per_range();
+        bool reached_max_range_size = max_segments_in_range.has_value()
+                                      && num_segments_in_range
+                                           >= max_segments_in_range.value();
         bool is_valid_offset_range = valid_offset_range(
           *current_range.first, seg);
 
         if (
-          term_boundary || size_boundary || is_unstable
-          || !is_valid_offset_range) {
+          term_boundary || size_boundary || reached_max_range_size
+          || is_unstable || !is_valid_offset_range) {
             if (num_segments_in_range > 1) {
                 ranges.push_back(current_range);
             }

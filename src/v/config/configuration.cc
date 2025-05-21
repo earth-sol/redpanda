@@ -1080,6 +1080,16 @@ configuration::configuration()
       false)
   , log_compaction_adjacent_merge_self_compaction_count(
       *this, "log_compaction_adjacent_merge_self_compaction_count")
+  , log_compaction_merge_max_segments_per_range(
+      *this,
+      "log_compaction_merge_max_segments_per_range",
+      "The maximum number of segments that can be combined into a single "
+      "segment during an adjacent merge operation. If `null` (the default "
+      "value), no maximum is imposed on the number of segments that can be "
+      "combined at once. A value below 2 effectively disables adjacent merge "
+      "compaction.",
+      {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
+      std::nullopt)
   , retention_bytes(
       *this,
       "retention_bytes",
