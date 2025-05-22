@@ -79,40 +79,39 @@ public:
 
 protected:
     ss::future<> parse(model::record_batch b) {
-        if (b.header().type == model::record_batch_type::raft_data) {
+        switch (b.header().type) {
+        case model::record_batch_type::raft_data:
             return handle_raft_data(std::move(b));
-        }
-        // silently ignore raft configuration.
-        if (b.header().type == model::record_batch_type::raft_configuration) {
+        case model::record_batch_type::raft_configuration:
+            // silently ignore raft configuration.
             return ss::now();
-        }
-        if (b.header().type == model::record_batch_type::group_prepare_tx) {
+        case model::record_batch_type::group_prepare_tx: {
             auto data = parse_tx_batch<kafka::group_tx::offsets_metadata>(
               b, group::prepared_tx_record_version);
             return handle_tx_offsets(b.header(), std::move(data));
         }
-        if (b.header().type == model::record_batch_type::group_commit_tx) {
+        case model::record_batch_type::group_commit_tx: {
             auto data = parse_tx_batch<group_tx::commit_metadata>(
               b, group::commit_tx_record_version);
             return handle_commit(b.header(), std::move(data));
         }
-        if (b.header().type == model::record_batch_type::group_abort_tx) {
+        case model::record_batch_type::group_abort_tx: {
             auto data = parse_tx_batch<group_tx::abort_metadata>(
               b, group::aborted_tx_record_version);
             return handle_abort(b.header(), std::move(data));
         }
-        if (
-          b.header().type == model::record_batch_type::tx_fence
-          || b.header().type == model::record_batch_type::group_fence_tx) {
+        case model::record_batch_type::tx_fence:
+        case model::record_batch_type::group_fence_tx:
             return parse_fence(std::move(b));
-        }
-        if (b.header().type == model::record_batch_type::version_fence) {
+        case model::record_batch_type::version_fence: {
             auto fence = features::feature_table::decode_version_fence(
               std::move(b));
             return handle_version_fence(fence);
         }
-        vlog(klog.debug, "ignoring batch with type: {}", b.header().type);
-        return ss::make_ready_future<>();
+        default:
+            vlog(klog.debug, "ignoring batch with type: {}", b.header().type);
+            return ss::make_ready_future<>();
+        }
     }
 
 private:
