@@ -31,7 +31,9 @@ class JsonWriterTest : public ::testing::Test {
 protected:
     std::string serialize(const std::function<void(serde::json::writer&)>& fn) {
         serde::json::writer w;
+        w.begin_object();
         fn(w);
+        w.end_object();
         return to_string(std::move(w));
     }
 };

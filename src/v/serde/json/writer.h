@@ -17,9 +17,6 @@ namespace serde::json {
 
 // The writer class is responsible for serializing data into JSON format.
 //
-// This writer can only create JSON objects, so top level objects that are
-// arrays or leaf values are not supported.
-//
 // NOTE: This class is easily misused, it's recommended to use a DOM version
 // (not yet written) or have good tests.
 class writer {
@@ -81,10 +78,7 @@ public:
     void integer_string(int64_t i);
     void integer_string(uint64_t i);
 
-    iobuf&& finish() && {
-        end_object();
-        return std::move(_buf);
-    }
+    iobuf&& finish() && { return std::move(_buf); }
 
 private:
     void append_string(std::string_view);
@@ -97,7 +91,7 @@ private:
     }
 
     char _next_delimiter = '\0';
-    iobuf _buf = iobuf::from("{");
+    iobuf _buf;
 };
 
 } // namespace serde::json
