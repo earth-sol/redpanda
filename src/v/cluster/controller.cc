@@ -503,6 +503,7 @@ ss::future<> controller::start(
       }),
       ss::sharded_parameter(
         [] { return config::shard_local_cfg().retention_local_strict.bind(); }),
+      _scheduling_group,
       std::ref(_as));
 
     co_await _shard_balancer.start_single(
