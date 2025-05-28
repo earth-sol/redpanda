@@ -2,6 +2,16 @@ load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("//bazel:test.bzl", "redpanda_cc_gtest", "redpanda_test_cc_library")
 
+redpanda_test_cc_library(
+    name = "gmock_iceberg_matchers",
+    hdrs = ["gmock_iceberg_matchers.h"],
+    include_prefix = "iceberg/conversion/tests",
+    deps = [
+        "//src/v/iceberg:values",
+        "@googletest//:gtest",
+    ],
+)
+
 proto_library(
     name = "person_proto",
     srcs = ["testdata/person.proto"],
@@ -116,6 +126,7 @@ redpanda_cc_gtest(
     ],
     deps = [
         ":complex_cc_proto",
+        ":gmock_iceberg_matchers",
         ":person_cc_proto",
         ":proto2_cc_proto",
         ":proto_definitions_wrapper",
