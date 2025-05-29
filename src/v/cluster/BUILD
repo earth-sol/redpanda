@@ -682,6 +682,7 @@ redpanda_cc_library(
         "//src/v/model",
         "//src/v/model:fips_config",
         "//src/v/net",
+        "//src/v/panda_link/model",
         "//src/v/pandaproxy/schema_registry:config",
         "//src/v/pandaproxy/schema_registry:subject_name_strategy",
         "//src/v/raft",
