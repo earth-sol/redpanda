@@ -12,5 +12,6 @@
 #pragma once
 
 namespace cluster::panda_link {
+class frontend;
 class table;
-}
+} // namespace cluster::panda_link
