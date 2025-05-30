@@ -1463,12 +1463,31 @@ class TopicRecoveryTest(RedpandaTest):
                 return False
             return True
 
-        wait_until(
-            verify,
-            timeout_sec=timeout.total_seconds(),
-            # Upload should happen not more than in cloud_storage_segment_max_upload_interval_sec
-            backoff_sec=CLOUD_STORAGE_SEGMENT_MAX_UPLOAD_INTERVAL_SEC / 2,
-            err_msg='objects not found in S3')
+        try:
+            wait_until(
+                verify,
+                timeout_sec=timeout.total_seconds(),
+                # Upload should happen not more than in cloud_storage_segment_max_upload_interval_sec
+                backoff_sec=CLOUD_STORAGE_SEGMENT_MAX_UPLOAD_INTERVAL_SEC / 2,
+                err_msg='objects not found in S3')
+        except TimeoutError:
+            assert deltas.maxlen is not None
+            missing_measurements = deltas.maxlen - len(deltas)
+            if missing_measurements > 0:
+                self.logger.warning(
+                    f"not enough measurements collected in the given time, "
+                    f"expected {deltas.maxlen}, got {len(deltas)}. "
+                    f"Retrying with a longer timeout to collect more measurements."
+                )
+                wait_until(
+                    verify,
+                    timeout_sec=(timeout.total_seconds() /
+                                 max(1, len(deltas)) *
+                                 (missing_measurements * 2)),
+                    backoff_sec=CLOUD_STORAGE_SEGMENT_MAX_UPLOAD_INTERVAL_SEC /
+                    2,
+                    err_msg='objects not found in S3 after retry')
+            raise
 
     def _wait_for_topic(self,
                         recovered_topics,
