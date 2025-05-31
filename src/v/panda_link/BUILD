@@ -15,3 +15,31 @@ redpanda_cc_library(
         "@seastar",
     ],
 )
+
+redpanda_cc_library(
+    name = "impl",
+    srcs = [
+        "manager.cc",
+    ],
+    hdrs = [
+        "manager.h",
+    ],
+    implementation_deps = [
+        ":logger",
+    ],
+    include_prefix = "panda_link",
+    visibility = ["//src/v/panda_link:__subpackages__"],
+    deps = [
+        "//src/v/model",
+        "//src/v/panda_link/model",
+    ],
+)
+
+redpanda_cc_library(
+    name = "fwd",
+    hdrs = [
+        "fwd.h",
+    ],
+    include_prefix = "panda_link",
+    visibility = ["//visibility:public"],
+)
