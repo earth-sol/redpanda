@@ -21,22 +21,27 @@ ARG DL_USE_CACHE=1
 ENV TZ="UTC" \
     DEBIAN_FRONTEND=noninteractive
 
-RUN mkdir -p /opt/redpanda-tests
+# removing docker-clean to ensure the downloaded packages remain: we use a cache mount
+# for apt, so apt downloads and repo lists do not appear in the final image
+RUN rm /etc/apt/apt.conf.d/docker-clean && mkdir -p /opt/redpanda-tests
 COPY --chown=0:0 tests/protobuf /opt/redpanda-tests/protobuf
 
 COPY --chmod=0755 tests/docker/ducktape-deps/download-utils /
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/java-dev-tools /
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/protobuf /
-RUN --mount=type=cache,id=dl-cache,target=/dl-cache /java-dev-tools && \
-    rm /java-dev-tools && \
-    rm -rf /var/lib/apt/lists/*
+# these /running/<name> mounts exist solely to appear first in the command such
+# that you can tell what's running when the first part of a command would otherwise
+# just be a long series of common mount options
+RUN --mount=target=/running/java-dev-tools,type=tmpfs --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked --mount=type=cache,id=dl-cache,target=/dl-cache \
+    /java-dev-tools && \
+    rm /java-dev-tools
 
 # - install distro-packaged depedencies
 # - install dependencies of 'rpk debug' system scan
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/tool-pkgs /
-RUN /tool-pkgs && \
-    rm /tool-pkgs && \
-    rm -rf /var/lib/apt/lists/*
+RUN --mount=target=/running/tool-pkgs,type=tmpfs --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    /tool-pkgs && \
+    rm /tool-pkgs
 
 #################################
 
@@ -45,7 +50,9 @@ FROM base AS maven_base
 ARG USE_MAVEN_SEED=1
 # Used to seed the maven cache for the java base image, see script for details
 COPY --chmod=0755 tests/docker/ducktape-deps/seed-maven-cache /
-RUN --mount=type=cache,id=dl-cache,target=/dl-cache /seed-maven-cache && rm -rf /seed-maven-cache /var/lib/apt/lists/*
+RUN --mount=type=cache,id=dl-cache,target=/dl-cache \
+    /seed-maven-cache && \
+    rm /seed-maven-cache
 
 
 #################################
@@ -247,7 +254,8 @@ RUN /tinygo-wasi-transforms && \
 
 FROM base AS ocsf
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/ocsf-server /
-RUN /ocsf-server && rm /ocsf-server
+RUN --mount=target=/running/ocsf-server,type=tmpfs --mount=type=cache,target=/var/cache/apt,sharing=locked,id=ocsf-cache-apt --mount=type=cache,target=/var/lib/apt,sharing=locked,id=ocsf-lib-apt \
+    /ocsf-server && rm /ocsf-server
 
 #################################
 
@@ -325,9 +333,9 @@ RUN /python-deps
 ENV PATH="/opt/.ducktape-venv/bin:$PATH"
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/teleport /
-RUN /teleport && \
-    rm /teleport && \
-    rm -rf /var/lib/apt/lists/*
+RUN --mount=target=/running/teleport,type=tmpfs --mount=type=cache,target=/var/cache/apt,sharing=locked --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    /teleport && \
+    rm /teleport
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/arroyo /
 RUN /arroyo && \
