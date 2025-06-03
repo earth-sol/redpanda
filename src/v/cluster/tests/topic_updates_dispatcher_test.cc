@@ -112,16 +112,16 @@ FIXTURE_TEST(
 FIXTURE_TEST(
   test_dispatching_happy_path_delete, topic_table_updates_dispatcher_fixture) {
     create_topics();
-    BOOST_REQUIRE(!dispatcher
-                     .apply_update(serde_serialize_cmd(
-                       cluster::delete_topic_cmd(
-                         make_tp_ns("test_tp_2"), make_tp_ns("test_tp_2"))))
-                     .get());
-    BOOST_REQUIRE(!dispatcher
-                     .apply_update(serde_serialize_cmd(
-                       cluster::delete_topic_cmd(
-                         make_tp_ns("test_tp_3"), make_tp_ns("test_tp_3"))))
-                     .get());
+    BOOST_REQUIRE(
+      !dispatcher
+         .apply_update(serde_serialize_cmd(cluster::delete_topic_cmd(
+           make_tp_ns("test_tp_2"), make_tp_ns("test_tp_2"))))
+         .get());
+    BOOST_REQUIRE(
+      !dispatcher
+         .apply_update(serde_serialize_cmd(cluster::delete_topic_cmd(
+           make_tp_ns("test_tp_3"), make_tp_ns("test_tp_3"))))
+         .get());
 
     auto& md = table.local().all_topics_metadata();
     BOOST_REQUIRE_EQUAL(md.size(), 1);
@@ -256,20 +256,18 @@ FIXTURE_TEST(
         check_final_counts({2, 4, 4, 2});
 
         logger.info("cancel move");
-        dispatch_command(
-          cluster::cancel_moving_partition_replicas_cmd{
-            ntp,
-            cluster::cancel_moving_partition_replicas_cmd_data{
-              cluster::force_abort_update{false}}});
+        dispatch_command(cluster::cancel_moving_partition_replicas_cmd{
+          ntp,
+          cluster::cancel_moving_partition_replicas_cmd_data{
+            cluster::force_abort_update{false}}});
         check_allocated_counts({3, 4, 4, 2});
         check_final_counts({3, 4, 4, 1});
 
         logger.info("force-cancel move");
-        dispatch_command(
-          cluster::cancel_moving_partition_replicas_cmd{
-            ntp,
-            cluster::cancel_moving_partition_replicas_cmd_data{
-              cluster::force_abort_update{true}}});
+        dispatch_command(cluster::cancel_moving_partition_replicas_cmd{
+          ntp,
+          cluster::cancel_moving_partition_replicas_cmd_data{
+            cluster::force_abort_update{true}}});
         check_allocated_counts({3, 4, 4, 2});
         check_final_counts({3, 4, 4, 1});
 
@@ -291,19 +289,17 @@ FIXTURE_TEST(
         check_final_counts({2, 4, 4, 2});
 
         logger.info("cancel move");
-        dispatch_command(
-          cluster::cancel_moving_partition_replicas_cmd{
-            ntp,
-            cluster::cancel_moving_partition_replicas_cmd_data{
-              cluster::force_abort_update{false}}});
+        dispatch_command(cluster::cancel_moving_partition_replicas_cmd{
+          ntp,
+          cluster::cancel_moving_partition_replicas_cmd_data{
+            cluster::force_abort_update{false}}});
         check_allocated_counts({3, 4, 4, 2});
         check_final_counts({3, 4, 4, 1});
 
         logger.info("revert_cancel move");
-        dispatch_command(
-          cluster::revert_cancel_partition_move_cmd(
-            int8_t{0},
-            cluster::revert_cancel_partition_move_cmd_data{.ntp = ntp}));
+        dispatch_command(cluster::revert_cancel_partition_move_cmd(
+          int8_t{0},
+          cluster::revert_cancel_partition_move_cmd_data{.ntp = ntp}));
         check_allocated_counts({2, 4, 4, 2});
         check_final_counts({2, 4, 4, 2});
     }
@@ -323,10 +319,9 @@ FIXTURE_TEST(
 
         logger.info(
           "force_partition_reconfiguration ntp {} to {}", ntp, new_replicas);
-        dispatch_command(
-          cluster::force_partition_reconfiguration_cmd{
-            ntp,
-            cluster::force_partition_reconfiguration_cmd_data(new_replicas)});
+        dispatch_command(cluster::force_partition_reconfiguration_cmd{
+          ntp,
+          cluster::force_partition_reconfiguration_cmd_data(new_replicas)});
         check_allocated_counts({2, 4, 4, 2});
         check_final_counts({2, 3, 3, 2});
 
@@ -351,9 +346,8 @@ FIXTURE_TEST(
         check_final_counts({4, 4, 4, 0});
 
         logger.info("delete topic");
-        dispatch_command(
-          cluster::delete_topic_cmd(
-            create_topic_cmd.key, create_topic_cmd.key));
+        dispatch_command(cluster::delete_topic_cmd(
+          create_topic_cmd.key, create_topic_cmd.key));
         check_allocated_counts({0, 0, 0, 0});
         check_final_counts({0, 0, 0, 0});
     }
