@@ -49,8 +49,10 @@ bazel_dep(name = "zstd", version = "1.5.7")
 bazel_dep(name = "patchelf", version = "0.18.0")
 bazel_dep(name = "bzip2", version = "1.0.8.bcr.2")
 
-bazel_dep(name = "buildifier_prebuilt", version = "7.3.1", dev_dependency = True)
+bazel_dep(name = "buildifier_prebuilt", version = "8.0.3", dev_dependency = True)
 bazel_dep(name = "rules_python", version = "1.0.0", dev_dependency = True)
+bazel_dep(name = "rules_cc", version = "0.1.1", dev_dependency = True)
+bazel_dep(name = "rules_shell", version = "0.4.1", dev_dependency = True)
 
 python = use_extension("@rules_python//python/extensions:python.bzl", "python", dev_dependency = True)
 python.toolchain(
@@ -360,7 +362,6 @@ crate.from_cargo(
     ],
 )
 use_repo(crate, "crates")
-
 crate.annotation(
     additive_build_file = "//bazel/thirdparty:wasmtime.BUILD",
     crate = "wasmtime-c-api-impl",
