@@ -1715,11 +1715,14 @@ class redpanda_partitions(gdb.Command):
             pm_ptr = find_partition_manager()
 
             for v in absl_get_nodes(pm_ptr['_ntp_table']):
-                ntp = v['value']['first']
-                p = redpanda_partition(
-                    seastar_lw_shared_ptr(v['value']['second']).get())
-                print("ntp: {}, partition: {}".format(model_ntp(ntp),
-                                                      p.archiver))
+                try:
+                    ntp = v['value']['first']
+                    p = redpanda_partition(
+                        seastar_lw_shared_ptr(v['value']['second']).get())
+                    print("ntp: {}, partition: {}, {}".format(model_ntp(ntp), p.archiver, p.archival_meta))
+                except Exception as e:
+                    ntp = v['value']['first']
+                    print("Skipping ntp {}: {}".format(model_ntp(ntp), e))
 
     def invoke(self, arg, from_tty):
         self.print_partitions()
