@@ -201,13 +201,15 @@ redpanda_cc_btest(
     ],
 )
 
-redpanda_cc_btest(
-    name = "async_data_uploader_test",
-    timeout = "moderate",
+redpanda_test_cc_library(
+    name = "async_data_uploader_fixture",
     srcs = [
-        "async_data_uploader_test.cc",
+        "async_data_uploader_fixture.cc",
     ],
-    cpu = 1,
+    hdrs = [
+        "async_data_uploader_fixture.h",
+    ],
+    visibility = ["//visibility:private"],
     deps = [
         "//src/v/bytes:iostream",
         "//src/v/cluster",
@@ -219,8 +221,34 @@ redpanda_cc_btest(
         "//src/v/redpanda/tests:fixture",
         "//src/v/storage",
         "//src/v/test_utils:fixture",
-        "//src/v/test_utils:seastar_boost",
-        "@boost//:test",
+        "//src/v/test_utils:gtest",
+        "@googletest//:gtest",
+        "@seastar",
+        "@seastar//:testing",
+    ],
+)
+
+redpanda_cc_gtest(
+    name = "async_data_uploader_test",
+    timeout = "moderate",
+    srcs = [
+        "async_data_uploader_test.cc",
+    ],
+    cpu = 1,
+    deps = [
+        ":async_data_uploader_fixture",
+        "//src/v/bytes:iostream",
+        "//src/v/cluster",
+        "//src/v/config",
+        "//src/v/kafka/client",
+        "//src/v/kafka/server/tests:kafka_test_utils",
+        "//src/v/model",
+        "//src/v/random:generators",
+        "//src/v/redpanda/tests:fixture",
+        "//src/v/storage",
+        "//src/v/test_utils:fixture",
+        "//src/v/test_utils:gtest",
+        "@googletest//:gtest",
         "@seastar",
         "@seastar//:testing",
     ],
