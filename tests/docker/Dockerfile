@@ -127,8 +127,8 @@ RUN /kcat && \
 FROM base AS golang
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/golang /
-RUN /golang && \
-    rm /golang
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /golang && rm /golang
 ENV PATH="${PATH}:/usr/local/go/bin"
 
 #################################
@@ -169,8 +169,8 @@ RUN /rp-storage-tool && \
 FROM golang AS sarama-examples
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/sarama-examples /
-RUN /sarama-examples && \
-    rm /sarama-examples
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /sarama-examples && rm /sarama-examples
 
 #################################
 
@@ -178,16 +178,16 @@ FROM golang AS golang-test-clients
 
 COPY --chown=0:0 --chmod=0755 tests/go /opt/redpanda-tests/go
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/golang-test-clients /
-RUN /golang-test-clients && \
-    rm /golang-test-clients
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /golang-test-clients && rm /golang-test-clients
 
 #################################
 
 FROM golang AS franz-bench
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/franz-bench /
-RUN /franz-bench && \
-    rm /franz-bench
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /franz-bench && rm /franz-bench
 
 #################################
 
@@ -202,16 +202,16 @@ RUN --mount=type=cache,id=dl-cache,target=/dl-cache /flink && \
 FROM golang AS kcl
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/kcl /
-RUN /kcl && \
-    rm /kcl
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /kcl && rm /kcl
 
 #################################
 
 FROM golang AS kgo-verifier
 
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/kgo-verifier /
-RUN /kgo-verifier && \
-    rm /kgo-verifier
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /kgo-verifier && rm /kgo-verifier
 
 #################################
 
@@ -227,7 +227,8 @@ FROM golang AS byoc-mock
 
 COPY --chown=0:0 --chmod=0755 tests/go/byoc-mock /opt/redpanda-tests/go/byoc-mock
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/byoc-mock /
-RUN /byoc-mock && rm /byoc-mock
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /byoc-mock && rm /byoc-mock
 
 #################################
 
@@ -235,7 +236,8 @@ FROM golang AS plugin-mock
 
 COPY --chown=0:0 --chmod=0755 tests/go/plugin-mock /opt/redpanda-tests/go/plugin-mock
 COPY --chown=0:0 --chmod=0755 tests/docker/ducktape-deps/plugin-mock /
-RUN /plugin-mock && rm /plugin-mock
+RUN --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
+    /plugin-mock && rm /plugin-mock
 
 #################################
 
@@ -334,6 +336,7 @@ RUN --mount=type=cache,id=dl-cache,target=/dl-cache \
     --mount=type=cache,target=/gradle_polaris,id=gradle-polaris \
     --mount=type=cache,target=/gradle_nessie,id=gradle-nessie \
     --mount=type=cache,target=/gradle_iceberg,id=gradle-iceberg \
+    --mount=type=cache,target=/root/go/pkg/mod,id=go-mod-cache \
     bash -c "source /debug-cache && debug_cache"
 
 ###################################
