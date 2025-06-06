@@ -1781,9 +1781,11 @@ class archival_metadata_stm:
         self.lock = named_samaphore(ref['_lock']['_sem'])
         self.last_clean_at = model_offset(ref['_last_clean_at'])
         self.last_dirty_at = model_offset(ref['_last_dirty_at'])
+        self.op_lock = named_samaphore(ref['_op_lock']['_sem'])
+        self.apply_lock = named_samaphore(ref['_apply_lock']['_sem'])
 
     def __repr__(self):
-        return f"archival_metadata_stm(lock={self.lock}, last_clean_at={self.last_clean_at}, last_dirty_at={self.last_dirty_at})"
+        return f"archival_metadata_stm(lock={self.lock}, last_clean_at={self.last_clean_at}, last_dirty_at={self.last_dirty_at}, op_lock={self.op_lock}, apply_lock={self.apply_lock})"
 
 
 class rm_stm:
@@ -1791,9 +1793,11 @@ class rm_stm:
         self.ref = ref
         self.state_lock = seastar_basic_rwlock(ref['_state_lock'])
         self.last_known_lso = model_offset(ref['_last_known_lso'])
+        self.op_lock = named_samaphore(ref['_op_lock']['_sem'])
+        self.apply_lock = named_samaphore(ref['_apply_lock']['_sem'])
 
     def __repr__(self):
-        return f"rm_stm(state_lock={self.state_lock}, last_known_lso={self.last_known_lso})"
+        return f"rm_stm(state_lock={self.state_lock}, last_known_lso={self.last_known_lso}, op_lock={self.op_lock}, apply_lock={self.apply_lock})"
 
 
 class consensus:
