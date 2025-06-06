@@ -1691,9 +1691,10 @@ class condition_variable:
         self.ref = ref
         self.waiters = boost_intrusive_list(ref['_waiters'])
         self.signaled = ref['_signalled']
+        self.ex = ref['_ex']
 
     def __repr__(self):
-        return f"condition_variable(waiters_count={len(self.waiters)}, signalled={self.signaled})"
+        return f"condition_variable(waiters_count={len(self.waiters)}, signalled={self.signaled}, ex={self.ex})"
 
 
 def lowres_clock_now():
