@@ -1694,6 +1694,7 @@ class offset_monitor:
     def __repr__(self):
         return f"offset_monitor(waiters_size={self.waiters_size})"
 
+
 class condition_variable:
     def __init__(self, ref):
         self.ref = ref
@@ -1796,6 +1797,25 @@ class archival_metadata_stm:
         return f"archival_metadata_stm(lock={self.lock}, last_clean_at={self.last_clean_at}, last_dirty_at={self.last_dirty_at}, op_lock={self.op_lock}, apply_lock={self.apply_lock})"
 
 
+class log_eviction_stm:
+    def __init__(self, ref):
+        self.ref = ref
+        self.storage_eviction_offset = model_offset(
+            ref['_storage_eviction_offset'])
+        self.delete_records_eviction_offset = model_offset(
+            ref['_delete_records_eviction_offset'])
+        self.cached_kafka_offset_override = model_offset(
+            ref['_cached_kafka_start_offset_override'])
+        self.has_pending_truncation = condition_variable(
+            ref['_has_pending_truncation'])
+        self.gate_count = ref['_gate']['_count']
+        self.op_lock = named_samaphore(ref['_op_lock']['_sem'])
+        self.apply_lock = named_samaphore(ref['_apply_lock']['_sem'])
+
+    def __repr__(self):
+        return f"log_eviction_stm(has_pending_truncation={self.has_pending_truncation}, storage_eviction_offset={self.storage_eviction_offset}, delete_records_eviction_offset={self.delete_records_eviction_offset}, cached_kafka_offset_override={self.cached_kafka_offset_override}, gate_count={self.gate_count}, op_lock={self.op_lock}, apply_lock={self.apply_lock})"
+
+
 class rm_stm:
     def __init__(self, ref):
         self.ref = ref
@@ -1835,6 +1855,8 @@ class redpanda_partition:
         self.archival_meta = archival_metadata_stm(
             seastar_shared_ptr(ptr['_archival_meta_stm']).get())
         self.rm = rm_stm(seastar_shared_ptr(ptr['_rm_stm']).get())
+        self.log_eviction = log_eviction_stm(
+            seastar_shared_ptr(ptr['_log_eviction_stm']).get())
         self.raft = consensus(seastar_lw_shared_ptr(ptr['_raft']).get())
 
 
@@ -1856,9 +1878,9 @@ class redpanda_partitions(gdb.Command):
                     ntp = v['value']['first']
                     p = redpanda_partition(
                         seastar_lw_shared_ptr(v['value']['second']).get())
-                    print("ntp: {}\n {}\n, {}\n, {}\n {}\n".format(
+                    print("ntp: {}\n {}\n, {}\n, {}\n, {}\n, {}\n".format(
                         model_ntp(ntp), p.archiver, p.archival_meta, p.rm,
-                        p.raft))
+                        p.log_eviction, p.raft))
                 except Exception as e:
                     ntp = v['value']['first']
                     print("Skipping ntp {}: {}".format(model_ntp(ntp), e))
