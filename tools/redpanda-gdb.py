@@ -1686,6 +1686,14 @@ class named_samaphore:
         return f"named_samaphore(count={self.count}, wait_list_size={self.wait_list.size})"
 
 
+class offset_monitor:
+    def __init__(self, ref):
+        self.ref = ref
+        self.waiters_size = self.ref['_waiters']['tree_']['size_']
+
+    def __repr__(self):
+        return f"offset_monitor(waiters_size={self.waiters_size})"
+
 class condition_variable:
     def __init__(self, ref):
         self.ref = ref
@@ -1805,14 +1813,18 @@ class consensus:
         self.ref = ref
         self.term = ref['_term']
         self.confirmed_term = ref['_confirmed_term']
+        self.election_lock = named_samaphore(ref['_election_lock']['_sem'])
+        self.op_lock = named_samaphore(ref['_op_lock']['_sem'])
+        self.snapshot_lock = named_samaphore(ref['_snapshot_lock']['_sem'])
         self.v_state = ref['_vstate']
+        self.offset_monitor = offset_monitor(ref['_consumable_offset_monitor'])
 
     # vote state reference: leader = 2, follower = 1, candidate = 0
     def is_leader(self):
         return self.v_state == 2 and self.term == self.confirmed_term
 
     def __repr__(self):
-        return f"consensus(term={self.term}, confirmed_term={self.confirmed_term}, v_state={self.v_state}, is_leader={self.is_leader()})"
+        return f"consensus(term={self.term}, confirmed_term={self.confirmed_term}, v_state={self.v_state}, is_leader={self.is_leader()}, election_lock={self.election_lock}, op_lock={self.op_lock}, snapshot_lock={self.snapshot_lock}, offset_monitor={self.offset_monitor})"
 
 
 class redpanda_partition:
