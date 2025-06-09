@@ -1880,12 +1880,19 @@ class seastar_data_source:
         self.session_error = self.session['_error']
         self.session_shutdown = self.session['_shutdown']
         self.session_out_pending = self.session['_output_pending']
-        self.session_in = std_unique_ptr(self.session['_in']['_dsi']).get().dynamic_cast(gdb.lookup_type("seastar::net::posix_data_source_impl").pointer()).dereference()
+        self.session_in = std_unique_ptr(
+            self.session['_in']['_dsi']).get().dynamic_cast(
+                gdb.lookup_type("seastar::net::posix_data_source_impl").
+                pointer()).dereference()
         self.out_pending = self.session['_output_pending']
-        self.session_ssl = std_unique_ptr(self.session['_ssl']).get().dereference()
+        self.session_ssl = std_unique_ptr(
+            self.session['_ssl']).get().dereference()
         self.rbio = self.session_ssl['rbio'].dereference()
 
-        self.session_sock = std_unique_ptr(self.session['_sock']).get().dynamic_cast(gdb.lookup_type('seastar::net::posix_connected_socket_impl').pointer()).dereference()
+        self.session_sock = std_unique_ptr(
+            self.session['_sock']).get().dynamic_cast(
+                gdb.lookup_type('seastar::net::posix_connected_socket_impl').
+                pointer()).dereference()
         self.session_sock_fd = seastar_pollable_fd(self.session_sock['_fd'])
 
     def __repr__(self):
@@ -1905,6 +1912,7 @@ rbio={self.rbio},
 session_in={self.session_in},
 out_pending={self.out_pending}),
 """
+
 
 class seastar_input_stream:
     def __init__(self, ref):
