@@ -12,5 +12,7 @@
 #pragma once
 
 namespace panda_link {
+class link;
 class manager;
-}
+class service;
+} // namespace panda_link

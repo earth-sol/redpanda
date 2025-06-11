@@ -11,8 +11,13 @@
 
 #pragma once
 
+#include "container/fragmented_vector.h"
 #include "model/fundamental.h"
+#include "panda_link/link.h"
 #include "panda_link/model/types.h"
+#include "ssx/work_queue.h"
+
+#include <absl/container/flat_hash_map.h>
 
 namespace panda_link {
 
@@ -37,6 +42,24 @@ public:
 
     virtual std::optional<std::reference_wrapper<const model::metadata>>
     find_link_by_name(const model::name_t&) const = 0;
+
+    virtual chunked_vector<model::id_t> get_all_link_ids() const = 0;
+};
+
+/**
+ * @brief Factory abstract class to create new links
+ *
+ */
+class link_factory {
+public:
+    link_factory() = default;
+    link_factory(const link_factory&) = delete;
+    link_factory(link_factory&&) = delete;
+    link_factory& operator=(const link_factory&) = delete;
+    link_factory& operator=(link_factory&&) = delete;
+    virtual ~link_factory() = default;
+
+    virtual std::unique_ptr<link> create_link(model::metadata config) = 0;
 };
 
 /**
@@ -47,7 +70,10 @@ public:
  */
 class manager {
 public:
-    manager(::model::node_id self, std::unique_ptr<link_registry> registry);
+    manager(
+      ::model::node_id self,
+      std::unique_ptr<link_registry> registry,
+      std::unique_ptr<link_factory> link_factory);
     manager(const manager&) = delete;
     manager(manager&&) = delete;
     manager& operator=(const manager&) = delete;
@@ -61,10 +87,15 @@ public:
     void on_link_change(model::id_t id);
     /// Used to notify manager in a change of NTP leadership
     void on_leadership_change(::model::ntp ntp, ntp_leader is_ntp_leader);
+    /// Handles creation and start of a link
+    ss::future<> handle_on_link_change(model::id_t id);
 
 private:
     ::model::node_id _self;
     std::unique_ptr<link_registry> _registry;
-    ntp_leader _is_controller_leader{ntp_leader::no};
+    std::unique_ptr<link_factory> _link_factory;
+    ssx::work_queue _queue;
+
+    absl::flat_hash_map<id_t, std::unique_ptr<link>> _links;
 };
 } // namespace panda_link

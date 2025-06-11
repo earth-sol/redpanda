@@ -12,6 +12,7 @@ redpanda_test_cc_library(
         "//src/v/cluster",
     ],
     include_prefix = "cluster/panda_link/tests",
+    visibility = ["//visibility:public"],
     deps = [
         "//src/v/model",
         "//src/v/panda_link/model",
