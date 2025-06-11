@@ -121,8 +121,8 @@ class CloudStorageUsageTest(RedpandaTest, PartitionMovementMixin):
 
     def _test_epilogue(self):
         # Assert tht retention was active
-        self.redpanda.metric_sum(
-            "redpanda_cloud_storage_deleted_segments",
+        assert self.redpanda.metric_sum(
+            "redpanda_cloud_storage_deleted_segments_total",
             metrics_endpoint=MetricsEndpoint.PUBLIC_METRICS) > 0
 
         # Assert that compacted segment re-upload operated during the test
