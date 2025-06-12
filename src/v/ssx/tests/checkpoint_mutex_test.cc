@@ -204,12 +204,12 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
     auto res = mutex
                  .with([&] {
 		     return ss::sleep(500ms).then([&] {
-                     EXPECT_TRUE(mutex.has_units() == false);
+                     EXPECT_FALSE(mutex.has_units());
                      return 1;
 		       });
                  })
                  .get();
-    EXPECT_TRUE(mutex.has_units() == true);
+    EXPECT_TRUE(mutex.has_units());
     EXPECT_EQ(res, 1);
 
     res = mutex
@@ -217,12 +217,12 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
               1s,
               [&] {
 		     return ss::sleep(500ms).then([&] {
-                  EXPECT_TRUE(mutex.has_units() == false);
+                  EXPECT_FALSE(mutex.has_units());
                   return 2;
 		});
               })
             .get();
-    EXPECT_TRUE(mutex.has_units() == true);
+    EXPECT_TRUE(mutex.has_units());
     EXPECT_EQ(res, 2);
 
     res = mutex
@@ -230,12 +230,12 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
               ss::timer<>::clock::now() + 1s,
               [&] {
 		     return ss::sleep(500ms).then([&] {
-                  EXPECT_TRUE(mutex.has_units() == false);
+                  EXPECT_FALSE(mutex.has_units());
                   return 3;
 		});
               })
             .get();
-    EXPECT_TRUE(mutex.has_units() == true);
+    EXPECT_TRUE(mutex.has_units());
     EXPECT_EQ(res, 3);
 
     ss::abort_source as;
@@ -244,11 +244,11 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
               as,
               [&] {
 		     return ss::sleep(500ms).then([&] {
-                  EXPECT_TRUE(mutex.has_units() == false);
+                  EXPECT_FALSE(mutex.has_units());
                   return 4;
 		});
               })
             .get();
-    EXPECT_TRUE(mutex.has_units() == true);
+    EXPECT_TRUE(mutex.has_units());
     EXPECT_EQ(res, 4);
 }
