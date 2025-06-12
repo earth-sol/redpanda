@@ -203,8 +203,10 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
     // Acquire the mutex normally.
     auto res = mutex
                  .with([&] {
+		     return ss::sleep(500ms).then([&] {
                      EXPECT_TRUE(mutex.has_units() == false);
                      return 1;
+		       });
                  })
                  .get();
     EXPECT_TRUE(mutex.has_units() == true);
@@ -214,8 +216,10 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
             .with(
               1s,
               [&] {
+		     return ss::sleep(500ms).then([&] {
                   EXPECT_TRUE(mutex.has_units() == false);
                   return 2;
+		});
               })
             .get();
     EXPECT_TRUE(mutex.has_units() == true);
@@ -225,8 +229,10 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
             .with(
               ss::timer<>::clock::now() + 1s,
               [&] {
+		     return ss::sleep(500ms).then([&] {
                   EXPECT_TRUE(mutex.has_units() == false);
                   return 3;
+		});
               })
             .get();
     EXPECT_TRUE(mutex.has_units() == true);
@@ -237,8 +243,10 @@ TEST(CheckpointMutex, checkpoint_mutex_lock_with) {
             .with(
               as,
               [&] {
+		     return ss::sleep(500ms).then([&] {
                   EXPECT_TRUE(mutex.has_units() == false);
                   return 4;
+		});
               })
             .get();
     EXPECT_TRUE(mutex.has_units() == true);
