@@ -85,8 +85,8 @@ public:
     std::invoke_result_t<Func> gated_retry_with_mitigation(Func func) {
         return gated_retry_with_mitigation_impl(
           _gate,
-          _config.retries(),
-          _config.retry_base_backoff(),
+          _config.retries_cfg.max_retries,
+          _config.retries_cfg.retry_base_backoff,
           std::move(func),
           [this](std::exception_ptr ex) { return mitigate_error(ex); },
           _as);
@@ -179,7 +179,31 @@ public:
 
     bool is_connected() const { return !_brokers.empty(); }
 
-    configuration& config() { return _config; }
+    void set_credentials(std::optional<sasl_configuration> creds);
+
+    void set_max_retries(size_t max_retries) {
+        _config.retries_cfg.max_retries = max_retries;
+    }
+
+    void set_retry_base_backoff(std::chrono::milliseconds retry_base_backoff) {
+        _config.retries_cfg.retry_base_backoff = retry_base_backoff;
+    }
+
+    void set_batch_record_count(int32_t count) {
+        _producer.set_batch_record_count(count);
+    }
+
+    void set_batch_size_bytes(int32_t size) {
+        _producer.set_batch_size_bytes(size);
+    }
+
+    void set_batch_delay(std::chrono::milliseconds delay) {
+        _producer.set_batch_delay(delay);
+    }
+
+    const std::optional<sasl_configuration>& get_credentials() const {
+        return _config.connection_cfg.sasl_cfg;
+    }
 
 private:
     friend class client_fetcher;
@@ -214,7 +238,7 @@ private:
 
     prefix_logger& logger() { return _logger; }
     /// \brief Client holds a copy of its configuration
-    configuration _config;
+    client_configuration _config;
     /// \brief Seeds are used when no brokers are connected.
     std::vector<net::unresolved_address> _seeds;
     prefix_logger _logger;

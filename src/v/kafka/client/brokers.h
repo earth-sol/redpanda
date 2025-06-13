@@ -33,9 +33,11 @@ class brokers {
       = absl::flat_hash_set<shared_broker_t, broker_hash, broker_eq>;
 
 public:
-    explicit brokers(const configuration& config, prefix_logger& logger)
+    explicit brokers(
+      const connection_configuration& config, prefix_logger& logger)
       : _config(config)
-      , _logger(&logger) {};
+      , _logger(&logger)
+      , _factory(_config, *_logger) {};
 
     brokers(const brokers&) = delete;
     brokers(brokers&&) = default;
@@ -63,13 +65,17 @@ public:
     /// \brief Returns true if there are no connected brokers
     bool empty() const;
 
+    ss::future<shared_broker_t>
+    create_broker(model::node_id node_id, net::unresolved_address addr);
+
 private:
-    const configuration& _config;
+    const connection_configuration& _config;
     /// \brief Brokers map a model::node_id to a client.
     brokers_t _brokers;
     /// \brief Next broker to select with round-robin
     size_t _next_broker{0};
     prefix_logger* _logger;
+    broker_factory _factory;
 };
 
 } // namespace kafka::client

@@ -59,11 +59,8 @@ ss::future<> brokers::apply(chunked_vector<metadata_response::broker>&& res) {
                  new_brokers_begin,
                  new_brokers.end(),
                  [this](const metadata_response::broker& b) {
-                     return make_broker(
-                       b.node_id,
-                       net::unresolved_address(b.host, b.port),
-                       _config,
-                       *_logger);
+                     return _factory.create_broker(
+                       b.node_id, net::unresolved_address(b.host, b.port));
                  })
           .then([this, &new_brokers, new_brokers_begin](
                   std::vector<shared_broker_t> broker_endpoints) mutable {
@@ -87,6 +84,10 @@ ss::future<> brokers::apply(chunked_vector<metadata_response::broker>&& res) {
               std::swap(brokers, _brokers);
           });
     });
+}
+ss::future<shared_broker_t>
+brokers::create_broker(model::node_id node_id, net::unresolved_address addr) {
+    return _factory.create_broker(node_id, std::move(addr));
 }
 
 bool brokers::empty() const { return _brokers.empty(); }
