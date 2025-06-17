@@ -70,8 +70,8 @@ pps::schema_version middle_version(int n_versions) {
     return pps::schema_version{n_versions / 2};
 }
 
-pps::schema_version next_version(int n_versions) {
-    return pps::schema_version{n_versions + 1};
+pps::schema_version last_version(int n_versions) {
+    return pps::schema_version{n_versions};
 }
 
 void setup_client(::http::client& client, perf_settings ps) {
@@ -88,22 +88,27 @@ void setup_client(::http::client& client, perf_settings ps) {
     }
 }
 
+constexpr size_t inner_iters = 100;
+
 void perf_body(
   ::http::client& client, const endpoint& ep, const perf_settings& ps) {
     const auto subject = make_subject(ps.i_subject);
     const auto version = ps.version_logic(ps.n_versions);
     const auto schema = make_proto_schema(subject, version);
     const auto payload = make_payload(schema);
+
     perf_tests::start_measuring_time();
-    auto res = ep.fn(client, subject, payload);
-    perf_tests::do_not_optimize(res);
+    for (size_t i = 0; i < inner_iters; ++i) {
+        auto res = ep.fn(client, subject, payload);
+        perf_tests::do_not_optimize(res);
+        dassert(
+          res.headers.result() == boost::beast::http::status::ok,
+          "{err_ctx} failed for sub {} version {}",
+          ep.name,
+          subject,
+          version);
+    }
     perf_tests::stop_measuring_time();
-    vassert(
-      res.headers.result() == boost::beast::http::status::ok,
-      "{err_ctx} failed for sub {} version {}",
-      ep.name,
-      subject,
-      version);
 }
 
 } // namespace
@@ -119,14 +124,14 @@ public:
     sr_bench_fixture operator=(sr_bench_fixture&&) = delete;
     ~sr_bench_fixture() = default;
 
-    future<void> run_test(endpoint ep, perf_settings ps) {
+    future<size_t> run_test(endpoint ep, perf_settings ps) {
         auto client = make_schema_reg_client();
         ss::thread_attributes thread_attr;
         co_await ss::async(thread_attr, [&client, &ep, ps] {
             setup_client(client, ps);
             perf_body(client, ep, ps);
         });
-        co_return;
+        co_return inner_iters;
     }
 };
 
@@ -136,103 +141,103 @@ static std::map<std::string_view, endpoint> perf_apis{
   {schema_lookup, endpoint{.fn = lookup_schema, .name = schema_lookup}},
   {schema_post, endpoint{.fn = post_schema, .name = schema_post}}};
 
-PERF_TEST_C(sr_bench_fixture, lookup_x1_1) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x1_1) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 1,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
 }
-PERF_TEST_C(sr_bench_fixture, lookup_x1_10) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x1_10) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 10,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
 }
-PERF_TEST_C(sr_bench_fixture, lookup_x1_100) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x1_100) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 100,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
 }
 
-PERF_TEST_C(sr_bench_fixture, lookup_x10_1) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x10_1) {
     perf_settings ss{
       .n_subjects = 10,
       .n_versions = 1,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
 }
-PERF_TEST_C(sr_bench_fixture, lookup_x10_10) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x10_10) {
     perf_settings ss{
       .n_subjects = 10,
       .n_versions = 10,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
     ;
 }
-PERF_TEST_C(sr_bench_fixture, lookup_x20_20) {
+PERF_TEST_CN(sr_bench_fixture, lookup_x20_20) {
     perf_settings ss{
       .n_subjects = 20,
       .n_versions = 20,
       .i_subject = 0,
       .version_logic = middle_version};
-    co_await run_test(perf_apis[schema_lookup], ss);
+    co_return co_await run_test(perf_apis[schema_lookup], ss);
 }
 
-PERF_TEST_C(sr_bench_fixture, post_x1_1) {
+PERF_TEST_CN(sr_bench_fixture, post_x1_1) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 1,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
-PERF_TEST_C(sr_bench_fixture, post_x1_10) {
+PERF_TEST_CN(sr_bench_fixture, post_x1_10) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 10,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
-PERF_TEST_C(sr_bench_fixture, post_x1_100) {
+PERF_TEST_CN(sr_bench_fixture, post_x1_100) {
     perf_settings ss{
       .n_subjects = 1,
       .n_versions = 100,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
 
-PERF_TEST_C(sr_bench_fixture, post_x10_1) {
+PERF_TEST_CN(sr_bench_fixture, post_x10_1) {
     perf_settings ss{
       .n_subjects = 10,
       .n_versions = 1,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
-PERF_TEST_C(sr_bench_fixture, post_x10_10) {
+PERF_TEST_CN(sr_bench_fixture, post_x10_10) {
     perf_settings ss{
       .n_subjects = 10,
       .n_versions = 10,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
-PERF_TEST_C(sr_bench_fixture, post_x20_20) {
+PERF_TEST_CN(sr_bench_fixture, post_x20_20) {
     perf_settings ss{
       .n_subjects = 20,
       .n_versions = 20,
       .i_subject = 0,
-      .version_logic = next_version};
-    co_await run_test(perf_apis[schema_post], ss);
+      .version_logic = last_version};
+    co_return co_await run_test(perf_apis[schema_post], ss);
 }
