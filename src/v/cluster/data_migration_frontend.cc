@@ -41,6 +41,7 @@ frontend::frontend(
   ss::sharded<features::feature_table>& features,
   ss::sharded<controller_stm>& stm,
   ss::sharded<partition_leaders_table>& leaders,
+  group_proxy& group_proxy,
   ss::sharded<rpc::connection_cache>& connections,
   std::optional<std::reference_wrapper<cloud_storage::topic_mount_handler>>
     topic_mount_handler,
@@ -51,6 +52,7 @@ frontend::frontend(
   , _features(features.local())
   , _controller(stm)
   , _leaders_table(leaders.local())
+  , _group_proxy(group_proxy)
   , _connections(connections.local())
   , _topic_mount_handler(topic_mount_handler)
   , _as(as)

@@ -41,10 +41,12 @@ worker::worker(
   model::node_id self,
   partition_leaders_table& leaders_table,
   partition_manager& partition_manager,
+  group_proxy& group_proxy,
   ss::abort_source& as)
   : _self(self)
   , _leaders_table(leaders_table)
   , _partition_manager(partition_manager)
+  , _group_proxy(group_proxy)
   , _as(as)
   , _operation_timeout(5s) {}
 

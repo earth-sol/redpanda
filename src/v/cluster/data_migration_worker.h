@@ -11,6 +11,7 @@
 #pragma once
 
 #include "base/outcome.h"
+#include "cluster/data_migration_group_proxy.h"
 #include "cluster/data_migration_types.h"
 #include "cluster/fwd.h"
 #include "cluster/notification.h"
@@ -34,6 +35,7 @@ public:
       model::node_id,
       partition_leaders_table&,
       partition_manager&,
+      group_proxy&,
       ss::abort_source&);
     ss::future<> stop();
 
@@ -90,6 +92,7 @@ private:
     model::node_id _self;
     partition_leaders_table& _leaders_table;
     partition_manager& _partition_manager;
+    group_proxy& _group_proxy;
     ss::abort_source& _as;
     std::chrono::milliseconds _operation_timeout;
 

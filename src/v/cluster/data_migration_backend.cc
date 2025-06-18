@@ -86,6 +86,7 @@ backend::backend(
   topics_frontend& topics_frontend,
   topic_table& topic_table,
   shard_table& shard_table,
+  group_proxy& group_proxy,
   std::optional<std::reference_wrapper<cloud_storage::remote>>
     cloud_storage_api,
   std::optional<std::reference_wrapper<cloud_storage::topic_mount_handler>>
@@ -99,6 +100,7 @@ backend::backend(
   , _topics_frontend(topics_frontend)
   , _topic_table(topic_table)
   , _shard_table(shard_table)
+  , _group_proxy(group_proxy)
   , _cloud_storage_api(cloud_storage_api)
   , _topic_mount_handler(topic_mount_handler)
   , _as(as) {}

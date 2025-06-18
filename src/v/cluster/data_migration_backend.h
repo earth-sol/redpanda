@@ -11,6 +11,7 @@
 #pragma once
 #include "cloud_storage/fwd.h"
 #include "cloud_storage/topic_mount_handler.h"
+#include "cluster/data_migration_group_proxy.h"
 #include "cluster/data_migration_table.h"
 #include "cluster/shard_table.h"
 #include "container/chunked_hash_map.h"
@@ -40,6 +41,7 @@ public:
       topics_frontend& topics_frontend,
       topic_table& topic_table,
       shard_table& shard_table,
+      group_proxy& group_proxy,
       std::optional<std::reference_wrapper<cloud_storage::remote>>
         _cloud_storage_api,
       std::optional<std::reference_wrapper<cloud_storage::topic_mount_handler>>
@@ -327,6 +329,7 @@ private:
     topics_frontend& _topics_frontend;
     topic_table& _topic_table;
     shard_table& _shard_table;
+    group_proxy& _group_proxy;
     std::optional<std::reference_wrapper<cloud_storage::remote>>
       _cloud_storage_api;
     std::optional<std::reference_wrapper<cloud_storage::topic_mount_handler>>
