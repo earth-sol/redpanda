@@ -39,6 +39,9 @@ public:
       features::feature_table*,
       ss::abort_source*);
 
+    using notification_id = table::notification_id;
+    using notification_callback = table::notification_callback;
+
     struct mutation_result {
         cluster::errc ec;
     };
@@ -49,6 +52,17 @@ public:
       ::panda_link::model::name_t, model::timeout_clock::time_point);
 
     bool panda_link_active(bool check_license) const;
+
+    notification_id register_for_updates(notification_callback);
+    void unregister_for_updates(notification_id);
+
+    std::optional<std::reference_wrapper<const ::panda_link::model::metadata>>
+    find_link_by_id(::panda_link::model::id_t id) const;
+
+    std::optional<std::reference_wrapper<const ::panda_link::model::metadata>>
+    find_link_by_name(const ::panda_link::model::name_t& name) const;
+
+    chunked_vector<::panda_link::model::id_t> get_all_link_ids() const;
 
 private:
     ss::future<mutation_result>
