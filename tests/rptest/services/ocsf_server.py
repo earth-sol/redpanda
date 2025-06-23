@@ -136,20 +136,9 @@ class OcsfServer(Service):
         self.logger.debug(f'Starting OCSF Server with cmd "{cmd}"')
         node.account.ssh(cmd, allow_fail=False)
 
-        def _wait_for_version():
-            try:
-                _ = self.get_api_version()
-                return True
-            except Exception:
-                # Ignore exceptions as server may be coming up and
-                # connections may time out
-                pass
-            return False
-
-        wait_until(_wait_for_version,
-                   timeout_sec=10,
-                   backoff_sec=1,
-                   err_msg='Failed to get version from server during startup')
+        # Wait for server to come up online
+        version = self.get_api_version(timeout_sec=30)
+        self.logger.debug(f'OCSF Server online with version "{version}"')
 
     def stop_node(self, node):
         cmd = self._stop_cmd()
