@@ -143,7 +143,9 @@ ss::future<std::error_code> table::apply_update(model::record_batch b) {
     });
     auto first_res = results.front();
     auto state_consistent = std::ranges::all_of(
-      results, [first_res](cluster::errc res) { return first_res == res; });
+      results, [first_res](cluster::cluster_link::errc res) {
+          return first_res == res;
+      });
 
     vassert(
       state_consistent,
@@ -181,7 +183,7 @@ void table::run_callbacks(id_t id) {
     }
 }
 
-cluster::errc table::upsert_link(id_t id, metadata meta) {
+cluster::cluster_link::errc table::upsert_link(id_t id, metadata meta) {
     auto name_it = _name_index.find(meta.name);
     if (name_it != _name_index.end()) {
         if (name_it->second != id) {
@@ -192,7 +194,7 @@ cluster::errc table::upsert_link(id_t id, metadata meta) {
               id,
               meta.name,
               name_it->second);
-            return cluster::errc::cluster_link_service_error;
+            return cluster::cluster_link::errc::service_error;
         }
     } else {
         _name_index.emplace(meta.name, id);
@@ -200,13 +202,13 @@ cluster::errc table::upsert_link(id_t id, metadata meta) {
 
     _link_metadata.insert_or_assign(id, std::move(meta));
     run_callbacks(id);
-    return cluster::errc::success;
+    return cluster::cluster_link::errc::success;
 }
 
-cluster::errc table::remove_link(const name_t& name) {
+cluster::cluster_link::errc table::remove_link(const name_t& name) {
     auto name_it = _name_index.find(name);
     if (name_it == _name_index.end()) {
-        return cluster::errc::success;
+        return cluster::cluster_link::errc::success;
     }
 
     auto id = name_it->second;
@@ -220,6 +222,6 @@ cluster::errc table::remove_link(const name_t& name) {
     _link_metadata.erase(it);
 
     run_callbacks(id);
-    return cluster::errc::success;
+    return cluster::cluster_link::errc::success;
 }
 } // namespace cluster::cluster_link
