@@ -52,16 +52,16 @@ make_authn_event_options(const server::request_t& rq) {
 }
 security::audit::authentication_event_options make_authn_event_error(
   const server::request_t& rq,
-  const ss::sstring& username,
-  ss::sstring reason) {
+  std::string_view username,
+  std::string_view reason) {
     return {
       .server_addr = from_ss_sa(rq.req->get_server_address()),
       .svc_name = audit_svc_name,
       .client_addr = from_ss_sa(rq.req->get_client_address()),
       .is_cleartext = is_cleartext(rq.req->get_protocol_name()),
       .user
-      = {.name = username, .type_id = security::audit::user::type::unknown},
-      .error_reason = reason};
+      = {.name = ss::sstring{username}, .type_id = security::audit::user::type::unknown},
+      .error_reason = ss::sstring{reason}};
 }
 
 void do_audit_authn(
@@ -102,9 +102,9 @@ void do_audit_authz(const server::request_t& rq) {
 
 void audit_authn_failure(
   const server::request_t& rq,
-  const ss::sstring& username,
-  ss::sstring reason) {
-    do_audit_authn(rq, make_authn_event_error(rq, username, std::move(reason)));
+  std::string_view username,
+  std::string_view reason) {
+    do_audit_authn(rq, make_authn_event_error(rq, username, reason));
 }
 
 void audit_authn_success(const server::request_t& rq) {
@@ -171,7 +171,7 @@ void auth::handle_auth(server::request_t& rq) const {
             try {
                 return rq.service().authenticator().authenticate(*rq.req);
             } catch (const unauthorized_user_exception& e) {
-                audit_authn_failure(rq, e.get_username(), e.what());
+                audit_authn_failure(rq, e.get_username()(), e.what());
                 throw;
             } catch (const ss::httpd::base_exception& e) {
                 audit_authn_failure(rq, "", e.what());
