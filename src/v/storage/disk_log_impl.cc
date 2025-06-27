@@ -496,7 +496,9 @@ disk_log_impl::request_eviction_until_offset(model::offset max_offset) {
 }
 
 ss::future<compaction_result> disk_log_impl::segment_self_compact(
-  compaction_config cfg, ss::lw_shared_ptr<segment> seg) {
+  compaction_config cfg,
+  ss::lw_shared_ptr<segment> seg,
+  bool force_compaction) {
     co_return co_await storage::internal::self_compact_segment(
       seg,
       _stm_manager,
@@ -504,7 +506,8 @@ ss::future<compaction_result> disk_log_impl::segment_self_compact(
       *_probe,
       *_readers_cache,
       _manager.resources(),
-      _feature_table);
+      _feature_table,
+      force_compaction);
 }
 
 ss::future<> disk_log_impl::adjacent_merge_compact(

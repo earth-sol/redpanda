@@ -768,16 +768,22 @@ ss::future<compaction_result> self_compact_segment(
   storage::probe& pb,
   storage::readers_cache& readers_cache,
   storage_resources& resources,
-  ss::sharded<features::feature_table>& feature_table) {
+  ss::sharded<features::feature_table>& feature_table,
+  bool force_compaction) {
     if (s->has_appender()) {
         throw std::runtime_error(fmt::format(
           "Cannot compact an active segment. cfg:{} - segment:{}", cfg, s));
     }
 
     const bool may_remove_tombstones = may_have_removable_tombstones(s, cfg);
-    if (
-      !s->is_compactible(cfg)
-      || (s->finished_self_compaction() && !may_remove_tombstones)) {
+
+    auto should_force_compaction = force_compaction || may_remove_tombstones;
+
+    // force_compaction will not invalidate max_removable_local_log_offset.
+    auto segment_needs_compaction
+      = s->is_compactible(cfg)
+        && (!s->finished_self_compaction() || should_force_compaction);
+    if (!segment_needs_compaction) {
         co_return compaction_result{s->size_bytes()};
     }
 
@@ -787,10 +793,9 @@ ss::future<compaction_result> self_compact_segment(
         s, stm_manager, cfg, read_holder, resources, pb);
 
     const bool segment_already_compacted
-      = (state == compacted_index::recovery_state::already_compacted)
-        && !may_remove_tombstones;
+      = (state == compacted_index::recovery_state::already_compacted);
 
-    if (segment_already_compacted) {
+    if (segment_already_compacted && !should_force_compaction) {
         vlog(
           gclog.debug,
           "detected {} is already compacted",
@@ -1172,6 +1177,8 @@ ss::future<compaction_result> concatenate_and_rebuild_target_segment(
     }
     pb.add_initial_segment(*replacement.get());
 
+    // Force self compaction of the replacement segment to rebuild in-memory
+    // index state.
     compaction_result ret = co_await self_compact_segment(
       replacement,
       stm_manager,
@@ -1179,7 +1186,8 @@ ss::future<compaction_result> concatenate_and_rebuild_target_segment(
       pb,
       readers_cache,
       resources,
-      feature_table);
+      feature_table,
+      true);
     vlog(gclog.debug, "Final compacted segment {}", replacement);
 
     /*
