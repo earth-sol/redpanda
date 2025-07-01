@@ -101,11 +101,6 @@ TEST_F_CORO(dl_stm_fixture, test_basic) {
 
     ASSERT_TRUE_CORO(
       api(node(*get_leader())).read_snapshot(snapshot_res.value()).has_value());
-    ASSERT_EQ_CORO(
-      api(node(*get_leader()))
-        .read_snapshot(snapshot_res.value())
-        ->overlays.size(),
-      1);
 
     auto snapshot_res2 = co_await api(node(*get_leader())).start_snapshot();
 

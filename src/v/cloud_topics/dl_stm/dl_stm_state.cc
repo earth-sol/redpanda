@@ -93,7 +93,6 @@ dl_stm_state::read_snapshot(dl_snapshot_id id) const {
 
     return dl_snapshot_payload{
       .id = *it,
-      .overlays = std::move(overlays),
     };
 }
 

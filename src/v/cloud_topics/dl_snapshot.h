@@ -39,9 +39,6 @@ struct dl_snapshot_payload
       serde::compat_version<0>> {
     /// Version for which the snapshot is created.
     dl_snapshot_id id;
-
-    /// Overlays visible at the snapshot version.
-    fragmented_vector<dl_overlay> overlays;
 };
 
 }; // namespace experimental::cloud_topics

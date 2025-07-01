@@ -169,7 +169,6 @@ TEST(dl_stm_state_death, start_snapshot) {
     auto snapshot1 = state.read_snapshot(snapshot_id1);
     ASSERT_TRUE(snapshot1.has_value());
     ASSERT_EQ(snapshot1->id, snapshot_id1);
-    ASSERT_TRUE(snapshot1->overlays.empty());
 
     // This does not exist yet.
     ASSERT_FALSE(
@@ -181,7 +180,6 @@ TEST(dl_stm_state_death, start_snapshot) {
     auto snapshot2 = state.read_snapshot(snapshot_id2);
     ASSERT_TRUE(snapshot2.has_value());
     ASSERT_EQ(snapshot2->id, snapshot_id2);
-    ASSERT_TRUE(snapshot2->overlays.empty());
 
     // Starting a snapshot without advancing the version should throw.
     ASSERT_DEATH(
@@ -225,26 +223,18 @@ TEST(dl_stm_state, start_snapshot) {
     auto snapshot0 = state.read_snapshot(snapshot_id0);
     ASSERT_TRUE(snapshot0.has_value());
     ASSERT_EQ(snapshot0->id, snapshot_id0);
-    ASSERT_EQ(snapshot0->overlays.size(), 1) << snapshot0->overlays;
-    ASSERT_EQ(snapshot0->overlays[0], overlay0);
 
     auto snapshot1 = state.read_snapshot(snapshot_id1);
     ASSERT_TRUE(snapshot1.has_value());
     ASSERT_EQ(snapshot1->id, snapshot_id1);
-    ASSERT_EQ(snapshot1->overlays.size(), 0);
 
     auto snapshot2 = state.read_snapshot(snapshot_id2);
     ASSERT_TRUE(snapshot2.has_value());
     ASSERT_EQ(snapshot2->id, snapshot_id2);
-    ASSERT_EQ(snapshot2->overlays.size(), 1) << snapshot2->overlays;
-    ASSERT_EQ(snapshot2->overlays[0], overlay1);
 
     auto snapshot3 = state.read_snapshot(snapshot_id3);
     ASSERT_TRUE(snapshot3.has_value());
     ASSERT_EQ(snapshot3->id, snapshot_id3);
-    ASSERT_EQ(snapshot3->overlays.size(), 2);
-    ASSERT_EQ(snapshot3->overlays[0], overlay1) << snapshot3->overlays;
-    ASSERT_EQ(snapshot3->overlays[1], overlay2) << snapshot3->overlays;
 }
 
 TEST(dl_stm_state, remove_snapshots_before) {
