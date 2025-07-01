@@ -115,12 +115,10 @@ redpanda_cc_library(
     srcs = [
         "broker.cc",
         "brokers.cc",
-        "sasl_client.cc",
     ],
     hdrs = [
         "broker.h",
         "brokers.h",
-        "sasl_client.h",
     ],
     include_prefix = "kafka/client",
     deps = [
