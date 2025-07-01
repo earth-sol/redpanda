@@ -178,6 +178,7 @@ redpanda_cc_library(
     ],
     include_prefix = "kafka/client",
     deps = [
+        ":api_types",
         ":configuration",
         ":exceptions",
         ":logger",
