@@ -32,6 +32,10 @@
 
 #include <chrono>
 
+namespace experimental::cloud_topics {
+class app;
+}
+
 namespace cluster {
 class partition_manager
   : public ss::peering_sharded_service<partition_manager> {
@@ -48,7 +52,8 @@ public:
       ss::lw_shared_ptr<const archival::configuration>,
       ss::sharded<features::feature_table>&,
       ss::sharded<archival::upload_housekeeping_service>&,
-      config::binding<std::chrono::milliseconds>);
+      config::binding<std::chrono::milliseconds>,
+      ss::sharded<experimental::cloud_topics::app>&);
 
     ~partition_manager();
 
@@ -301,6 +306,9 @@ private:
     std::optional<raft::group_manager_notification_id> _leader_notify_handle;
 
     state_machine_registry _stm_registry;
+
+    // The sharded app may not be initialized if cloud topics isn't enabled.
+    ss::sharded<experimental::cloud_topics::app>& _cloud_topics_app;
 
     friend std::ostream& operator<<(std::ostream&, const partition_manager&);
     friend std::ostream& operator<<(

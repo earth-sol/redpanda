@@ -57,7 +57,6 @@ cc_proto_library(
 redpanda_test_cc_library(
     name = "proto_definitions_wrapper",
     hdrs = ["proto_definitions.h"],
-    defines = ["BAZEL_TEST=1"],
     include_prefix = "iceberg/conversion/tests",
     deps = [
         ":complex_cc_proto",
@@ -132,6 +131,26 @@ redpanda_cc_gtest(
         "@protobuf",
         "@protobuf//src/google/protobuf/compiler:importer",
         "@protobuf//src/google/protobuf/io:tokenizer",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_gtest(
+    name = "iceberg_json_tests",
+    timeout = "short",
+    srcs = [
+        "iceberg_json_tests.cc",
+    ],
+    deps = [
+        "//src/v/iceberg:datatypes",
+        "//src/v/iceberg/conversion:conversion_outcome",
+        "//src/v/iceberg/conversion:schema_json",
+        "//src/v/iceberg/conversion/json_schema:frontend",
+        "//src/v/iceberg/conversion/json_schema:ir",
+        "//src/v/json",
+        "//src/v/test_utils:gtest",
+        "@fmt",
+        "@googletest//:gtest",
         "@seastar",
     ],
 )

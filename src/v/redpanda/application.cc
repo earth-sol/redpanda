@@ -362,6 +362,11 @@ void application::shutdown() {
         _datalake_manager.invoke_on_all(&datalake::datalake_manager::shutdown)
           .get();
     }
+    if (_datalake_credential_mgr.local_is_initialized()) {
+        _datalake_credential_mgr
+          .invoke_on_all(&datalake::credential_manager::stop)
+          .get();
+    }
 
     // Stop all partitions before destructing the subsystems (transaction
     // coordinator, etc). This interrupts ongoing replication requests,
@@ -1347,6 +1352,12 @@ void application::wire_up_runtime_services(
         // Construct datalake subsystems, now that dependencies are
         // already constructed.
         syschecks::systemd_message("Starting datalake services").get();
+
+        // Start credential manager first to provide shared credentials
+        construct_service(_datalake_credential_mgr).get();
+        _datalake_credential_mgr
+          .invoke_on_all(&datalake::credential_manager::start)
+          .get();
         construct_service(
           _datalake_coordinator_mgr,
           node_id,
@@ -1357,17 +1368,21 @@ void application::wire_up_runtime_services(
           std::ref(controller->get_topics_frontend()),
           _schema_registry.get(),
           ss::sharded_parameter(
-            [bucket](cloud_io::remote& remote)
+            [bucket](
+              cloud_io::remote& remote, datalake::credential_manager& cred_mgr)
               -> std::unique_ptr<datalake::coordinator::catalog_factory> {
                 return datalake::coordinator::get_catalog_factory(
                   config::shard_local_cfg(),
                   remote,
                   *bucket,
-                  ss::metrics::label_instance{"role", "coordinator"});
+                  ss::metrics::label_instance{"role", "coordinator"},
+                  cred_mgr);
             },
-            std::ref(cloud_io)),
+            std::ref(cloud_io),
+            std::ref(_datalake_credential_mgr)),
           std::ref(cloud_io),
-          std::ref(*bucket))
+          std::ref(*bucket),
+          std::ref(_datalake_credential_mgr))
           .get();
         construct_service(
           _datalake_coordinator_fe,
@@ -1392,15 +1407,18 @@ void application::wire_up_runtime_services(
           &_datalake_coordinator_fe,
           &cloud_io,
           ss::sharded_parameter(
-            [bucket](cloud_io::remote& remote)
+            [bucket](
+              cloud_io::remote& remote, datalake::credential_manager& cred_mgr)
               -> std::unique_ptr<datalake::coordinator::catalog_factory> {
                 return datalake::coordinator::get_catalog_factory(
                   config::shard_local_cfg(),
                   remote,
                   *bucket,
-                  ss::metrics::label_instance{"role", "translator"});
+                  ss::metrics::label_instance{"role", "translator"},
+                  cred_mgr);
             },
-            std::ref(cloud_io)),
+            std::ref(cloud_io),
+            std::ref(_datalake_credential_mgr)),
           _schema_registry.get(),
           &_as,
           *bucket,
@@ -1692,7 +1710,8 @@ void application::wire_up_redpanda_services(
       ss::sharded_parameter([] {
           return config::shard_local_cfg()
             .partition_manager_shutdown_watchdog_timeout.bind();
-      }))
+      }),
+      std::ref(cloud_topics_api))
       .get();
     vlog(_log.info, "Partition manager started");
     construct_service(
@@ -2095,8 +2114,7 @@ void application::wire_up_redpanda_services(
       std::ref(controller->get_topics_state()),
       std::ref(tx_gateway_frontend),
       std::ref(controller->get_feature_table()),
-      std::ref(_consumer_group_lag_metrics_frontend),
-      &kafka::make_consumer_offsets_serializer)
+      std::ref(_consumer_group_lag_metrics_frontend))
       .get();
     construct_service(
       offsets_recoverer,

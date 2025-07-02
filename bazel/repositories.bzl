@@ -130,9 +130,9 @@ def data_dependency():
     http_archive(
         name = "openssl",
         build_file = "//bazel/thirdparty:openssl.BUILD",
-        sha256 = "57e03c50feab5d31b152af2b764f10379aecd8ee92f16c985983ce4a99f7ef86",
-        strip_prefix = "openssl-3.0.16",
-        url = "https://github.com/openssl/openssl/releases/download/openssl-3.0.16/openssl-3.0.16.tar.gz",
+        sha256 = "dfdd77e4ea1b57ff3a6dbde6b0bdc3f31db5ac99e7fdd4eaf9e1fbb6ec2db8ce",
+        strip_prefix = "openssl-3.0.17",
+        url = "https://github.com/openssl/openssl/releases/download/openssl-3.0.17/openssl-3.0.17.tar.gz",
     )
 
     http_archive(
@@ -162,9 +162,9 @@ def data_dependency():
     http_archive(
         name = "seastar",
         build_file = "//bazel/thirdparty:seastar.BUILD",
-        sha256 = "d3edc66ddd24f7ce378d2d2bc1461a0af38181fa126297922db16c1be9b7111c",
-        strip_prefix = "seastar-b2688bb13dadff1ce3bec03543e6e1d7e3487667",
-        url = "https://github.com/redpanda-data/seastar/archive/b2688bb13dadff1ce3bec03543e6e1d7e3487667.tar.gz",
+        sha256 = "4f64324c068aff7fec3cb9bba9b49bd876b0a07889de325a38385463716af18a",
+        strip_prefix = "seastar-8a5ef9d49b50d2056637db761938fbf23a35013b",
+        url = "https://github.com/redpanda-data/seastar/archive/8a5ef9d49b50d2056637db761938fbf23a35013b.tar.gz",
     )
 
     http_archive(

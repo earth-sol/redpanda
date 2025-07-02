@@ -14,6 +14,7 @@ package(default_visibility = [
     "//src/v/cloud_topics/tests:__pkg__",
     "//src/v/cloud_topics/throttler:__pkg__",
     "//src/v/cloud_topics/throttler/tests:__pkg__",
+    "//src/v/kafka/data:__pkg__",
 ])
 
 redpanda_cc_library(
@@ -25,6 +26,7 @@ redpanda_cc_library(
         "logger.h",
     ],
     include_prefix = "cloud_topics",
+    visibility = ["//visibility:public"],
     deps = [
         "@seastar",
     ],
@@ -40,27 +42,10 @@ redpanda_cc_library(
         "types.h",
     ],
     include_prefix = "cloud_topics",
+    visibility = [":__subpackages__"],
     deps = [
         "//src/v/utils:named_type",
         "//src/v/utils:uuid",
-        "@fmt",
-    ],
-)
-
-redpanda_cc_library(
-    name = "dl_overlay",
-    srcs = [
-        "dl_overlay.cc",
-    ],
-    hdrs = [
-        "dl_overlay.h",
-    ],
-    include_prefix = "cloud_topics",
-    deps = [
-        ":types",
-        "//src/v/model",
-        "//src/v/serde",
-        "@abseil-cpp//absl/container:btree",
         "@fmt",
     ],
 )
@@ -101,7 +86,6 @@ redpanda_cc_library(
     ],
     include_prefix = "cloud_topics",
     deps = [
-        ":dl_overlay",
         ":dl_version",
         "//src/v/container:fragmented_vector",
         "//src/v/serde",

@@ -161,10 +161,6 @@ static constexpr auto retry_after_seconds = 1;
 
 namespace {
 
-inline net::unresolved_address from_ss_sa(const ss::socket_address& sa) {
-    return {fmt::format("{}", sa.addr()), sa.port(), sa.addr().in_family()};
-}
-
 security::audit::authentication::used_cleartext
 is_cleartext(const ss::sstring& protocol) {
     return boost::iequals(protocol, "https")
@@ -176,9 +172,9 @@ security::audit::authentication_event_options make_authn_event_options(
   ss::httpd::const_req req, const request_auth_result& auth_result) {
     return {
       .auth_protocol = auth_result.get_sasl_mechanism(),
-      .server_addr = from_ss_sa(req.get_server_address()),
+      .server_addr = net::unresolved_address{req.get_server_address()},
       .svc_name = audit_svc_name,
-      .client_addr = from_ss_sa(req.get_client_address()),
+      .client_addr = net::unresolved_address{req.get_client_address()},
       .is_cleartext = is_cleartext(req.get_protocol_name()),
       .user = {
         .name = auth_result.get_username().empty() ? "{{anonymous}}"
@@ -195,14 +191,22 @@ security::audit::authentication_event_options make_authn_event_options(
   const security::credential_user& username,
   const ss::sstring& reason) {
     return {
-      .server_addr = from_ss_sa(req.get_server_address()),
+      .server_addr = net::unresolved_address{req.get_server_address()},
       .svc_name = audit_svc_name,
-      .client_addr = from_ss_sa(req.get_client_address()),
+      .client_addr = net::unresolved_address{req.get_client_address()},
       .is_cleartext = is_cleartext(req.get_protocol_name()),
       .user
       = {.name = username, .type_id = security::audit::user::type::unknown},
       .error_reason = reason};
 }
+
+std::string_view strip_query_param(const ss::sstring& url) {
+    auto pos = url.find('?');
+    if (pos == ss::sstring::npos) {
+        return {url};
+    }
+    return {url.begin(), pos};
+};
 
 bool escape_hatch_request(ss::httpd::const_req req) {
     /// The following "break glass" mechanism allows the cluster config
@@ -212,14 +216,14 @@ bool escape_hatch_request(ss::httpd::const_req req) {
     static const auto allowed_requests = std::to_array(
       {ss::httpd::cluster_config_json::get_cluster_config_status,
        ss::httpd::cluster_config_json::get_cluster_config_schema,
-       ss::httpd::cluster_config_json::patch_cluster_config});
+       ss::httpd::cluster_config_json::patch_cluster_config,
+       ss::httpd::cluster_config_json::get_cluster_config});
 
-    return std::any_of(
-      allowed_requests.cbegin(),
-      allowed_requests.cend(),
+    return std::ranges::any_of(
+      allowed_requests,
       [method = req._method,
-       url = req.get_url()](const ss::httpd::path_description& d) {
-          return d.path == url
+       url = req._url](const ss::httpd::path_description& d) {
+          return d.path == strip_query_param(url)
                  && d.operations.method == ss::httpd::str2type(method);
       });
 }
