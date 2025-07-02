@@ -14,6 +14,7 @@
 #include "datalake/logger.h"
 #include "datalake/schema_identifier.h"
 #include "datalake/schema_registry.h"
+#include "iceberg/conversion/ir_json.h"
 #include "iceberg/conversion/schema_avro.h"
 #include "iceberg/conversion/schema_protobuf.h"
 #include "iceberg/datatypes.h"
@@ -275,6 +276,11 @@ void chunked_schema_cache::setup_metrics() {
           sm::description("The number of times a schema was in the cache.")),
       });
 }
+
+resolved_schema::resolved_schema(ss::shared_ptr<iceberg::json_conversion_ir> ir)
+  : shared_schema_(std::move(ir))
+  , schema_(
+      *std::get<ss::shared_ptr<iceberg::json_conversion_ir>>(shared_schema_)) {}
 
 std::ostream& operator<<(std::ostream& o, const type_resolver::errc& e) {
     switch (e) {
