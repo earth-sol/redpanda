@@ -37,6 +37,7 @@ import re
 
 MIGRATION_LOG_ALLOW_LIST = [
     'Error during log recovery: cloud_storage::missing_partition_exception',
+    'skipping group metadata, group is blocked'
 ] + Finjector.LOG_ALLOW_LIST
 
 
@@ -137,10 +138,16 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
             debug='all')
 
     @contextmanager
-    def ck_consumer(self):
-        self.last_consumer_id += 1
+    def ck_consumer(self, group=None):
+        if group is None:
+            self.last_consumer_id += 1
+            group = f'group-{self.last_consumer_id}'
         consumer = ck.Consumer({
-            'group.id': f'group-{self.last_consumer_id}',
+            'debug': 'all',
+            'log_level': 7,
+            'logger': self.logger,
+            'session.timeout.ms': 6000,
+            'group.id': group,
             'bootstrap.servers': self.redpanda.brokers(),
             'auto.offset.reset': 'earliest',
             'isolation.level': 'read_committed',
@@ -723,67 +730,88 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
         consumer.start(clean=False)
         return consumer
 
-    def _do_validate_topic_operation(self, topic: str, op_name: str,
-                                     expected_to_pass: bool | None,
-                                     operation: Callable[[str], typing.Any]):
+    def _do_validate_operation(self, topic: str | None, group: str | None,
+                               op_name: str, expected_to_pass: bool | None,
+                               operation: Callable[[str | None, str | None],
+                                                   typing.Any]):
         if expected_to_pass is None:
             return
 
-        self.logger.info(
-            f"Validating execution of {op_name} against topic: {topic}")
-        success = True
+        self.logger.info(f"Validating execution of {op_name}"
+                         f" against {topic=} {group=}")
         try:
-            operation(topic)
+            result = operation(topic, group)
         except Exception as e:
-            self.logger.info(
-                f"Operation {op_name} executed against topic: {topic} failed - {e}"
-            )
-            success = False
+            self.logger.info(f"Operation {op_name} executed against"
+                             f" {topic=} {group=} failed - {e}")
+            self.logger.exception(e)
+            result = False  # assume real op cannot return False
+        success = result is not False
 
         assert expected_to_pass == success, f"Operation {op_name} outcome is not " \
-            f"expected. Expected to pass: {expected_to_pass}, succeeded: {success}"
+            f"expected. {expected_to_pass=}, {success=}, {result=}"
 
-    def validate_topic_access(self, topic: str, expect_present: bool | None,
-                              expect_metadata_changeable: bool | None,
-                              expect_readable: bool | None,
-                              expect_writable: bool | None):
+    def validate_entities_access(self, entities: dict[str, str | None],
+                                 expect_present: bool | None,
+                                 expect_metadata_changeable: bool | None,
+                                 expect_readable: bool | None,
+                                 expect_writable: bool | None):
         rpk = RpkTool(self.redpanda)
+
+        topic = entities['topic']
+        group = entities['group']
 
         if expect_present is not None:
             assert expect_present == (topic in rpk.list_topics()), \
                 f"validated topic {topic} must be present"
 
-        self._do_validate_topic_operation(
-            topic=topic,
+        self._do_validate_operation(
+            **entities,
             op_name="add_partitions",
             expected_to_pass=expect_metadata_changeable,
-            operation=lambda topic: rpk.add_partitions(topic, 33))
+            operation=lambda topic, _: rpk.add_partitions(topic, 33))
 
-        def _alter_cfg(topic):
+        def _alter_cfg(topic, _):
             rpk.alter_topic_config(topic, TopicSpec.PROPERTY_FLUSH_MS, 2000)
             rpk.delete_topic_config(topic, TopicSpec.PROPERTY_FLUSH_MS)
 
-        self._do_validate_topic_operation(
-            topic=topic,
+        self._do_validate_operation(
+            **entities,
             op_name="alter_topic_configuration",
             expected_to_pass=expect_metadata_changeable,
             operation=_alter_cfg)
 
-        self._do_validate_topic_operation(
-            topic=topic,
-            op_name="read",
+        self._do_validate_operation(
+            **entities,
+            op_name="read_without_group",
             expected_to_pass=expect_readable,
-            operation=lambda topic: rpk.consume(topic=topic, n=1, offset=0))
+            operation=lambda topic, _: rpk.consume(topic=topic, n=1, offset=0))
+
+        if group is not None:
+
+            def read_with_group(topic, group):
+                with self.ck_consumer(group) as consumer:
+                    consumer.subscribe([topic])
+                    msg = consumer.poll(20)
+                    if msg is None or msg.error() is not None:
+                        raise ck.KafkaException(
+                            f"Failed to read from topic {topic} with group {group}: {msg and msg.error()}"
+                        )
+
+            self._do_validate_operation(**entities,
+                                        op_name="read_with_group",
+                                        expected_to_pass=expect_writable,
+                                        operation=read_with_group)
 
         # check if topic is writable only if it is expected to be blocked not to disturb the verifiers.
         if expect_writable:
             expect_writable = None
 
-        self._do_validate_topic_operation(
-            topic=topic,
+        self._do_validate_operation(
+            **entities,
             op_name="produce",
             expected_to_pass=expect_writable,
-            operation=lambda topic: rpk.produce(
+            operation=lambda topic, _: rpk.produce(
                 topic=topic, key="test-key", msg='test-msg'))
 
     def consume_and_validate(self, topic_name, expected_records):
@@ -822,15 +850,16 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
             "outbound migration complete, inbound migration not complete " \
             "and not in progress, so the topic should be removed"
 
-    def cancel_outbound(self, migration_id, topic_name, producer):
+    def cancel_outbound(self, migration_id, entities, producer):
+        topic_name = entities['topic']
         self.cancel(migration_id, topic_name)
         producer.stop_if_running()
         self.consume_and_validate(topic_name, producer.acked_records)
-        self.validate_topic_access(topic=topic_name,
-                                   expect_present=True,
-                                   expect_metadata_changeable=True,
-                                   expect_readable=True,
-                                   expect_writable=True)
+        self.validate_entities_access(entities=entities,
+                                      expect_present=True,
+                                      expect_metadata_changeable=True,
+                                      expect_readable=True,
+                                      expect_writable=True)
 
     def cancel_inbound(self, migration_id, topic_name):
         self.cancel(migration_id, topic_name)
@@ -904,7 +933,12 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
         self.client().create_topic(workload_topic)
 
         with self.start_producer(workload_topic.name) as producer:
-            groups = ["consumer-group-id"] if include_groups else []
+            group = "consumer-group-id" if include_groups else None
+            groups = [group] if group else []
+            entities = {
+                'topic': workload_topic.name,
+                'group': group,
+            }
 
             tl_topic_name = workload_topic.name if transfer_leadership else None
             with self.tl_thread(tl_topic_name):
@@ -919,26 +953,26 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                                                      stage='preparing'):
                     self.wait_for_migration_states(out_migration_id,
                                                    ['preparing', 'prepared'])
-                    return self.cancel_outbound(out_migration_id,
-                                                workload_topic.name, producer)
+                    return self.cancel_outbound(out_migration_id, entities,
+                                                producer)
 
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=True,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=True,
-                                           expect_writable=True)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=True,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=True,
+                                              expect_writable=True)
 
                 self.wait_for_migration_states(out_migration_id, ['prepared'])
 
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=True,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=True,
-                                           expect_writable=True)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=True,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=True,
+                                              expect_writable=True)
                 if cancellation == CancellationStage(dir='out',
                                                      stage='prepared'):
-                    return self.cancel_outbound(out_migration_id,
-                                                workload_topic.name, producer)
+                    return self.cancel_outbound(out_migration_id, entities,
+                                                producer)
 
                 self.admin.execute_data_migration_action(
                     out_migration_id, MigrationAction.execute)
@@ -946,8 +980,8 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                                                      stage='executing'):
                     self.wait_for_migration_states(out_migration_id,
                                                    ['executing', 'executed'])
-                    return self.cancel_outbound(out_migration_id,
-                                                workload_topic.name, producer)
+                    return self.cancel_outbound(out_migration_id, entities,
+                                                producer)
 
                 self.validate_entities_access(entities=entities,
                                               expect_present=True,
@@ -956,25 +990,25 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                                               expect_writable=None)
 
                 self.wait_for_migration_states(out_migration_id, ['executed'])
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=True,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=True,
-                                           expect_writable=False)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=True,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=True,
+                                              expect_writable=False)
                 if cancellation == CancellationStage(dir='out',
                                                      stage='executed'):
-                    return self.cancel_outbound(out_migration_id,
-                                                workload_topic.name, producer)
+                    return self.cancel_outbound(out_migration_id, entities,
+                                                producer)
 
                 time_before_final_action = now()
                 self.admin.execute_data_migration_action(
                     out_migration_id, MigrationAction.finish)
 
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=None,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=False,
-                                           expect_writable=False)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=None,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=False,
+                                              expect_writable=False)
 
                 self.wait_for_migration_states(out_migration_id,
                                                ['cut_over', 'finished'],
@@ -986,17 +1020,17 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
 
                 self.wait_for_migration_states(out_migration_id, ['finished'],
                                                time_before_final_action)
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=False,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=False,
-                                           expect_writable=False)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=False,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=False,
+                                              expect_writable=False)
                 self.admin.delete_data_migration(out_migration_id)
-                self.validate_topic_access(topic=workload_topic.name,
-                                           expect_present=False,
-                                           expect_metadata_changeable=False,
-                                           expect_readable=False,
-                                           expect_writable=False)
+                self.validate_entities_access(entities=entities,
+                                              expect_present=False,
+                                              expect_metadata_changeable=False,
+                                              expect_readable=False,
+                                              expect_writable=False)
 
             # attach topic back
             if use_alias:
@@ -1005,6 +1039,11 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
             else:
                 inbound_topic_name = workload_topic.name
                 alias = None
+
+            entities = {
+                'topic': inbound_topic_name,
+                'group': group,
+            }
 
             tl_topic_name = inbound_topic_name if transfer_leadership else None
             with self.tl_thread(tl_topic_name):
@@ -1018,12 +1057,13 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
 
                     # check if topic that is being migrated can not be created even if
                     # migration has not yet been prepared
-                    self._do_validate_topic_operation(
+                    self._do_validate_operation(
                         inbound_topic_name,
+                        None,
                         "creation",
                         expected_to_pass=False,
-                        operation=lambda topic: rpk.create_topic(topic=topic,
-                                                                 replicas=3))
+                        operation=lambda topic, _: rpk.create_topic(
+                            topic=topic, replicas=3))
                     self.admin.execute_data_migration_action(
                         in_migration_id, MigrationAction.prepare)
 
@@ -1036,8 +1076,8 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                                             inbound_topic_name)
                         continue
 
-                    self.validate_topic_access(
-                        topic=inbound_topic_name,
+                    self.validate_entities_access(
+                        entities=entities,
                         expect_present=None,
                         expect_metadata_changeable=False,
                         expect_readable=False,
@@ -1046,8 +1086,8 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                     self.wait_for_migration_states(in_migration_id,
                                                    ['prepared'])
 
-                    self.validate_topic_access(
-                        topic=inbound_topic_name,
+                    self.validate_entities_access(
+                        entities=entities,
                         expect_present=True,
                         expect_metadata_changeable=False,
                         expect_readable=False,
@@ -1077,8 +1117,8 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                                             inbound_topic_name)
                         continue
 
-                    self.validate_topic_access(
-                        topic=inbound_topic_name,
+                    self.validate_entities_access(
+                        entities=entities,
                         expect_present=True,
                         expect_metadata_changeable=False,
                         expect_readable=False,
@@ -1087,8 +1127,8 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                     self.wait_for_migration_states(in_migration_id,
                                                    ['executed'])
 
-                    self.validate_topic_access(
-                        topic=inbound_topic_name,
+                    self.validate_entities_access(
+                        entities=entities,
                         expect_present=True,
                         expect_metadata_changeable=False,
                         expect_readable=False,
@@ -1112,12 +1152,14 @@ class DataMigrationsApiTest(RedpandaTest, DataMigrationTestMixin):
                     # now the topic should be fully operational
                     self.consume_and_validate(inbound_topic_name,
                                               producer.acked_records)
-                    self.validate_topic_access(topic=inbound_topic_name,
-                                               expect_present=True,
-                                               expect_metadata_changeable=True,
-                                               expect_readable=True,
-                                               expect_writable=True)
                     remounted = True
+
+            # rejoining a migrated group isn't stable with leadership transfers
+            self.validate_entities_access(entities=entities,
+                                          expect_present=True,
+                                          expect_metadata_changeable=True,
+                                          expect_readable=True,
+                                          expect_writable=True)
 
     @cluster(num_nodes=3, log_allow_list=MIGRATION_LOG_ALLOW_LIST)
     def test_list_mountable_topics(self):
