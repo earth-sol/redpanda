@@ -49,6 +49,12 @@ auto fmt::formatter<cluster_link::model::mirror_topic_state>::format(
     return fmt::format_to(ctx.out(), "{}", to_string_view(s));
 }
 
+auto fmt::formatter<cluster_link::model::task_state>::format(
+  cluster_link::model::task_state st, format_context& ctx) const
+  -> decltype(ctx.out()) {
+    return fmt::format_to(ctx.out(), "{}", to_string_view(st));
+}
+
 auto fmt::formatter<cluster_link::model::scram_credentials>::format(
   const cluster_link::model::scram_credentials& c, format_context& ctx)
   -> decltype(ctx.out()) {

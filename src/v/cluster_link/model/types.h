@@ -55,6 +55,38 @@ static constexpr std::string_view to_string_view(mirror_topic_state s) {
     return "unknown";
 }
 
+enum class task_state : uint8_t {
+    /// The task is currently active and processing
+    active,
+    /// The task has been paused by the user
+    paused,
+    /// The link to the source cluster is unavailable.  This could be a
+    /// temporary condition that can be resolved by changing configuration of
+    /// the task or on the source cluster.  This state is informative and the
+    /// task will continue to run at its set interval
+    link_unavailable,
+    /// The task is not configured to run
+    not_running,
+    /// The task has encountered an unexpected fault
+    faulted,
+};
+
+static constexpr std::string_view to_string_view(task_state st) {
+    switch (st) {
+    case task_state::active:
+        return "active";
+    case task_state::paused:
+        return "paused";
+    case task_state::link_unavailable:
+        return "link_unavailable";
+    case task_state::not_running:
+        return "not_running";
+    case task_state::faulted:
+        return "faulted";
+    }
+    return "unknown";
+}
+
 /**
  * @brief SCRAM credentials to use for authentication
  */
@@ -225,6 +257,13 @@ template<>
 struct fmt::formatter<cluster_link::model::mirror_topic_state>
   : fmt::formatter<string_view> {
     auto format(cluster_link::model::mirror_topic_state s, format_context& ctx)
+      -> decltype(ctx.out());
+};
+
+template<>
+struct fmt::formatter<cluster_link::model::task_state>
+  : fmt::formatter<string_view> {
+    auto format(cluster_link::model::task_state, format_context& ctx) const
       -> decltype(ctx.out());
 };
 
