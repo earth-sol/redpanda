@@ -9,11 +9,10 @@
  */
 #pragma once
 
-#include "base/outcome.h"
-#include "cluster/cloud_metadata/error_outcome.h"
+#include "cluster/errc.h"
 #include "container/chunked_vector.h"
+#include "kafka/protocol/types.h"
 #include "model/fundamental.h"
-#include "model/metadata.h"
 #include "serde/envelope.h"
 
 namespace cluster {
@@ -102,6 +101,115 @@ struct group_offsets_snapshot
     friend bool
     operator==(const group_offsets_snapshot&, const group_offsets_snapshot&)
       = default;
+};
+
+struct get_group_offsets_request
+  : public serde::envelope<
+      get_group_offsets_request,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using self = get_group_offsets_request;
+
+    model::partition_id co_partition;
+    chunked_vector<kafka::group_id> groups;
+
+    get_group_offsets_request() = default;
+    get_group_offsets_request(
+      model::partition_id co_partition, chunked_vector<kafka::group_id> groups)
+      : co_partition(co_partition)
+      , groups(std::move(groups)) {}
+
+    /**
+     * This type must be copyable to operate with leader_router
+     */
+    get_group_offsets_request(get_group_offsets_request&&) = default;
+    get_group_offsets_request& operator=(get_group_offsets_request&&) = default;
+    get_group_offsets_request(const get_group_offsets_request& other)
+      : co_partition(other.co_partition)
+      , groups(other.groups.copy()) {}
+    get_group_offsets_request&
+    operator=(const get_group_offsets_request& other) {
+        return *this = auto(other);
+    };
+
+    auto serde_fields() { return std::tie(co_partition, groups); }
+    friend bool operator==(const self&, const self&) = default;
+};
+
+struct get_group_offsets_reply
+  : public serde::envelope<
+      get_group_offsets_reply,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using self = get_group_offsets_reply;
+
+    cluster::errc ec;
+    chunked_vector<group_offsets> group_offsets;
+
+    get_group_offsets_reply() = default;
+    get_group_offsets_reply(
+      cluster::errc ec, chunked_vector<cluster::group_offsets> group_offsets)
+      : ec(ec)
+      , group_offsets(std::move(group_offsets)) {}
+
+    /**
+     * This type must be copyable to operate with leader_router
+     */
+    get_group_offsets_reply(get_group_offsets_reply&&) = default;
+    get_group_offsets_reply& operator=(get_group_offsets_reply&&) = default;
+    get_group_offsets_reply(const get_group_offsets_reply& other)
+      : ec(other.ec)
+      , group_offsets(
+          std::from_range,
+          other.group_offsets | std::views::transform(&group_offsets::copy)) {}
+    get_group_offsets_reply& operator=(const get_group_offsets_reply& other) {
+        return *this = auto(other);
+    };
+
+    auto serde_fields() { return std::tie(ec, group_offsets); }
+    friend bool operator==(const self&, const self&) = default;
+};
+
+struct set_group_offsets_request
+  : public serde::envelope<
+      set_group_offsets_request,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using self = set_group_offsets_request;
+
+    group_offsets_snapshot group_offsets;
+
+    set_group_offsets_request() = default;
+    explicit set_group_offsets_request(group_offsets_snapshot group_offsets)
+      : group_offsets(std::move(group_offsets)) {}
+
+    /**
+     * This type must be copyable to operate with leader_router
+     */
+    set_group_offsets_request(set_group_offsets_request&&) = default;
+    set_group_offsets_request& operator=(set_group_offsets_request&&) = default;
+    set_group_offsets_request(const set_group_offsets_request& other)
+      : group_offsets(other.group_offsets.copy()) {}
+    set_group_offsets_request&
+    operator=(const set_group_offsets_request& other) {
+        return *this = auto(other);
+    };
+
+    auto serde_fields() { return std::tie(group_offsets); }
+    friend bool operator==(const self&, const self&) = default;
+};
+
+struct set_group_offsets_reply
+  : public serde::envelope<
+      set_group_offsets_reply,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using self = set_group_offsets_reply;
+
+    cluster::errc ec;
+
+    auto serde_fields() { return std::tie(ec); }
+    friend bool operator==(const self&, const self&) = default;
 };
 
 } // namespace cluster
