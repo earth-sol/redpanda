@@ -438,6 +438,21 @@ static ss::future<segment_set> unsafe_do_recover(
             vlog(stlog.info, "Recovered: {}", s);
             good.emplace_back(std::move(s));
         }
+
+        // Pass `good` by value on purpose, we need to preserve segments for
+        // sad return path below in case we are unable to produce a
+        // contiguous segment set here.
+        auto seg_set_opt = maybe_create_contiguous_segment_set(good).get();
+        if (seg_set_opt.has_value()) {
+            return std::move(seg_set_opt).value();
+        }
+        vlog(
+          stlog.warn,
+          "Failed to create contiguous segment set from recovered segment "
+          "set of size {} [{}-{}] - using recovered segments as is.",
+          good.size(),
+          good.front()->filename(),
+          good.back()->filename());
         return segment_set(std::move(good));
     });
 }
