@@ -245,6 +245,7 @@ redpanda_cc_library(
         "//src/v/security/audit",
         "//src/v/security/audit:types",
         "//src/v/serde",
+        "//src/v/serde/protobuf:rpc",
         "//src/v/ssx:async_algorithm",
         "//src/v/ssx:sformat",
         "//src/v/storage",

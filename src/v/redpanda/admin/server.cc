@@ -114,6 +114,7 @@
 #include <seastar/coroutine/as_future.hh>
 #include <seastar/coroutine/maybe_yield.hh>
 #include <seastar/http/api_docs.hh>
+#include <seastar/http/common.hh>
 #include <seastar/http/exception.hh>
 #include <seastar/http/httpd.hh>
 #include <seastar/http/json_path.hh>
@@ -338,6 +339,33 @@ admin_server::admin_server(
   , _default_blocked_reactor_notify(
       ss::engine().get_blocked_reactor_notify_ms()) {
     _server.set_content_streaming(true);
+}
+
+void admin_server::add_service(
+  std::unique_ptr<serde::pb::rpc::base_service> service) {
+    for (auto& route : service->all_routes()) {
+        // TODO: Do we need a real nickname?
+        ss::sstring nickname;
+        ss::httpd::path_description path{
+          fmt::format("/v2{}", route.path),
+          ss::httpd::operation_type::POST,
+          nickname,
+          /*path_parameters=*/{},
+          /*mandatory_params=*/{},
+        };
+        switch (route.authz_level) {
+        case serde::pb::rpc::authz_level::unauthenticated:
+            register_route_raw_async<publik>(path, route.handler);
+            break;
+        case serde::pb::rpc::authz_level::user:
+            register_route_raw_async<user>(path, route.handler);
+            break;
+        case serde::pb::rpc::authz_level::superuser:
+            register_route_raw_async<superuser>(path, route.handler);
+            break;
+        }
+    }
+    _services.push_back(std::move(service));
 }
 
 ss::future<> admin_server::start() {
