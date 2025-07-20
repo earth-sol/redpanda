@@ -97,6 +97,28 @@ redpanda_cc_library(
 )
 
 redpanda_cc_library(
+    name = "source_topic_syncer",
+    srcs = [
+        "source_topic_syncer.cc",
+    ],
+    hdrs = [
+        "source_topic_syncer.h",
+    ],
+    implementation_deps = [
+        ":logger",
+        "//src/v/cluster_link/model",
+        "//src/v/kafka/server:topic_config_utils",
+        "@fmt",
+    ],
+    include_prefix = "cluster_link",
+    visibility = ["//src/v/cluster_link:__subpackages__"],
+    deps = [
+        ":impl",
+        "//src/v/kafka/client:cluster",
+    ],
+)
+
+redpanda_cc_library(
     name = "cluster_link",
     srcs = [
         "service.cc",
