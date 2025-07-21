@@ -13,7 +13,6 @@
 
 #include "container/fragmented_vector.h"
 #include "model/fundamental.h"
-#include "model/limits.h"
 #include "model/record.h"
 #include "model/timeout_clock.h"
 #include "model/timestamp.h"
@@ -21,7 +20,6 @@
 #include "storage/fwd.h"
 #include "storage/key_offset_map.h"
 #include "storage/scoped_file_tracker.h"
-#include "utils/tristate.h"
 
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/file.hh> //io_priority
