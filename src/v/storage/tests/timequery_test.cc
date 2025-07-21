@@ -67,7 +67,7 @@ TEST_F(log_builder_fixture, timequery) {
     for (auto offset = 100; offset <= 200; offset++) {
         auto ts = 100 + (offset - 100) / 5;
         auto batch = make_random_batch(
-          model::term_id(0), model::offset(offset), model::timestamp(ts));
+          model::term_id(1), model::offset(offset), model::timestamp(ts));
         b | add_batch(std::move(batch));
     }
 
@@ -94,7 +94,8 @@ TEST_F(log_builder_fixture, timequery) {
             EXPECT_EQ(
               res,
               storage::timequery_result(
-                model::term_id(0),
+                start_offset > model::offset{100} ? model::term_id(1)
+                                                  : model::term_id(0),
                 start_offset,
                 model::timestamp(start_offset)));
         }
@@ -139,7 +140,7 @@ TEST_F(log_builder_fixture, timequery) {
         EXPECT_EQ(
           res,
           storage::timequery_result(
-            model::term_id(0), model::offset(offset), model::timestamp(ts)));
+            model::term_id(1), model::offset(offset), model::timestamp(ts)));
     }
 
     b | stop();
