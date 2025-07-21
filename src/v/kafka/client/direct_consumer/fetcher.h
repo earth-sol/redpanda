@@ -15,6 +15,7 @@
 #include "kafka/client/direct_consumer/data_queue.h"
 #include "kafka/protocol/fetch.h"
 #include "kafka/protocol/list_offset.h"
+#include "kafka/protocol/types.h"
 #include "model/fundamental.h"
 #include "utils/mutex.h"
 #include "utils/prefix_logger.h"
@@ -35,12 +36,50 @@ struct fetch_session_state {
         incremental_fetch,
         needs_close,
     };
-    void update_fetch_session(kafka::fetch_session_id id) {
-        session_id = id;
-        session_epoch++;
-    }
+
     explicit fetch_session_state(
       fetch_sessions_enabled sessions_enabled = fetch_sessions_enabled::yes);
+
+    /**
+     *         reset()            any ID
+     *    sessions OFF           +------+
+     * (epoch = final)|          |      |
+     *                |          |      |
+     *                |     +----v------+---+
+     * +--------------+---->|     none      |
+     * |                    +-------+-------+
+     * |                            | enable
+     * |                            | sessions
+     * |                            v (epoch = init)
+     * |        reset()     +---------------+
+     * |    sessions ON     |               |<---+
+     * |     -------------->|   full_fetch  |    | invalid ID
+     * | (epoch = init) |   |               +----+
+     * |                |   +-------+-------+
+     * |                |           |
+     * |                |           | valid ID (epoch++)
+     * |                |           v
+     * |                |   +---------------+
+     * |                +---+               |<--+
+     * |                |   |  incremental  |   | same ID (epoch++)
+     * |     invalid ID |   |               +---+
+     * |    sessions ON |   +-------+-------+
+     * | (epoch = init) |           |
+     * |                |           | different ID (epoch = final)
+     * |                |           v OR disable sessions
+     * |                |   +---------------+
+     * |                |   |               |<--+
+     * |                +---+  needs_close  |   | valid ID
+     * |                    |               +---+
+     * +------------------------------------+
+     *       invalid ID
+     *     sessions OFF
+     *  (epoch = final)
+     *
+     * Basic lifecycle of a fetch session, driven primarily by session IDs
+     * returned by the broker in fetch_response.
+     */
+    void update_fetch_session(kafka::fetch_session_id id);
     void reset();
     void toggle(fetch_sessions_enabled enable);
 
@@ -72,6 +111,13 @@ struct fetch_session_state {
     state session_state;
 
 private:
+    void advance_epoch() {
+        if (session_epoch == kafka::fetch_session_epoch::max()) {
+            session_epoch = kafka::initial_fetch_session_epoch + 1;
+        } else {
+            ++session_epoch;
+        }
+    }
     fetch_sessions_enabled _fetch_sessions_enabled;
     fmt::iterator format_to(fmt::iterator it) const;
 };

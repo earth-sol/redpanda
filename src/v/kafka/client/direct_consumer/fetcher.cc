@@ -10,7 +10,6 @@
  */
 #include "kafka/client/direct_consumer/fetcher.h"
 
-#include "absl/container/flat_hash_set.h"
 #include "base/format_to.h"
 #include "kafka/client/direct_consumer/data_queue.h"
 #include "kafka/client/direct_consumer/direct_consumer.h"
@@ -31,6 +30,42 @@ fetch_session_state::fetch_session_state(
   : _fetch_sessions_enabled(sessions_enabled) {
     reset();
 }
+
+void fetch_session_state::update_fetch_session(kafka::fetch_session_id id) {
+    switch (session_state) {
+    case state::none:
+        reset();
+        return;
+    case state::need_full_fetch:
+        reset();
+        if (id != kafka::invalid_fetch_session_id) {
+            session_id = id;
+            session_state = state::incremental_fetch;
+            advance_epoch();
+        }
+        return;
+    case state::incremental_fetch:
+        if (id == kafka::invalid_fetch_session_id) {
+            reset();
+        } else if (id == session_id) {
+            session_state = state::incremental_fetch;
+            advance_epoch();
+        } else {
+            session_state = state::needs_close;
+            session_epoch = kafka::final_fetch_session_epoch;
+        }
+        return;
+    case state::needs_close:
+        if (id == kafka::invalid_fetch_session_id) {
+            reset();
+        } else {
+            session_state = state::needs_close;
+            session_epoch = kafka::final_fetch_session_epoch;
+        }
+        return;
+    }
+}
+
 void fetch_session_state::reset() {
     session_id = kafka::invalid_fetch_session_id;
     if (_fetch_sessions_enabled) {
