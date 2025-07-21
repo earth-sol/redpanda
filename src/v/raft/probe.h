@@ -74,6 +74,7 @@ public:
     }
 
     uint32_t get_recovery_resets() const { return _recovery_resets; }
+    uint32_t get_log_truncations() { return _log_truncations; }
 
 private:
     uint64_t _vote_requests = 0;
