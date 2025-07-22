@@ -2162,9 +2162,6 @@ void application::wire_up_redpanda_services(
                 controller.get());
           }))
           .get();
-
-        cloud_topics_api.invoke_on_all([](auto& app) { return app.start(); })
-          .get();
     }
 
     // group membership
@@ -3384,6 +3381,11 @@ void application::start_runtime_services(
             return fm.verify_enterprise_license();
         })
       .get();
+
+    if (cloud_storage_api.local_is_initialized()) {
+        cloud_topics_api.invoke_on_all([](auto& app) { return app.start(); })
+          .get();
+    }
 
     _debug_bundle_service.invoke_on_all(&debug_bundle::service::start).get();
 
