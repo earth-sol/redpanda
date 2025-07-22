@@ -184,6 +184,10 @@ public:
     bool is_leader() const {
         return is_elected_leader() && _term == _confirmed_term;
     }
+    // If this node is not yet a voter, it is a learner.
+    bool is_learner() const {
+        return !_configuration_manager.get_latest().is_voter(_self);
+    }
     bool is_candidate() const { return _vstate == vote_state::candidate; }
     std::optional<model::node_id> get_leader_id() const {
         return _leader_id ? std::make_optional(_leader_id->id()) : std::nullopt;
