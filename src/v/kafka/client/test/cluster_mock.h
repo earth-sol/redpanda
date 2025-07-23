@@ -130,6 +130,12 @@ public:
 
     auto& get_topics() { return _topics; }
 
+    void set_controller_id(std::optional<model::node_id> id) {
+        _controller_id = id;
+    }
+
+    config::configuration& mock_config() { return _mock_config; }
+
 public:
     supported_versions default_supported_versions;
 
@@ -170,6 +176,9 @@ private:
       _broker_api_versions;
     chunked_hash_map<model::topic, topic_metadata> _topics;
 
+    config::configuration _mock_config;
+
+    // If unset, will use the node_id of the first broker in _brokers
     std::optional<model::node_id> _controller_id;
     prefix_logger _logger;
 };
