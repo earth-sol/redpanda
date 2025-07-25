@@ -99,9 +99,13 @@ class CompactionRecoveryTest(RedpandaTest):
             kafka_tools.produce(self.topic, 1024, 1024)
             storage = self.redpanda.storage()
             partitions[:] = storage.partitions("kafka", self.topic)
-            return partitions and all(
+            partitions_finished = list(
                 map(lambda p: len(p.segments) > count and p.recovered(),
                     partitions))
+            self.logger.debug(
+                f"Partition segments: {list(zip(partitions, partitions_finished))}"
+            )
+            return all(partitions_finished)
 
         wait_until(lambda: check_partitions(),
                    timeout_sec=90,
