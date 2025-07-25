@@ -140,6 +140,13 @@ def _common_redpanda_package_cfg(ctx, package_content, fips_enabled, base_path =
         return "{}/{}".format(base_path, path) if base_path else path
 
     files = []
+
+    # Redpanda binary is always required.
+    files.append({
+        "path": _path("bin"),
+        "name": "redpanda",
+        "source": package_content.redpanda_binary.path,
+    })
     if package_content.rp_util != None:
         files.append({
             "path": _path("bin"),
@@ -206,7 +213,6 @@ def _common_redpanda_package_cfg(ctx, package_content, fips_enabled, base_path =
         "package_dirs": [
             _path("bin"),
             _path("lib"),
-            _path("libexec"),
             _path("config"),
         ],
         "owner": ctx.attr.owner,
@@ -214,7 +220,6 @@ def _common_redpanda_package_cfg(ctx, package_content, fips_enabled, base_path =
 
 def _dir_package_configuration(ctx, package_content, fips_enabled):
     cfg = _common_redpanda_package_cfg(ctx, package_content, fips_enabled)
-    cfg["package_files"].append({"path": "libexec", "name": "redpanda", "source": package_content.redpanda_binary.path})
     cfg["directory_mode"] = True
     if ctx.file.default_yaml_config != None:
         cfg["package_files"].append({
@@ -226,7 +231,6 @@ def _dir_package_configuration(ctx, package_content, fips_enabled):
 
 def _tarball_package_configuration(ctx, package_content, fips_enabled):
     cfg = _common_redpanda_package_cfg(ctx, package_content, fips_enabled, "opt/redpanda")
-    cfg["package_files"].append({"path": "opt/redpanda/bin", "name": "redpanda", "source": package_content.redpanda_binary.path})
     cfg["directory_mode"] = False
     cfg["package_dirs"].append("etc/redpanda")
     cfg["package_dirs"].append("var/lib/redpanda/data")
