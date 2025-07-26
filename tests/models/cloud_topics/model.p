@@ -22,7 +22,7 @@ machine MultiPartitionProduceTest {
 
       storage = new Storage();
 
-      while (sizeof(partitions) < 3) {
+      while (sizeof(partitions) < num_partitions) {
         partitions += (new Partition());
       }
 
