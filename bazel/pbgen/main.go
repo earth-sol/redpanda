@@ -680,7 +680,7 @@ func (g *implGenerator) generateServiceHandlers(service protoreflect.ServiceDesc
 			pascalToSnakeCase(string(method.Name())),
 		)
 		w.Indent()
-		w.Println(`if (req->get_header("Content-Type") != "application/proto" && req->get_header("Content-Type") != "application/json") {`)
+		w.Println(`if (auto ct = req->get_header("Content-Type"); ct != "application/proto" && ct != "application/json") {`)
 		w.Indent()
 		w.Println(`co_return serde::pb::rpc::unimplemented_exception("only application/proto or application/json content-type is supported").handle(std::move(reply));`)
 		w.Dedent()
