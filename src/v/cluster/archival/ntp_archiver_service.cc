@@ -893,9 +893,12 @@ ss::future<std::error_code> ntp_archiver::process_anomalies(
   model::timestamp scrub_timestamp,
   std::optional<model::offset> last_scrubbed_offset,
   cloud_storage::scrub_status status,
-  cloud_storage::anomalies detected) {
+  cloud_storage::anomalies detected,
+  ss::abort_source& caller_as) {
+    ssx::composite_abort_source cas{caller_as, _as};
+
     // If there's ongoing housekeeping job, let it finish first.
-    auto units = co_await _mutex.get_units(_as);
+    auto units = co_await _mutex.get_units(cas.as());
 
     auto sync_timeout = config::shard_local_cfg()
                           .cloud_storage_metadata_sync_timeout_ms.value();
@@ -907,7 +910,7 @@ ss::future<std::error_code> ntp_archiver::process_anomalies(
       status,
       std::move(detected),
       deadline,
-      _as);
+      cas.as());
     if (error != cluster::errc::success) {
         vlog(
           _rtclog.warn,
