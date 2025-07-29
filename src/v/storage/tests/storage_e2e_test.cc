@@ -3117,7 +3117,7 @@ TEST_F(storage_test_fixture, compaction_non_raft_batches_regression_test) {
                    raft::group_id{0},
                    model::offset_translator_batch_types())
                  .get();
-    log->start(std::nullopt).get();
+    log->start(std::nullopt, as).get();
 
     storage::log_append_config appender_cfg{
       .should_fsync = storage::log_append_config::fsync::no,
@@ -3195,7 +3195,7 @@ TEST_F(storage_test_fixture, compaction_non_raft_batches_regression_test) {
               raft::group_id{0},
               model::offset_translator_batch_types())
             .get();
-    log->start(std::nullopt).get();
+    log->start(std::nullopt, as).get();
 
     // validate the translation by comparing it with state before
     // compaction.
