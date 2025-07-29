@@ -10,8 +10,8 @@
 
 #include "cloud_topics/errc.h"
 #include "cloud_topics/level_zero/read_pipeline.h"
-#include "cloud_topics/read_path/fetch_request_handler.h"
-#include "cloud_topics/read_path/tests/materialized_extent_fixture.h"
+#include "cloud_topics/level_zero/reader/fetch_request_handler.h"
+#include "cloud_topics/level_zero/reader/tests/materialized_extent_fixture.h"
 #include "container/fragmented_vector.h"
 #include "model/fundamental.h"
 #include "model/namespace.h"

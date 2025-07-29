@@ -2,8 +2,8 @@ load("//bazel:build.bzl", "redpanda_cc_library")
 
 package(default_visibility = [
     "//src/v/cloud_topics:__pkg__",
-    "//src/v/cloud_topics/read_path:__pkg__",
-    "//src/v/cloud_topics/read_path/tests:__pkg__",
+    "//src/v/cloud_topics/level_zero/reader:__pkg__",
+    "//src/v/cloud_topics/level_zero/reader/tests:__pkg__",
 ])
 
 redpanda_cc_library(
@@ -14,7 +14,7 @@ redpanda_cc_library(
     hdrs = [
         "materialized_extent.h",
     ],
-    include_prefix = "cloud_topics/read_path",
+    include_prefix = "cloud_topics/level_zero/reader",
     deps = [
         "//src/v/base",
         "//src/v/bytes",
@@ -49,7 +49,7 @@ redpanda_cc_library(
     hdrs = [
         "materialized_extent_reader.h",
     ],
-    include_prefix = "cloud_topics/read_path",
+    include_prefix = "cloud_topics/level_zero/reader",
     deps = [
         "//src/v/base",
         "//src/v/cloud_io:basic_cache_service_api",
@@ -59,7 +59,7 @@ redpanda_cc_library(
         "//src/v/cloud_topics:logger",
         "//src/v/cloud_topics:placeholder",
         "//src/v/cloud_topics:types",
-        "//src/v/cloud_topics/read_path:materialized_extent",
+        "//src/v/cloud_topics/level_zero/reader:materialized_extent",
         "//src/v/config",
         "//src/v/container:chunked_circular_buffer",
         "//src/v/model",
@@ -77,7 +77,7 @@ redpanda_cc_library(
     hdrs = [
         "fetch_request_handler.h",
     ],
-    include_prefix = "cloud_topics/read_path",
+    include_prefix = "cloud_topics/level_zero/reader",
     deps = [
         "//src/v/base",
         "//src/v/bytes",
@@ -90,11 +90,39 @@ redpanda_cc_library(
         "//src/v/cloud_topics/level_zero:event_filter",
         "//src/v/cloud_topics/level_zero:read_pipeline",
         "//src/v/cloud_topics/level_zero:read_request",
-        "//src/v/cloud_topics/read_path:materialized_extent_reader",
+        "//src/v/cloud_topics/level_zero/reader:materialized_extent_reader",
         "//src/v/model",
         "//src/v/ssx:future_util",
         "//src/v/storage",
         "//src/v/utils:retry_chain_node",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
+    name = "reader",
+    srcs = [
+        "reader.cc",
+    ],
+    hdrs = [
+        "reader.h",
+    ],
+    implementation_deps = [
+        "//src/v/cloud_topics:app",
+        "//src/v/cloud_topics:data_plane_api",
+        "//src/v/cloud_topics:logger",
+        "//src/v/cloud_topics:placeholder",
+        "//src/v/cluster",
+        "//src/v/config",
+    ],
+    include_prefix = "cloud_topics/level_zero/reader",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/v/base",
+        "//src/v/cloud_topics:extent_meta",
+        "//src/v/model",
+        "//src/v/storage",
+        "@boost//:outcome",
         "@seastar",
     ],
 )

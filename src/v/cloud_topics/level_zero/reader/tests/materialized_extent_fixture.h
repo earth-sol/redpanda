@@ -14,7 +14,7 @@
 #include "cloud_io/basic_cache_service_api.h"
 #include "cloud_topics/dl_placeholder.h"
 #include "cloud_topics/extent_meta.h"
-#include "cloud_topics/read_path/materialized_extent.h"
+#include "cloud_topics/level_zero/reader/materialized_extent.h"
 #include "container/fragmented_vector.h"
 #include "mocks.h"
 #include "model/fundamental.h"

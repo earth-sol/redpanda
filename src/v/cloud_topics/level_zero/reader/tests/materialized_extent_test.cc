@@ -9,8 +9,8 @@
  */
 
 #include "cloud_topics/errc.h"
-#include "cloud_topics/read_path/materialized_extent.h"
-#include "cloud_topics/read_path/tests/materialized_extent_fixture.h"
+#include "cloud_topics/level_zero/reader/materialized_extent.h"
+#include "cloud_topics/level_zero/reader/tests/materialized_extent_fixture.h"
 #include "test_utils/test.h"
 
 #include <seastar/core/abort_source.hh>

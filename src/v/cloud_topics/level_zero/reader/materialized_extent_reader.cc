@@ -8,14 +8,14 @@
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
 
-#include "cloud_topics/read_path/materialized_extent_reader.h"
+#include "cloud_topics/level_zero/reader/materialized_extent_reader.h"
 
 #include "cloud_io/basic_cache_service_api.h"
 #include "cloud_io/io_result.h"
 #include "cloud_io/remote.h"
 #include "cloud_topics/errc.h"
+#include "cloud_topics/level_zero/reader/materialized_extent.h"
 #include "cloud_topics/logger.h"
-#include "cloud_topics/read_path/materialized_extent.h"
 #include "model/fundamental.h"
 
 #include <seastar/core/file.hh>

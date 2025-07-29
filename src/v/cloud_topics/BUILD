@@ -8,8 +8,6 @@ package(default_visibility = [
     "//src/v/cloud_topics/level_zero:__subpackages__",
     "//src/v/cloud_topics/level_zero/throttler:__pkg__",
     "//src/v/cloud_topics/level_zero/throttler/tests:__pkg__",
-    "//src/v/cloud_topics/read_path:__pkg__",
-    "//src/v/cloud_topics/read_path/tests:__pkg__",
     "//src/v/cloud_topics/tests:__pkg__",
     "//src/v/kafka/data:__pkg__",
 ])
@@ -98,6 +96,7 @@ redpanda_cc_library(
     include_prefix = "cloud_topics",
     visibility = [
         "//src/v/cloud_topics/frontend:__pkg__",
+        "//src/v/cloud_topics/level_zero/reader:__pkg__",
         "//src/v/kafka/data:__pkg__",
         "//src/v/redpanda:__pkg__",
     ],
@@ -122,6 +121,7 @@ redpanda_cc_library(
     include_prefix = "cloud_topics",
     visibility = [
         "//src/v/cloud_topics/frontend:__pkg__",
+        "//src/v/cloud_topics/level_zero/reader:__pkg__",
         "//src/v/cloud_topics/level_zero/reconciler:__pkg__",
         "//src/v/kafka/data:__pkg__",
         "//src/v/redpanda:__pkg__",
@@ -157,9 +157,9 @@ redpanda_cc_library(
         "//src/v/cloud_topics/level_zero:read_pipeline",
         "//src/v/cloud_topics/level_zero:write_pipeline",
         "//src/v/cloud_topics/level_zero/batcher",
+        "//src/v/cloud_topics/level_zero/reader:fetch_handler",
         "//src/v/cloud_topics/level_zero/reconciler",
         "//src/v/cloud_topics/level_zero/throttler",
-        "//src/v/cloud_topics/read_path:fetch_handler",
         "//src/v/model",
         "//src/v/storage",
     ],

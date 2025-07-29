@@ -9,8 +9,8 @@
  */
 
 #include "base/vlog.h"
-#include "cloud_topics/read_path/materialized_extent_reader.h"
-#include "cloud_topics/read_path/tests/materialized_extent_fixture.h"
+#include "cloud_topics/level_zero/reader/materialized_extent_reader.h"
+#include "cloud_topics/level_zero/reader/tests/materialized_extent_fixture.h"
 #include "container/fragmented_vector.h"
 #include "model/fundamental.h"
 #include "model/record.h"
