@@ -4378,6 +4378,29 @@ class SchemaRegistryModeMutableTest(SchemaRegistryEndpoints):
         got_ver_to_id = {int(elem["version"]): elem["id"] for elem in resp}
         self.assert_equal(expected_ver_to_id, got_ver_to_id)
 
+    @cluster(num_nodes=3)
+    def test_schema_id_smaller_than_one(self):
+        sub = "test-subject-1"
+
+        self.logger.debug("Post a schema with id=0 - expect schema_id=0")
+        result_raw = self.sr_client.post_subjects_subject_versions(
+            sub, data=json.dumps({
+                "id": 0,
+                "schema": schema1_def
+            }))
+        self.assert_equal(result_raw.status_code, 200)
+        self.assert_equal(result_raw.json()["id"], 0)
+
+        self.logger.debug(
+            "Post another schema with id=-1 - expect schema_id=1")
+        result_raw = self.sr_client.post_subjects_subject_versions(
+            sub, data=json.dumps({
+                "id": -1,
+                "schema": schema2_def
+            }))
+        self.assert_equal(result_raw.status_code, 200)
+        self.assert_equal(result_raw.json()["id"], 1)
+
 
 class SchemaRegistryBasicAuthTest(SchemaRegistryEndpoints):
     """
