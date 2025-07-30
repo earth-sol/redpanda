@@ -265,6 +265,12 @@ TEST(ProtobufCompat, Wellknown) {
       absl::Seconds(123) + absl::Nanoseconds(789));
     original.get_duration_map().insert(
       {"foo", absl::Seconds(1) + absl::Nanoseconds(7)});
+    original.set_single_field_mask(
+      {.paths = {"foo_bar", "really.long_path.nested"}});
+    original.get_repeated_field_mask().push_back(
+      {.paths = {"foo_bar", "really.long_path.nested"}});
+    original.get_field_mask_map().insert(
+      {"qux", {.paths = {"tada", "really.nested"}}});
     proto::example::well_known_protos deserialized;
     iobuf serialized = original.to_proto().get();
     EXPECT_NO_THROW(

@@ -13,6 +13,7 @@
 
 #include "absl/time/time.h"
 #include "serde/json/parser.h"
+#include "serde/protobuf/field_mask.h"
 
 #include <seastar/core/coroutine.hh>
 #include <seastar/core/future.hh>
@@ -114,6 +115,8 @@ iobuf read_base64_encoded_bytes(peekable_parser* parser);
 namespace wellknown {
 ss::future<absl::Duration> duration_from_json(peekable_parser* parser);
 iobuf duration_to_json(absl::Duration);
+ss::future<field_mask> field_mask_from_json(peekable_parser* parser);
+iobuf field_mask_to_json(const field_mask&);
 } // namespace wellknown
 
 } // namespace serde::pb::json

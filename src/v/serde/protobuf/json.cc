@@ -11,8 +11,10 @@
 #include "serde/protobuf/json.h"
 
 #include "absl/strings/numbers.h"
+#include "absl/strings/str_split.h"
 #include "base/units.h"
 #include "serde/json/writer.h"
+#include "serde/protobuf/field_mask.h"
 #include "utils/base64.h"
 
 #include <seastar/core/coroutine.hh>
@@ -311,6 +313,65 @@ iobuf duration_to_json(absl::Duration d) {
     w.key("nanos");
     w.integer(nanos);
     w.end_object();
+    return std::move(w).finish();
+}
+
+namespace {
+void proto_name_to_json_name(std::string_view s, iobuf* b) {
+    bool was_underscore = false;
+    for (char c : s) {
+        if (c != '_') {
+            if (was_underscore && absl::ascii_islower(c)) {
+                c = absl::ascii_toupper(c);
+            }
+            b->append(&c, 1);
+        }
+        was_underscore = c == '_';
+    }
+}
+
+void json_name_to_proto_name(std::string_view s, std::string* b) {
+    for (char c : s) {
+        if (absl::ascii_isupper(c)) {
+            b->push_back('_');
+            c = absl::ascii_tolower(c);
+        }
+        b->push_back(c);
+    }
+}
+} // namespace
+
+ss::future<field_mask> field_mask_from_json(peekable_parser* parser) {
+    co_await parser->next();
+    field_mask mask;
+    ss::sstring encoded = read_string(parser);
+    if (encoded.empty()) {
+        co_return mask;
+    }
+    std::string proto_name;
+    for (std::string_view json_name :
+         absl::StrSplit(std::string_view(encoded), ',')) {
+        if (json_name.empty()) {
+            throw std::runtime_error(
+              fmt::format("empty field mask path in: {}", encoded));
+        }
+        proto_name.clear();
+        json_name_to_proto_name(json_name, &proto_name);
+        mask.paths.emplace_back(std::string_view(proto_name));
+    }
+    co_return mask;
+}
+
+iobuf field_mask_to_json(const field_mask& mask) {
+    iobuf encoded;
+    for (const auto& path : mask.paths) {
+        if (!encoded.empty()) {
+            encoded.append(std::to_array({','}));
+        }
+        proto_name_to_json_name(path, &encoded);
+    }
+    serde::json::writer w;
+    w.string(encoded);
     return std::move(w).finish();
 }
 
