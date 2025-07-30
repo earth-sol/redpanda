@@ -12,7 +12,7 @@
 #include "bytes/bytes.h"
 #include "bytes/iostream.h"
 #include "cloud_io/basic_cache_service_api.h"
-#include "cloud_topics/extent_meta.h"
+#include "cloud_topics/level_zero/common/extent_meta.h"
 #include "cloud_topics/level_zero/reader/materialized_extent.h"
 #include "cloud_topics/level_zero/stm/placeholder.h"
 #include "container/fragmented_vector.h"

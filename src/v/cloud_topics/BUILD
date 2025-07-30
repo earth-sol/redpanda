@@ -60,7 +60,7 @@ redpanda_cc_library(
     ],
     deps = [
         "//src/v/base",
-        "//src/v/cloud_topics:extent_meta",
+        "//src/v/cloud_topics/level_zero/common:extent_meta",
         "//src/v/container:fragmented_vector",
         "//src/v/model",
         "//src/v/storage",
@@ -87,8 +87,8 @@ redpanda_cc_library(
     deps = [
         "//src/v/base",
         "//src/v/cloud_topics:data_plane_api",
-        "//src/v/cloud_topics:extent_meta",
         "//src/v/cloud_topics/level_one/domain:domain_supervisor",
+        "//src/v/cloud_topics/level_zero/common:extent_meta",
         "//src/v/container:chunked_circular_buffer",
         "//src/v/container:fragmented_vector",
         "//src/v/model",
@@ -125,19 +125,6 @@ redpanda_cc_library(
     visibility = ["//src/v/redpanda:__pkg__"],
     deps = [
         "@seastar",
-    ],
-)
-
-redpanda_cc_library(
-    name = "extent_meta",
-    hdrs = [
-        "extent_meta.h",
-    ],
-    include_prefix = "cloud_topics",
-    deps = [
-        ":types",
-        "//src/v/model",
-        "@fmt",
     ],
 )
 
