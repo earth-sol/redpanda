@@ -140,40 +140,72 @@ enum class session_config : uint8_t {
 
 class basic_consume_fixture
   : public consumer_fixture
-  , public testing::TestWithParam<session_config> {};
+  , public testing::TestWithParam<session_config> {
+public:
+    void SetUp() override {
+        create_node_application(model::node_id{0});
+        create_node_application(model::node_id{1});
+        create_node_application(model::node_id{2});
+        auto* rp = instance(model::node_id{0});
+        wait_for_all_members(3s).get();
+        rp->add_topic({model::kafka_namespace, topic}, 3, std::nullopt, 3)
+          .get();
+        cluster = create_client_cluster().get();
+        consumer = std::make_unique<kafka::client::direct_consumer>(
+          *cluster,
+          direct_consumer::configuration{
+            .with_sessions = fetch_sessions_enabled{
+              GetParam() == session_config::with_sessions}});
+        consumer->start().get();
+    }
+
+    void TearDown() override {
+        consumer->stop().get();
+        cluster->stop().get();
+    }
+
+    void assign_partitions(topic_assignment assgn) {
+        consumer
+          ->assign_partitions(
+            chunked_vector<topic_assignment>::single(std::move(assgn)))
+          .get();
+    }
+
+    void unassign_partition(model::topic_partition tp) {
+        consumer
+          ->unassign_partitions(
+            chunked_vector<model::topic_partition>::single(std::move(tp)))
+          .get();
+    }
+
+    void unassign_topic(model::topic topic) {
+        consumer
+          ->unassign_topics(
+            chunked_vector<model::topic>::single(std::move(topic)))
+          .get();
+    }
+
+    void maybe_toggle_fetch_sessions() {
+        if (GetParam() == session_config::toggle_sessions) {
+            consumer->update_configuration(direct_consumer::configuration{
+              .with_sessions = fetch_sessions_enabled::yes});
+        }
+    }
+
+    redpanda_thread_fixture* rp;
+    std::unique_ptr<kafka::client::cluster> cluster;
+    std::unique_ptr<kafka::client::direct_consumer> consumer;
+    model::topic topic{"test-topic"};
+};
 
 } // namespace
 
 TEST_P(basic_consume_fixture, TestBasicConsumption) {
-    create_node_application(model::node_id{0});
-    create_node_application(model::node_id{1});
-    create_node_application(model::node_id{2});
-    auto* rp = instance(model::node_id{0});
-    wait_for_all_members(3s).get();
-    model::topic topic{"test-topic"};
-    rp->add_topic({model::kafka_namespace, topic}, 3, std::nullopt, 3).get();
-
-    auto cluster = create_client_cluster().get();
-
-    kafka::client::direct_consumer consumer(
-      *cluster, direct_consumer::configuration{});
-    consumer.start().get();
-    auto d_stop = ss::defer([&cluster, &consumer] {
-        consumer.stop().get();
-        cluster->stop().get();
-    });
-    consumer
-      .assign_partitions(chunked_vector<topic_assignment>::single(
-        make_assignment(topic, {0, 1, 2})))
-      .get();
-
-    consumer.update_configuration(direct_consumer::configuration{
-      .with_sessions = fetch_sessions_enabled{
-        GetParam() == session_config::with_sessions}});
+    assign_partitions(make_assignment(topic, {0, 1, 2}));
 
     // no data should be available immediately, as the topic is empty
     for (int i = 0; i < 10; ++i) {
-        auto fetched = consumer.fetch_next(100ms).get();
+        auto fetched = consumer->fetch_next(100ms).get();
         ASSERT_TRUE(fetched.value().empty());
     }
 
@@ -182,7 +214,7 @@ TEST_P(basic_consume_fixture, TestBasicConsumption) {
     produce_to_partition(topic, 1, 400);
     produce_to_partition(topic, 2, 20);
 
-    auto fetched = fetch_until_empty(consumer);
+    auto fetched = fetch_until_empty(*consumer);
 
     ASSERT_EQ(fetched.size(), 3);
     ASSERT_EQ(
@@ -201,16 +233,11 @@ TEST_P(basic_consume_fixture, TestBasicConsumption) {
         .last_offset(),
       model::offset(19));
 
-    if (GetParam() == session_config::toggle_sessions) {
-        consumer.update_configuration(direct_consumer::configuration{
-          .with_sessions = fetch_sessions_enabled::yes});
-    }
-
     // produce again
     produce_to_partition(topic, 2, 1000);
     produce_to_partition(topic, 1, 400);
     produce_to_partition(topic, 0, 20);
-    auto fetched_2 = fetch_until_empty(consumer);
+    auto fetched_2 = fetch_until_empty(*consumer);
     ASSERT_EQ(fetched_2.size(), 3);
     ASSERT_EQ(
       fetched_2[model::topic_partition(topic, model::partition_id(0))]
@@ -227,6 +254,165 @@ TEST_P(basic_consume_fixture, TestBasicConsumption) {
         .back()
         .last_offset(),
       model::offset(1019));
+}
+
+TEST_P(basic_consume_fixture, TestUnassignPartition) {
+    assign_partitions(make_assignment(topic, {0, 1}));
+
+    constexpr size_t n = 100;
+
+    // produce some data
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+        ASSERT_EQ(fetched.size(), 2);
+        ASSERT_EQ(
+          fetched.find(model::topic_partition{topic, model::partition_id{2}}),
+          fetched.end());
+        for (auto id : std::array{0, 1}) {
+            ASSERT_EQ(
+              fetched[model::topic_partition(topic, model::partition_id(id))]
+                .back()
+                .last_offset(),
+              model::offset(n - 1));
+        }
+    }
+
+    unassign_partition(model::topic_partition{topic, model::partition_id{0}});
+
+    // enable fetch sessions if the test is in toggle mode
+    maybe_toggle_fetch_sessions();
+
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+
+        ASSERT_EQ(fetched.size(), 1);
+        for (auto p : std::array{0, 2}) {
+            ASSERT_EQ(
+              fetched.find(
+                model::topic_partition{topic, model::partition_id{p}}),
+              fetched.end());
+        }
+        ASSERT_EQ(
+          fetched[model::topic_partition(topic, model::partition_id(1))]
+            .back()
+            .last_offset(),
+          model::offset(n * 2 - 1));
+    }
+
+    unassign_partition(model::topic_partition{topic, model::partition_id{1}});
+    assign_partitions(make_assignment(topic, {0}));
+
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+
+        ASSERT_EQ(fetched.size(), 1);
+        for (auto p : std::array{1, 2}) {
+            ASSERT_EQ(
+              fetched.find(
+                model::topic_partition{topic, model::partition_id{p}}),
+              fetched.end());
+        }
+        ASSERT_EQ(
+          fetched[model::topic_partition(topic, model::partition_id(0))]
+            .back()
+            .last_offset(),
+          model::offset(n * 3 - 1));
+    }
+}
+
+TEST_P(basic_consume_fixture, TestUnassignTopic) {
+    assign_partitions(make_assignment(topic, {0, 1, 2}));
+
+    constexpr size_t n = 100;
+
+    // produce some data
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+        ASSERT_EQ(fetched.size(), 3);
+        for (auto id : std::array{0, 1, 2}) {
+            ASSERT_EQ(
+              fetched[model::topic_partition(topic, model::partition_id(id))]
+                .back()
+                .last_offset(),
+              model::offset(n - 1));
+        }
+    }
+
+    unassign_topic(topic);
+
+    maybe_toggle_fetch_sessions();
+
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+        ASSERT_EQ(fetched.size(), 0);
+    }
+}
+
+TEST_P(basic_consume_fixture, TestBogusPartitionIds) {
+    // test that providing non-existent or ill formed partition IDs to the
+    // consumer doesn't cause issues. we wouldn't expect this to happen in
+    // practice.
+    assign_partitions(make_assignment(topic, {0, 2, 5, 23, -1}));
+
+    constexpr int n = 100;
+
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+        ASSERT_EQ(fetched.size(), 2);
+        for (auto id : std::array{0, 2}) {
+            ASSERT_EQ(
+              fetched[model::topic_partition(topic, model::partition_id(id))]
+                .back()
+                .last_offset(),
+              model::offset(n - 1));
+        }
+    }
+
+    maybe_toggle_fetch_sessions();
+
+    unassign_partition(model::topic_partition{topic, model::partition_id{5}});
+    unassign_partition(model::topic_partition{topic, model::partition_id{42}});
+    unassign_topic(model::topic{"noexist"});
+
+    for (auto p : std::array{0, 1, 2}) {
+        produce_to_partition(topic, p, n);
+    }
+
+    {
+        auto fetched = fetch_until_empty(*consumer);
+        ASSERT_EQ(fetched.size(), 2);
+        for (auto id : std::array{0, 2}) {
+            ASSERT_EQ(
+              fetched[model::topic_partition(topic, model::partition_id(id))]
+                .back()
+                .last_offset(),
+              model::offset(2 * n - 1));
+        }
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(
