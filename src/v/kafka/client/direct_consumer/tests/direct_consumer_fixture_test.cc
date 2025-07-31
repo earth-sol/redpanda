@@ -10,6 +10,7 @@
  */
 
 #include "cluster/tests/cluster_test_fixture.h"
+#include "container/chunked_vector.h"
 #include "kafka/client/direct_consumer/direct_consumer.h"
 #include "kafka/server/tests/produce_consume_utils.h"
 #include "redpanda/tests/fixture.h"
