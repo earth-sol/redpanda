@@ -28,7 +28,6 @@
 
 #include <fmt/chrono.h>
 
-#include <algorithm>
 #include <exception>
 #include <type_traits>
 
@@ -216,12 +215,13 @@ ss::future<std::expected<int64_t, std::error_code>> do_fetch_leader_epoch_impl(
   ss::abort_source* as,
   Func get_raft0_leader) {
     constexpr std::chrono::milliseconds base_backoff = 100ms;
-    constexpr std::chrono::milliseconds max_backoff = 10s;
+    constexpr std::chrono::milliseconds max_backoff = 1s;
     constexpr static std::chrono::milliseconds rpc_timeout = 3s;
     auto policy = make_exponential_backoff_policy<model::timeout_clock>(
       base_backoff, max_backoff);
+    const auto deadline = model::timeout_clock::now() + 10s;
     std::optional<std::error_code> last_error;
-    while (!as->abort_requested()) {
+    while (!as->abort_requested() && model::timeout_clock::now() < deadline) {
         try {
             co_await ss::sleep_abortable<model::timeout_clock>(
               policy.current_backoff_duration(), *as);
@@ -231,6 +231,10 @@ ss::future<std::expected<int64_t, std::error_code>> do_fetch_leader_epoch_impl(
         }
         std::optional<model::node_id> raft0_leader = get_raft0_leader();
         if (!raft0_leader) {
+            vlog(
+              clusterlog.trace,
+              "Failed to get cluster epoch, retrying... - no controller "
+              "leader");
             last_error = make_error_code(errc::no_leader_controller);
             continue;
         }
@@ -249,6 +253,10 @@ ss::future<std::expected<int64_t, std::error_code>> do_fetch_leader_epoch_impl(
                               });
             if (!result) {
                 last_error = result.error();
+                vlog(
+                  clusterlog.trace,
+                  "Failed to get cluster epoch, retrying... - {}",
+                  result.error());
                 continue;
             }
             auto resp = result.value().data;
@@ -466,6 +474,7 @@ cluster_epoch_service<Clock>::shard0_get_epoch(ssx::sharded_abort_source* as) {
 template<typename Clock>
 ss::future<std::expected<int64_t, std::error_code>>
 cluster_epoch_service<Clock>::fetch_leader_epoch(ss::abort_source* as) {
+    vlog(clusterlog.trace, "Making RPC to fetch leader epoch");
     auto maybe_epoch = co_await _do_fetch_leader_epoch_fn(as);
     if (maybe_epoch) {
         co_return maybe_epoch;
