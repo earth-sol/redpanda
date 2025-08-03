@@ -41,6 +41,7 @@ redpanda_cc_library(
         "base_manifest.cc",
         "cache_probe.cc",
         "cache_service.cc",
+        "configuration.cc",
         "download_exception.cc",
         "inventory/aws_ops.cc",
         "inventory/inv_consumer.cc",
