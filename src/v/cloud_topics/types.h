@@ -20,7 +20,7 @@
 
 namespace experimental::cloud_topics {
 
-enum class ctp_stm_key {
+enum class ctp_stm_key : uint8_t {
     advance_reconciled_offset = 1,
 };
 

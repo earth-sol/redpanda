@@ -54,7 +54,8 @@ redpanda_cc_library(
     name = "ctp_stm_commands",
     hdrs = ["ctp_stm_commands.h"],
     deps = [
-        ":dl_version",
+        "//src/v/cloud_topics:types",
+        "//src/v/model",
         "//src/v/serde",
     ],
 )
