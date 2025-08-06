@@ -47,6 +47,22 @@ topic_metadata_mirroring_config topic_metadata_mirroring_config::copy() const {
     return copy;
 }
 
+consumer_groups_mirroring_config
+consumer_groups_mirroring_config::copy() const {
+    consumer_groups_mirroring_config copy;
+
+    copy.is_enabled = is_enabled;
+    copy.task_interval = task_interval;
+    copy.filters = filters.copy();
+    return copy;
+}
+
+link_configuration link_configuration::copy() const {
+    link_configuration copy;
+    copy.topic_metadata_mirroring_cfg = topic_metadata_mirroring_cfg.copy();
+    return copy;
+}
+
 void link_state::set_mirror_topics(const mirror_topics_t& topics) {
     mirror_topics.reserve(topics.size());
     for (const auto& [topic, state] : topics) {
@@ -65,7 +81,6 @@ link_state link_state::copy() const {
     for (const auto& [topic, state] : mirror_topics) {
         copy.mirror_topics.emplace(topic, state.copy());
     }
-    copy.topic_metadata_mirroring_cfg = topic_metadata_mirroring_cfg.copy();
     return copy;
 }
 
@@ -75,6 +90,7 @@ metadata metadata::copy() const {
     copy.uuid = uuid;
     copy.connection = connection;
     copy.state = state.copy();
+    copy.configuration = configuration.copy();
     return copy;
 }
 
@@ -246,10 +262,9 @@ auto fmt::formatter<cluster_link::model::link_state>::format(
   -> decltype(ctx.out()) {
     return fmt::format_to(
       ctx.out(),
-      "{{paused: {}, mirror_topics: {}, auto_mirror_topic_task_config: {}}}",
+      "{{paused: {}, mirror_topics: {}}}",
       s.paused,
-      fmt::join(s.mirror_topics.begin(), s.mirror_topics.end(), ","),
-      s.topic_metadata_mirroring_cfg);
+      fmt::join(s.mirror_topics.begin(), s.mirror_topics.end(), ","));
 }
 
 auto fmt::formatter<cluster_link::model::metadata>::format(
@@ -332,4 +347,13 @@ auto fmt::formatter<cluster_link::model::cluster_link_task_status_report>::
       ctx.out(),
       "{{link_reports={}}}",
       fmt::join(r.link_reports.begin(), r.link_reports.end(), ","));
+}
+
+auto fmt::formatter<cluster_link::model::link_configuration>::format(
+  const cluster_link::model::link_configuration& cfg, format_context& ctx) const
+  -> decltype(ctx.out()) {
+    return fmt::format_to(
+      ctx.out(),
+      "{{topic_metadata_mirroring_cfg: {}}}",
+      cfg.topic_metadata_mirroring_cfg);
 }
