@@ -10,7 +10,6 @@
 #include "cloud_topics/frontend/frontend.h"
 
 #include "cloud_storage/types.h"
-#include "cloud_topics/app.h"
 #include "cloud_topics/data_plane_api.h"
 #include "cloud_topics/frontend/errc.h"
 #include "cloud_topics/level_zero/common/extent_meta.h"
@@ -178,11 +177,6 @@ frontend::frontend(
   ss::shared_ptr<experimental::cloud_topics::data_plane_api> app) noexcept
   : _partition(std::move(p))
   , _data_plane(std::move(app)) {}
-
-frontend::frontend(
-  ss::lw_shared_ptr<cluster::partition> p,
-  ss::sharded<experimental::cloud_topics::app>& ct_app) noexcept
-  : frontend(std::move(p), ct_app.local().get_data_plane_api()) {}
 
 const model::ntp& frontend::ntp() const { return _partition->ntp(); }
 
