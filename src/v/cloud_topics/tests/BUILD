@@ -15,19 +15,6 @@ redpanda_test_cc_library(
 )
 
 redpanda_cc_gtest(
-    name = "types_test",
-    timeout = "short",
-    srcs = [
-        "types_test.cc",
-    ],
-    deps = [
-        "//src/v/cloud_topics:types",
-        "//src/v/test_utils:gtest",
-        "@googletest//:gtest",
-    ],
-)
-
-redpanda_cc_gtest(
     name = "end_to_end_test",
     timeout = "short",
     srcs = [

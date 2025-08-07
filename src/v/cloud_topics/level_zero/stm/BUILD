@@ -53,11 +53,13 @@ redpanda_cc_library(
 
 redpanda_cc_library(
     name = "types",
+    srcs = ["types.cc"],
     hdrs = ["types.h"],
     include_prefix = "cloud_topics/level_zero/stm",
     visibility = [":__subpackages__"],
     deps = [
         "//src/v/model",
+        "@fmt",
         "@seastar",
     ],
 )
@@ -66,7 +68,7 @@ redpanda_cc_library(
     name = "ctp_stm_commands",
     hdrs = ["ctp_stm_commands.h"],
     deps = [
-        "//src/v/cloud_topics:types",
+        ":types",
         "//src/v/model",
         "//src/v/serde",
     ],
@@ -78,7 +80,6 @@ redpanda_cc_library(
     hdrs = ["ctp_stm_state.h"],
     deps = [
         "//src/v/cloud_topics:types",
-        "//src/v/container:chunked_circular_buffer",
         "//src/v/model",
         "//src/v/serde",
     ],
@@ -91,6 +92,7 @@ redpanda_cc_library(
     implementation_deps = [
         ":ctp_stm_commands",
         ":placeholder",
+        ":types",
         "//src/v/bytes:iobuf",
         "//src/v/bytes:iobuf_parser",
         "//src/v/cloud_topics:types",

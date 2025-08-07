@@ -10,7 +10,7 @@
 
 #pragma once
 
-#include "cloud_topics/types.h"
+#include "cloud_topics/level_zero/stm/types.h"
 #include "model/fundamental.h"
 #include "serde/envelope.h"
 

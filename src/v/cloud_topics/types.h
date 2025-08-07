@@ -20,10 +20,6 @@
 
 namespace experimental::cloud_topics {
 
-enum class ctp_stm_key : uint8_t {
-    advance_reconciled_offset = 1,
-};
-
 /// Offset in the cloud storage object
 using first_byte_offset_t = named_type<uint64_t, struct first_byte_offset_tag>;
 
@@ -35,7 +31,7 @@ using cluster_epoch = named_type<int64_t, struct cloud_topics_epoch>;
 
 /// Return the previous cluster epoch value.
 inline constexpr cluster_epoch prev_cluster_epoch(cluster_epoch e) {
-    if (cluster_epoch{0} == e || cluster_epoch::min() == e) {
+    if (e <= cluster_epoch{0}) {
         return cluster_epoch::min();
     }
     return cluster_epoch(e() - 1);
@@ -67,14 +63,6 @@ enum class ctp_stm_object_ownership {
 };
 
 } // namespace experimental::cloud_topics
-
-template<>
-struct fmt::formatter<experimental::cloud_topics::ctp_stm_key>
-  : fmt::formatter<std::string_view> {
-    auto format(
-      experimental::cloud_topics::ctp_stm_key, fmt::format_context& ctx) const
-      -> decltype(ctx.out());
-};
 
 template<>
 struct fmt::formatter<experimental::cloud_topics::object_id>

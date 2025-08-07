@@ -11,7 +11,6 @@
 #pragma once
 
 #include "cloud_topics/types.h"
-#include "container/chunked_circular_buffer.h"
 #include "model/fundamental.h"
 #include "serde/envelope.h"
 

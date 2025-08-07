@@ -11,17 +11,6 @@
 
 #include <fmt/core.h>
 
-auto fmt::formatter<experimental::cloud_topics::ctp_stm_key>::format(
-  experimental::cloud_topics::ctp_stm_key key, fmt::format_context& ctx) const
-  -> decltype(ctx.out()) {
-    switch (key) {
-    case experimental::cloud_topics::ctp_stm_key::advance_reconciled_offset:
-        return fmt::format_to(ctx.out(), "advance_reconciled_offset");
-    }
-    return fmt::format_to(
-      ctx.out(), "unknown ctp_stm_key({})", static_cast<int>(key));
-}
-
 auto fmt::formatter<experimental::cloud_topics::object_id>::format(
   const experimental::cloud_topics::object_id& id,
   fmt::format_context& ctx) const -> decltype(ctx.out()) {
