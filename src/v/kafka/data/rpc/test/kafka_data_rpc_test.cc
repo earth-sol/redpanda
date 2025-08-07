@@ -245,6 +245,9 @@ TEST_P(KafkaDataRpcTest, ClientCanRequestPartitionOffsets) {
     ASSERT_TRUE(ne_res.has_value());
     auto offsets_2 = std::move(ne_res.value());
     EXPECT_EQ(offsets_2.size(), 1);
+    auto p_offsets_2
+      = offsets_2[not_existing.tp.topic][not_existing.tp.partition];
+    EXPECT_EQ(p_offsets_2.err, cluster::errc::topic_not_exists);
 }
 
 INSTANTIATE_TEST_SUITE_P(

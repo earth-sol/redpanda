@@ -35,6 +35,7 @@ public:
       model::node_id self,
       std::unique_ptr<kafka::data::rpc::partition_leader_cache>,
       std::unique_ptr<kafka::data::rpc::topic_creator>,
+      std::unique_ptr<kafka::data::rpc::topic_metadata_cache>,
       ss::sharded<::rpc::connection_cache>*,
       ss::sharded<local_service>*);
 
@@ -92,6 +93,7 @@ private:
     model::node_id _self;
     std::unique_ptr<kafka::data::rpc::partition_leader_cache> _leaders;
     std::unique_ptr<kafka::data::rpc::topic_creator> _topic_creator;
+    std::unique_ptr<kafka::data::rpc::topic_metadata_cache> _metadata_cache;
     ss::sharded<::rpc::connection_cache>* _connections;
     ss::sharded<local_service>* _local_service;
     ss::abort_source _as;

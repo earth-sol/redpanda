@@ -132,11 +132,13 @@ client::client(
   model::node_id self,
   std::unique_ptr<kafka::data::rpc::partition_leader_cache> l,
   std::unique_ptr<kafka::data::rpc::topic_creator> t,
+  std::unique_ptr<kafka::data::rpc::topic_metadata_cache> mdc,
   ss::sharded<::rpc::connection_cache>* c,
   ss::sharded<local_service>* s)
   : _self(self)
   , _leaders(std::move(l))
   , _topic_creator(std::move(t))
+  , _metadata_cache(std::move(mdc))
   , _connections(c)
   , _local_service(s) {}
 
@@ -339,6 +341,14 @@ client::get_partition_offsets(
           topic.partitions,
           [this, &topic, &per_node_partitions, &results](
             model::partition_id partition) {
+              model::topic_namespace_view tp_ns(
+                model::kafka_namespace, topic.topic);
+              auto tp_cfg = _metadata_cache->find_topic_cfg(tp_ns);
+              if (!tp_cfg) {
+                  results[topic.topic][partition] = partition_offset_result(
+                    cluster::errc::topic_not_exists);
+                  return;
+              }
               auto leader = _leaders->get_leader_node(
                 model::topic_namespace_view(
                   model::kafka_namespace, topic.topic),

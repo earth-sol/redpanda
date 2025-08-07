@@ -1955,6 +1955,10 @@ void application::wire_up_redpanda_services(
               return kafka::data::rpc::topic_creator::make_default(
                 controller.get());
           }),
+          ss::sharded_parameter([this] {
+              return kafka::data::rpc::topic_metadata_cache::make_default(
+                &metadata_cache);
+          }),
           &_connection_cache,
           &_kafka_data_rpc_service)
           .get();
