@@ -159,14 +159,7 @@ sharded_store::get_schema_version(stored_schema schema) {
     co_await validate_schema(schema.schema.share());
 
     // Determine if the definition already exists
-    auto map = [&schema](store& s) {
-        return s.get_schema_id(schema.schema.def());
-    };
-    auto reduce = [](
-                    std::optional<schema_id> acc,
-                    std::optional<schema_id> s_id) { return acc ? acc : s_id; };
-    auto s_id = co_await _store.map_reduce0(
-      map, std::optional<schema_id>{}, reduce);
+    auto s_id = co_await get_schema_id(schema.schema.def().share());
 
     // Determine if a provided schema id is appropriate
     const auto& sub = schema.schema.sub();
@@ -185,18 +178,8 @@ sharded_store::get_schema_version(stored_schema schema) {
 
     // Determine if the subject already has a version that references this
     // schema, deleted versions are seen.
-    const auto versions = co_await _store.invoke_on(
-      shard_for(sub),
-      _smp_opts,
-      [sub](auto& s) -> std::vector<subject_version_entry> {
-          auto res = s.get_version_ids(sub, include_deleted::no);
-          if (
-            res.has_error()
-            && res.assume_error().code() == error_code::subject_not_found) {
-              return {};
-          }
-          return res.value();
-      });
+    const auto versions = co_await get_subject_versions(
+      sub, include_deleted::no);
 
     std::optional<schema_version> v_id;
     if (s_id.has_value()) {
@@ -404,6 +387,22 @@ sharded_store::get_schema_subject_versions(schema_id id) {
         return acc;
     };
     co_return co_await _store.map_reduce0(map, subject_versions{}, reduce);
+}
+
+ss::future<std::vector<subject_version_entry>>
+sharded_store::get_subject_versions(subject sub, include_deleted inc_del) {
+    co_return co_await _store.invoke_on(
+      shard_for(sub),
+      _smp_opts,
+      [sub, inc_del](store& s) -> std::vector<subject_version_entry> {
+          auto res = s.get_version_ids(sub, inc_del);
+          if (
+            res.has_error()
+            && res.assume_error().code() == error_code::subject_not_found) {
+              return {};
+          }
+          return res.value();
+      });
 }
 
 ss::future<chunked_vector<subject>>
@@ -938,6 +937,16 @@ ss::future<bool> sharded_store::has_version(
           return s.has_version(sub, id, i);
       });
     co_return has_id.has_value() && has_id.assume_value();
+}
+
+ss::future<std::optional<schema_id>>
+sharded_store::get_schema_id(schema_definition def) const {
+    auto map = [&def](const store& s) { return s.get_schema_id(def); };
+    auto reduce = [](
+                    std::optional<schema_id> acc,
+                    std::optional<schema_id> s_id) { return acc ? acc : s_id; };
+    co_return co_await _store.map_reduce0(
+      map, std::optional<schema_id>{}, reduce);
 }
 
 } // namespace pandaproxy::schema_registry

@@ -89,6 +89,11 @@ public:
     ss::future<chunked_vector<subject_version>>
     get_schema_subject_versions(schema_id id);
 
+    ///\brief Return a list of subject-versions for the subject. Returns an
+    /// empty vector if the subject does not exist.
+    ss::future<std::vector<subject_version_entry>>
+    get_subject_versions(subject sub, include_deleted inc_del);
+
     ///\brief Return a list of subjects for the schema id.
     ss::future<chunked_vector<subject>>
     get_schema_subjects(schema_id id, include_deleted inc_del);
@@ -209,6 +214,10 @@ public:
 
     //// \brief Throw if the store is not mutable
     void check_mode_mutability(force f) const;
+
+    ///\brief Look up the id of a schema by definition
+    ss::future<std::optional<schema_id>>
+    get_schema_id(schema_definition def) const;
 
 private:
     ss::future<compatibility_result> do_is_compatible(
