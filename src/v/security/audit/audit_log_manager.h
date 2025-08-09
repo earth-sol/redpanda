@@ -14,6 +14,7 @@
 #include "config/property.h"
 #include "kafka/client/fwd.h"
 #include "kafka/client/types.h"
+#include "kafka/data/rpc/fwd.h"
 #include "kafka/protocol/types.h"
 #include "model/namespace.h"
 #include "model/timeout_clock.h"
@@ -65,8 +66,9 @@ public:
     audit_log_manager(
       model::node_id self,
       cluster::controller* controller,
-      kafka::client::configuration&,
-      ss::sharded<cluster::metadata_cache>*);
+      ss::sharded<cluster::metadata_cache>*,
+      ss::sharded<kafka::data::rpc::client>*,
+      kafka::client::configuration& cfg);
 
     audit_log_manager(const audit_log_manager&) = delete;
     audit_log_manager& operator=(const audit_log_manager&) = delete;
@@ -265,7 +267,7 @@ public:
     bool report_redpanda_app_event(is_started);
 
     const kafka::client::configuration& get_client_config() const {
-        return _config;
+        return *_config;
     }
 
 private:
@@ -494,9 +496,10 @@ private:
     /// Other references
     model::node_id _self;
     cluster::controller* _controller;
-    kafka::client::configuration& _config;
+    kafka::client::configuration* _config;
 
     ss::sharded<cluster::metadata_cache>* _metadata_cache;
+    ss::sharded<kafka::data::rpc::client>* _rpc_client;
 };
 
 } // namespace security::audit

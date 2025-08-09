@@ -21,6 +21,7 @@
 #include "kafka/client/client.h"
 #include "kafka/client/config_utils.h"
 #include "kafka/data/record_batcher.h"
+#include "kafka/data/rpc/client.h"
 #include "kafka/protocol/produce.h"
 #include "kafka/protocol/schemata/produce_response.h"
 #include "kafka/protocol/topic_properties.h"
@@ -766,8 +767,9 @@ bool audit_log_manager::recovery_mode_enabled() noexcept {
 audit_log_manager::audit_log_manager(
   model::node_id self,
   cluster::controller* controller,
-  kafka::client::configuration& client_config,
-  ss::sharded<cluster::metadata_cache>* metadata_cache)
+  ss::sharded<cluster::metadata_cache>* metadata_cache,
+  ss::sharded<kafka::data::rpc::client>* rpc_client,
+  kafka::client::configuration& cfg)
   : _audit_enabled(config::shard_local_cfg().audit_enabled.bind())
   , _audit_log_reject_policy(
       config::shard_local_cfg().audit_failure_policy.bind())
@@ -784,14 +786,15 @@ audit_log_manager::audit_log_manager(
   , _queue_bytes_sem(_max_queue_size_bytes, "s/audit/buffer")
   , _self(self)
   , _controller(controller)
-  , _config(client_config)
-  , _metadata_cache(metadata_cache) {
+  , _config(&cfg)
+  , _metadata_cache(metadata_cache)
+  , _rpc_client(rpc_client) {
     _probe.setup_metrics([this] {
         return 1.0
                - (static_cast<double>(_queue_bytes_sem.available_units()) / static_cast<double>(_max_queue_size_bytes));
     });
     if (ss::this_shard_id() == client_shard_id) {
-        _sink = std::make_unique<audit_sink>(this, controller, client_config);
+        _sink = std::make_unique<audit_sink>(this, controller, *_config);
     }
 
     _drain_timer.set_callback([this] {
