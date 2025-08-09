@@ -555,7 +555,7 @@ TEST(ChunkedVector, FromRange) {
         buffer.push_back(i);
     }
 
-    auto vec = chunked_vector<int32_t>(buffer);
+    auto vec = chunked_vector<int32_t>(std::from_range, buffer);
     EXPECT_THAT(vec, ElementsAreArray(buffer));
 }
 

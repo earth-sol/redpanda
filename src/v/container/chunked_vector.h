@@ -108,17 +108,6 @@ public:
       : chunked_vector(elems.begin(), elems.end()) {}
 
     /**
-     * @brief Construct a new vector by moving from a given range
-     */
-    template<typename Range>
-    requires std::ranges::sized_range<Range>
-    explicit chunked_vector(Range range)
-      : chunked_vector() {
-        reserve(std::ranges::size(range));
-        std::move(range.begin(), range.end(), std::back_inserter(*this));
-    }
-
-    /**
      * @brief Construct a new vector from a range
      *
      * This constructor will copy or move from the range depending on the value
