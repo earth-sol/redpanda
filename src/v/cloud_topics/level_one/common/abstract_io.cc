@@ -7,22 +7,13 @@
  *
  * https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
  */
-#pragma once
 
-#include "cloud_storage_clients/types.h"
-#include "cloud_topics/level_one/common/object_id.h"
+#include "cloud_topics/level_one/common/abstract_io.h"
 
 namespace experimental::cloud_topics::l1 {
 
-/*
- * Utilities for working with the object storage paths.
- */
-class object_path_factory {
-public:
-    /*
-     * Generate the path of a level-one object.
-     */
-    static cloud_storage_clients::object_key level_one_path(object_id);
-};
+ss::future<ss::input_stream<char>> io::read_file(staging_file* file) {
+    return file->input_stream();
+}
 
 } // namespace experimental::cloud_topics::l1
