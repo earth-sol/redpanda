@@ -15,10 +15,10 @@
 #include "cloud_topics/batch_cache/batch_cache.h"
 #include "cloud_topics/cluster_services.h"
 #include "cloud_topics/level_zero/batcher/batcher.h"
-#include "cloud_topics/level_zero/read_pipeline.h"
+#include "cloud_topics/level_zero/pipeline/read_pipeline.h"
+#include "cloud_topics/level_zero/pipeline/write_pipeline.h"
 #include "cloud_topics/level_zero/reader/fetch_request_handler.h"
 #include "cloud_topics/level_zero/throttler/throttler.h"
-#include "cloud_topics/level_zero/write_pipeline.h"
 #include "model/fundamental.h"
 #include "storage/api.h"
 

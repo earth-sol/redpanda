@@ -11,9 +11,9 @@
 #include "cloud_topics/level_zero/throttler/throttler.h"
 
 #include "base/unreachable.h"
-#include "cloud_topics/level_zero/event_filter.h"
-#include "cloud_topics/level_zero/write_pipeline.h"
-#include "cloud_topics/level_zero/write_request.h"
+#include "cloud_topics/level_zero/pipeline/event_filter.h"
+#include "cloud_topics/level_zero/pipeline/write_pipeline.h"
+#include "cloud_topics/level_zero/pipeline/write_request.h"
 #include "cloud_topics/logger.h"
 
 #include <seastar/core/loop.hh>
@@ -24,7 +24,7 @@
 #include <exception>
 #include <limits>
 
-namespace experimental::cloud_topics {
+namespace experimental::cloud_topics::l0 {
 
 template<class Clock>
 throttler<Clock>::throttler(
@@ -160,4 +160,4 @@ ss::future<> throttler<Clock>::bg_throttle_write_pipeline() {
 
 template class throttler<ss::manual_clock>;
 template class throttler<ss::lowres_clock>;
-} // namespace experimental::cloud_topics
+} // namespace experimental::cloud_topics::l0
