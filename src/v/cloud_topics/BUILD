@@ -84,8 +84,10 @@ redpanda_cc_library(
     include_prefix = "cloud_topics",
     visibility = [
         "//src/v/cloud_topics/frontend:__pkg__",
+        "//src/v/cloud_topics/level_one/metastore/tests:__pkg__",
         "//src/v/cloud_topics/level_zero/reader:__pkg__",
         "//src/v/cloud_topics/level_zero/reconciler:__pkg__",
+        "//src/v/cloud_topics/tests:__pkg__",
         "//src/v/kafka/data:__pkg__",
         "//src/v/redpanda:__pkg__",
     ],
