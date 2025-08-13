@@ -68,7 +68,7 @@ model::record_batch record_batch_builder::build() && {
         _records = compression::compressor::compress(_records, _compression);
     }
 
-    internal::reset_size_checksum_metadata(header, _records);
+    header.reset_size_checksum_metadata(_records);
     return model::record_batch(
       header, std::move(_records), model::record_batch::tag_ctor_ng{});
 }
@@ -85,7 +85,7 @@ ss::future<model::record_batch> record_batch_builder::build_async() && {
           std::move(_records), _compression);
     }
 
-    internal::reset_size_checksum_metadata(header, _records);
+    header.reset_size_checksum_metadata(_records);
 
     co_return model::record_batch(
       header, std::move(_records), model::record_batch::tag_ctor_ng{});

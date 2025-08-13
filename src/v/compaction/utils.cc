@@ -61,7 +61,7 @@ model::record_batch make_placeholder_batch(model::record_batch_header& hdr) {
     new_hdr.first_timestamp = hdr.first_timestamp;
     new_hdr.max_timestamp = hdr.max_timestamp;
     auto no_records = iobuf{};
-    storage::internal::reset_size_checksum_metadata(new_hdr, no_records);
+    new_hdr.reset_size_checksum_metadata(no_records);
     return model::record_batch(
       new_hdr, std::move(no_records), model::record_batch::tag_ctor_ng{});
 }

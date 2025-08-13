@@ -141,7 +141,7 @@ model::record_batch copy_data_segment_reducer::make_placeholder_batch(
     new_hdr.first_timestamp = hdr.first_timestamp;
     new_hdr.max_timestamp = hdr.max_timestamp;
     auto no_records = iobuf{};
-    reset_size_checksum_metadata(new_hdr, no_records);
+    new_hdr.reset_size_checksum_metadata(no_records);
     return model::record_batch(
       new_hdr, std::move(no_records), model::record_batch::tag_ctor_ng{});
 }
@@ -272,7 +272,7 @@ copy_data_segment_reducer::filter(model::record_batch batch) {
     new_hdr.first_timestamp = first_time;
     new_hdr.max_timestamp = last_time;
     new_hdr.record_count = rec_count;
-    reset_size_checksum_metadata(new_hdr, ret);
+    new_hdr.reset_size_checksum_metadata(ret);
     auto new_batch = model::record_batch(
       new_hdr, std::move(ret), model::record_batch::tag_ctor_ng{});
     co_return new_batch;

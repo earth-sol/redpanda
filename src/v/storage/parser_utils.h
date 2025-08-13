@@ -30,9 +30,6 @@ model::record_batch maybe_decompress_batch_sync(const model::record_batch&);
 ss::future<model::record_batch>
   compress_batch(model::compression, model::record_batch);
 
-/// \brief resets the size, header crc and payload crc
-void reset_size_checksum_metadata(model::record_batch_header&, const iobuf&);
-
 inline bool is_zero(const char* data, size_t size) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     return data[0] == 0 && memcmp(data, data + 1, size - 1) == 0;

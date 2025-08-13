@@ -75,13 +75,4 @@ compress_batch(model::compression c, model::record_batch b) {
     co_return batch;
 }
 
-/// \brief resets the size, header crc and payload crc
-void reset_size_checksum_metadata(
-  model::record_batch_header& hdr, const iobuf& records) {
-    hdr.size_bytes = model::packed_record_batch_header_size
-                     + records.size_bytes();
-    hdr.crc = model::crc_record_batch(hdr, records);
-    hdr.header_crc = model::internal_header_only_crc(hdr);
-}
-
 } // namespace storage::internal
