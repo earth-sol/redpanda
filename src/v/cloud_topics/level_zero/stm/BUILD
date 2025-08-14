@@ -10,6 +10,7 @@ redpanda_cc_library(
         "placeholder.h",
     ],
     visibility = [
+        ":__subpackages__",
         "//src/v/cloud_topics/batch_cache:__pkg__",
         "//src/v/cloud_topics/frontend:__pkg__",
         "//src/v/cloud_topics/level_zero/frontend_reader:__pkg__",
@@ -51,19 +52,22 @@ redpanda_cc_library(
 )
 
 redpanda_cc_library(
-    name = "ctp_stm_commands",
-    hdrs = ["ctp_stm_commands.h"],
+    name = "types",
+    srcs = ["types.cc"],
+    hdrs = ["types.h"],
+    visibility = [":__subpackages__"],
     deps = [
-        ":dl_version",
-        "//src/v/serde",
+        "//src/v/model",
+        "@fmt",
+        "@seastar",
     ],
 )
 
 redpanda_cc_library(
-    name = "ctp_stm_offsets",
-    hdrs = ["ctp_stm_offsets.h"],
+    name = "ctp_stm_commands",
+    hdrs = ["ctp_stm_commands.h"],
     deps = [
-        ":dl_version",
+        ":types",
         "//src/v/model",
         "//src/v/serde",
     ],
@@ -74,10 +78,7 @@ redpanda_cc_library(
     srcs = ["ctp_stm_state.cc"],
     hdrs = ["ctp_stm_state.h"],
     deps = [
-        ":ctp_stm_offsets",
-        ":dl_snapshot",
-        ":dl_version",
-        "//src/v/container:chunked_vector",
+        "//src/v/cloud_topics:types",
         "//src/v/model",
         "//src/v/serde",
     ],
@@ -89,17 +90,22 @@ redpanda_cc_library(
     hdrs = ["ctp_stm.h"],
     implementation_deps = [
         ":ctp_stm_commands",
+        ":placeholder",
+        ":types",
         "//src/v/bytes:iobuf",
         "//src/v/bytes:iobuf_parser",
         "//src/v/cloud_topics:types",
         "//src/v/serde:map",
         "//src/v/serde:uuid",
         "//src/v/serde:vector",
+        "//src/v/storage",
     ],
     visibility = ["//visibility:public"],
     deps = [
         ":ctp_stm_state",
+        ":types",
         "//src/v/raft",
+        "@seastar",
     ],
 )
 
@@ -110,6 +116,8 @@ redpanda_cc_library(
     implementation_deps = [
         ":ctp_stm",
         ":ctp_stm_commands",
+        ":types",
+        "//src/v/cloud_topics:logger",
         "//src/v/cloud_topics:types",
         "//src/v/raft",
         "//src/v/serde:uuid",
@@ -121,6 +129,8 @@ redpanda_cc_library(
         ":dl_version",
         "//src/v/base",
         "//src/v/model",
+        "//src/v/ssx:future_util",
+        "//src/v/utils:retry_chain_node",
         "@seastar",
     ],
 )
