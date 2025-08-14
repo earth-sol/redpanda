@@ -28,6 +28,44 @@
 
 #include <optional>
 
+namespace {
+
+storage::local_log_reader_config kafka_to_local_log_reader_config(
+  kafka::log_reader_config cfg,
+  ss::lw_shared_ptr<const storage::offset_translator_state> ot_state) {
+    auto start_offset = ot_state->to_log_offset(
+      kafka::offset_cast(cfg.start_offset));
+    auto max_offset = ot_state->to_log_offset(
+      kafka::offset_cast(cfg.max_offset));
+
+    return storage::local_log_reader_config(
+      /*start_offset=*/start_offset,
+      /*max_offset=*/max_offset,
+      /*min_bytes=*/cfg.min_bytes,
+      /*max_bytes=*/cfg.max_bytes,
+      /*type_filter=*/std::nullopt,
+      /*first_timestamp=*/cfg.first_timestamp,
+      /*abort_source=*/cfg.abort_source,
+      /*client_address=*/cfg.client_address,
+      /*strict_max_bytes=*/cfg.strict_max_bytes);
+}
+
+cloud_storage::cloud_log_reader_config
+kafka_to_cloud_log_reader_config(kafka::log_reader_config cfg) {
+    return cloud_storage::cloud_log_reader_config(
+      /*start_offset=*/cfg.start_offset,
+      /*max_offset=*/cfg.max_offset,
+      /*min_bytes=*/cfg.min_bytes,
+      /*max_bytes=*/cfg.max_bytes,
+      /*type_filter=*/std::nullopt,
+      /*first_timestamp=*/cfg.first_timestamp,
+      /*abort_source=*/cfg.abort_source,
+      /*client_address=*/cfg.client_address,
+      /*strict_max_bytes=*/cfg.strict_max_bytes);
+}
+
+} // namespace
+
 namespace kafka {
 replicated_partition::replicated_partition(
   ss::lw_shared_ptr<cluster::partition> p) noexcept

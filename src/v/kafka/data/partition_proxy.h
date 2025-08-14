@@ -12,6 +12,7 @@
 
 #include "base/outcome.h"
 #include "cluster/fwd.h"
+#include "kafka/data/log_reader_config.h"
 #include "kafka/protocol/errors.h"
 #include "kafka/protocol/types.h"
 #include "model/fundamental.h"
