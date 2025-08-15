@@ -133,6 +133,7 @@ redpanda_cc_gtest(
     deps = [
         ":random",
         "//src/v/model",
+        "//src/v/model:batch_compression",
         "//src/v/test_utils:gtest",
         "@googletest//:gtest",
     ],

@@ -7,6 +7,7 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0
 
+#include "model/batch_compression.h"
 #include "model/record.h"
 #include "model/record_utils.h"
 #include "model/tests/random_batch.h"
@@ -109,3 +110,40 @@ TEST_F(RecordBatchTest, TestCorruptedRecordBytes) {
       b, [](model::record& r) { EXPECT_GE(r.offset_delta(), 0); });
     EXPECT_THROW(f.get(), std::out_of_range);
 }
+
+class RecordBatchCompressionTest
+  : public ::testing::TestWithParam<model::compression> {};
+
+TEST_P(RecordBatchCompressionTest, CompressionTest) {
+    auto b = model::test::make_random_batch({
+      .offset = model::offset(0),
+      .allow_compression = false,
+      .count = 10,
+    });
+    if (GetParam() == model::compression::none) {
+        // TODO: Reconsider the difference between throwing and not throwing
+        // based on the kind of reference used.
+        EXPECT_NO_THROW(model::decompress_batch(b.copy()).get());
+        EXPECT_ANY_THROW(model::decompress_batch(b).get());
+        EXPECT_ANY_THROW(model::compress_batch(GetParam(), std::move(b)).get());
+    } else {
+        auto c = model::compress_batch(GetParam(), std::move(b)).get();
+        EXPECT_TRUE(c.compressed());
+        EXPECT_EQ(c.header().attrs.compression(), GetParam());
+        auto u_copy = model::decompress_batch(c).get();
+        auto u = model::decompress_batch(std::move(c)).get();
+        EXPECT_FALSE(u.compressed());
+        EXPECT_EQ(u.header().attrs.compression(), model::compression::none);
+        EXPECT_EQ(u_copy, u);
+    }
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  CompressionTypes,
+  RecordBatchCompressionTest,
+  ::testing::Values(
+    model::compression::none,
+    model::compression::gzip,
+    model::compression::snappy,
+    model::compression::zstd,
+    model::compression::lz4));
