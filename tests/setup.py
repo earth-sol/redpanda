@@ -44,7 +44,7 @@ setup(
         'z3-solver==4.12.2',
         'hypothesis==6.82',
         'jsonschema==4.10.0',
-        'polaris.management@git+https://github.com/apache/polaris.git@1a6b3eb3963355f78c5ca916cc1d66ecd1493092#&subdirectory=regtests/client/python',
+        'redpanda-polaris-catalog-python==1.0.0.post3',  # See: .github/workflows/publish-apache-polaris-python-client.yml
         # PyIceberg: Use an official release once the next major (1.0) is out.
         #   Using a hash to unreleased version because we depend on new
         #   pluggable authentication mechanism.
