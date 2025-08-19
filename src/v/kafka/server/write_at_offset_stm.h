@@ -36,6 +36,7 @@ public:
         invalid_offset,
         replicate_exception,
         invalid_batch_type,
+        invalid_input,
     };
     struct errc_category final : public std::error_category {
         const char* name() const noexcept final;
@@ -55,8 +56,9 @@ public:
       storage::kvstore& kvstore,
       std::vector<model::record_batch_type> offset_translated_batches);
     /**
-     * Method that replicates a record batch only if its kafka::offset is going
-     * to be exactly the expected offset.
+     * Method that replicates a vector of record batches only if its
+     * kafka::offset of the first batch is going to be exactly the expected
+     * offset.
      *
      * The method supports replicating gaps in the logs, in this case the
      * prev_log_offset parameter must be present. If the `prev_log_offset` is
@@ -96,8 +98,8 @@ public:
      * more than one replicate request in flight at the same time.
      */
     raft::replicate_stages replicate(
-      model::record_batch,
-      kafka::offset expected_base_offset,
+      chunked_vector<model::record_batch>,
+      chunked_vector<kafka::offset> expected_base_offsets,
       std::optional<kafka::offset> prev_log_offset,
       model::timeout_clock::duration timeout,
       std::optional<std::reference_wrapper<ss::abort_source>> as
@@ -133,8 +135,8 @@ private:
     bool is_offset_translated_batch(const model::record_batch& batch) const;
 
     ss::future<result<raft::replicate_result>> do_replicate(
-      model::record_batch,
-      kafka::offset expected_base_offset,
+      chunked_vector<model::record_batch>,
+      chunked_vector<kafka::offset> expected_base_offsets,
       std::optional<kafka::offset> prev_log_offset,
       model::timeout_clock::duration timeout,
       std::optional<std::reference_wrapper<ss::abort_source>> as,
