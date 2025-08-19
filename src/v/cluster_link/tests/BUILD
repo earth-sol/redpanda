@@ -20,6 +20,7 @@ redpanda_test_cc_library(
         "//src/v/kafka/data/rpc",
         "//src/v/kafka/data/rpc/test:test_deps",
         "//src/v/model",
+        "//src/v/security",
         "@seastar",
     ],
 )

@@ -245,6 +245,7 @@ service::service(
   cluster::controller* controller,
   ss::sharded<kafka::group_router>* group_router,
   ss::sharded<cluster::health_monitor_frontend>* hm_frontend,
+  ss::sharded<cluster::security_frontend>* security_fe,
   ss::smp_service_group smp_group,
   ss::scheduling_group scheduling_group)
   : _self(self)
@@ -257,6 +258,7 @@ service::service(
   , _controller(controller)
   , _group_router(group_router)
   , _hm_frontend(hm_frontend)
+  , _security_fe(security_fe)
   , _smp_group(smp_group)
   , _scheduling_group(scheduling_group) {}
 
@@ -272,6 +274,7 @@ ss::future<> service::start() {
         _shard_table, _partition_manager, _smp_group),
       topic_metadata_cache::make_default(_metadata_cache),
       topic_creator::make_default(_controller),
+      security_service::make_default(_security_fe),
       std::make_unique<link_registry_adapter>(&_plf->local()),
       std::make_unique<default_link_factory>(_partition_manager),
       std::make_unique<cluster_factory>(),
