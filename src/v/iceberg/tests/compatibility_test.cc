@@ -1340,6 +1340,182 @@ TEST(ValuePromotionTest, PrimitiveValuePromotion) {
 
 namespace {
 
+struct fill_ids_test_case {
+    std::string_view description{};
+    ss::lw_shared_ptr<struct_type> source;
+    ss::lw_shared_ptr<struct_type> dest;
+    checked<ids_filled, schema_evolution_errc> expected_result{ids_filled::yes};
+};
+
+std::ostream& operator<<(std::ostream& os, const fill_ids_test_case& tc) {
+    return os << tc.description;
+}
+
+std::vector<fill_ids_test_case> generate_fill_ids_test_cases() {
+    std::vector<fill_ids_test_case> test_cases;
+
+    auto struct_template = [] {
+        auto s = ss::make_lw_shared<struct_type>();
+        s->fields.emplace_back(
+          nested_field::create(
+            nested_field::id_t{1}, "foo", field_required::yes, int_type{}));
+        s->fields.emplace_back(
+          nested_field::create(
+            nested_field::id_t{2}, "bar", field_required::no, string_type{}));
+        return s;
+    };
+
+    test_cases.emplace_back(
+      fill_ids_test_case{
+        .description = "equivalent schemas should succeed",
+        .source = struct_template(),
+        .dest = struct_template(),
+        .expected_result = ids_filled::yes,
+      });
+
+    test_cases.emplace_back(
+      fill_ids_test_case{
+        .description = "destination missing field should succeed",
+        .source = struct_template(),
+        .dest =
+          [&]() {
+              auto s = struct_template();
+              s->fields.pop_back();
+              return s;
+          }(),
+        .expected_result = ids_filled::yes,
+      });
+
+    test_cases.emplace_back(
+      fill_ids_test_case{
+        .description = "destination with extra field should fail",
+        .source = struct_template(),
+        .dest =
+          [&]() {
+              auto s = struct_template();
+              s->fields.emplace_back(
+                nested_field::create(
+                  nested_field::id_t{0},
+                  "extra",
+                  field_required::no,
+                  string_type{}));
+              return s;
+          }(),
+        .expected_result = ids_filled::no,
+      });
+
+    test_cases.emplace_back(
+      fill_ids_test_case{
+        .description
+        = "dest long type, source int type should fail (requires promotion)",
+        .source =
+          []() {
+              auto s = ss::make_lw_shared<struct_type>();
+              s->fields.emplace_back(
+                nested_field::create(
+                  nested_field::id_t{1},
+                  "foo",
+                  field_required::yes,
+                  int_type{}));
+              return s;
+          }(),
+        .dest =
+          []() {
+              auto s = ss::make_lw_shared<struct_type>();
+              s->fields.emplace_back(
+                nested_field::create(
+                  nested_field::id_t{0},
+                  "foo",
+                  field_required::yes,
+                  long_type{}));
+              return s;
+          }(),
+        .expected_result = ids_filled::no,
+      });
+
+    // test_cases.emplace_back(
+    //   fill_ids_test_case{
+    //     .description = "dest int type, source long type should succeed "
+    //                    "(allowed under promotion rules)",
+    //     .source =
+    //       []() {
+    //           auto s = ss::make_lw_shared<struct_type>();
+    //           s->fields.emplace_back(
+    //             nested_field::create(
+    //               nested_field::id_t{1},
+    //               "foo",
+    //               field_required::yes,
+    //               long_type{}));
+    //           return s;
+    //       }(),
+    //     .dest =
+    //       []() {
+    //           auto s = ss::make_lw_shared<struct_type>();
+    //           s->fields.emplace_back(
+    //             nested_field::create(
+    //               nested_field::id_t{0},
+    //               "foo",
+    //               field_required::yes,
+    //               int_type{}));
+    //           return s;
+    //       }(),
+    //     .expected_result = ids_filled::yes,
+    //   });
+
+    for (auto& tc : test_cases) {
+        reset_field_ids(*tc.dest);
+    }
+
+    return test_cases;
+}
+
+} // namespace
+
+template<typename T>
+struct FillIdsCompatibilityTest
+  : ::testing::Test
+  , testing::WithParamInterface<T> {};
+
+using FillIdsTest = FillIdsCompatibilityTest<fill_ids_test_case>;
+
+INSTANTIATE_TEST_SUITE_P(
+  FillIdsCompatibilityTest,
+  FillIdsTest,
+  ::testing::ValuesIn(generate_fill_ids_test_cases()));
+
+TEST_P(FillIdsTest, TryFillFieldIds) {
+    const auto& tc = GetParam();
+
+    // Make copies since try_fill_field_ids modifies the dest schema
+    auto source = tc.source->copy();
+    auto dest = tc.dest->copy();
+    auto result = try_fill_field_ids(source, dest);
+
+    ASSERT_EQ(result.has_error(), tc.expected_result.has_error());
+
+    if (result.has_error()) {
+        ASSERT_EQ(result.error(), tc.expected_result.error());
+    } else {
+        ASSERT_EQ(result.value(), tc.expected_result.value());
+
+        // If successful and ids_filled::yes, verify that all dest fields have
+        // non-zero IDs
+        if (result.value() == ids_filled::yes) {
+            bool all_have_ids = true;
+            std::ignore = for_each_field(
+              dest, [&all_have_ids](const nested_field* f) {
+                  if (f->id == nested_field::id_t{0}) {
+                      all_have_ids = false;
+                  }
+              });
+            ASSERT_TRUE(all_have_ids)
+              << "All destination fields should have assigned IDs";
+        }
+    }
+}
+
+namespace {
+
 struct merge_test_case {
     std::string description;
 

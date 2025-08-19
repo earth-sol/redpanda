@@ -501,8 +501,10 @@ try_fill_field_ids(const struct_type& source, struct_type& dest) {
         res.has_error()) {
         return res.error();
     } else {
-        // All we care about here is that every field got an ID
-        return ids_filled{res.value().n_added == 0};
+        // All we care about here is that every field got an ID and none got
+        // promoted. I.e. source is a superset of the destination.
+        return ids_filled{
+          res.value().n_added == 0 && res.value().n_promoted == 0};
     }
 }
 
