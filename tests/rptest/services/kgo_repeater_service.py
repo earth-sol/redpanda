@@ -122,6 +122,7 @@ class KgoRepeaterService(Service):
             node.account.remove(self.LOG_PATH)
 
     def start_node(self, node, clean=None):
+        self._log_node_network_state(node)
         self._remote_ports[node] = self._select_port(node)
         initial_data_mb = self.mb_per_worker * self.workers
 
@@ -246,6 +247,21 @@ class KgoRepeaterService(Service):
                 raise
 
         self._release_port(node)
+
+    def _log_node_network_state(self, node):
+        """
+        For debugging issues around starting and stopping processes: log which ports are in use.
+        """
+        self.logger.debug(
+            f"Gathering port usage information with 'netstat -panelot' on {node.name} while starting {self.who_am_i()}"
+        )
+
+        # Capture general process informatio
+
+        # Capture network information
+        for line in node.account.ssh_capture("netstat -panelot",
+                                             timeout_sec=30):
+            self.logger.debug(line.strip())
 
     def _remote_url(self, node, path):
         assert self._remote_ports is not None
