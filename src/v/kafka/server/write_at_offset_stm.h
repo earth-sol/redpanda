@@ -56,20 +56,21 @@ public:
       storage::kvstore& kvstore,
       std::vector<model::record_batch_type> offset_translated_batches);
     /**
-     * Method that replicates a vector of record batches only if its
-     * kafka::offset of the first batch is going to be exactly the expected
+     * Method that replicates a vector of record batches only if the
+     * kafka::offset of each batch is going to be exactly the expected
      * offset.
      *
      * The method supports replicating gaps in the logs, in this case the
      * prev_log_offset parameter must be present. If the `prev_log_offset` is
-     * not present it is equivalent for it to be equal to (expected_base_offset
+     * not present it is equivalent for it to be equal to (first
+     * expected_base_offset
      * - 1).
      *
      * If prev_log_offset is present the state machine will match the expected
-     * prev_log_offset with the tracked offset and fill the gap between
-     * (prev_log_offset, expected_base_offset) - both offsets are exclusive.
-     * i.e. gap first offset will be prev_log_offset + 1 and the gap last offset
-     * will be expected_base_offset - 1.
+     * prev_log_offset with the tracked offset and fill any gaps between
+     * consecutive batches and within the provided batch sequence.
+     * Gaps are filled between (prev_log_offset, first_expected_base_offset)
+     * and between any non-consecutive expected offsets in the batch vector.
      *
      * Example:
      *
@@ -77,22 +78,33 @@ public:
      * (denoted as [base_offset, end_offset])
      *
      *
-     * [0,0][1,3][4,4][gap][10,13]
+     * [0,4][gap][10,13][gap][20,22]
      *
-     * In order to replicate the sequence the following set of replicate calls
+     * In order to replicate the sequence the following replicate call
      * is required:
      *
-     * - batch [0,0]
-     *   replicate(batch, expected_base_offset=0,  prev_log_offset=std::nullopt)
+     * replicate(
+     *   batches=[[0, 4], [10, 13], [20, 22]],
+     *   expected_base_offsets=[0, 10, 20],
+     *   prev_log_offset=std::nullopt
+     * )
      *
-     * - batch [1,3]
-     *   replicate(batch, expected_base_offset=1,  prev_log_offset=std::nullopt)
+     * This will replicate:
+     * - [0, 4] at offset 0
+     * - fill gap from 5-9
+     * - [10, 13] at offset 10
+     * - fill gap from 14-19
+     * - [20, 22] at offset 20
      *
-     * - batch [4,4]
-     *   replicate(batch, expected_base_offset=4, prev_log_offset=std::nullopt);
+     * Alternatively, to replicate with a gap from a previous log position:
      *
-     * - gap & batch [10,13]
-     *   replicate(batch, expected_base_offset=10, prev_log_offset=4);
+     * replicate(
+     *   batches=[[10, 13]],
+     *   expected_base_offsets=[10],
+     *   prev_log_offset=4
+     * )
+     *
+     * This fills the gap [5, 9]  and replicates [10, 13] at offset 10.
      *
      * The method guarantees the replication in the call order. There can be
      * more than one replicate request in flight at the same time.
