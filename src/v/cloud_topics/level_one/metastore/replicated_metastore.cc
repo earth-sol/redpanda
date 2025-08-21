@@ -341,6 +341,12 @@ replicated_metastore::replace_objects(
     co_return std::expected<void, errc>{};
 }
 
+ss::future<std::expected<void, metastore::errc>>
+replicated_metastore::set_start_offset(
+  const model::topic_id_partition&, kafka::offset) {
+    co_return std::expected<void, errc>{};
+}
+
 ss::future<std::expected<metastore::object_response, metastore::errc>>
 replicated_metastore::get_first_ge(
   const model::topic_id_partition& tidp, kafka::offset offset) {
