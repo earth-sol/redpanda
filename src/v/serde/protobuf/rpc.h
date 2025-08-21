@@ -12,6 +12,7 @@
 #pragma once
 
 #include "base/seastarx.h"
+#include "model/fundamental.h"
 
 #include <seastar/core/future.hh>
 #include <seastar/core/sstring.hh>
@@ -76,6 +77,45 @@ public:
     virtual std::string_view name() const = 0;
     // Returns a vector of all the routes that this service has registered.
     virtual std::vector<route_descriptor> all_routes() = 0;
+};
+
+// Context about an RPC request being handled.
+class context {
+public:
+    context(
+      std::string_view service_name,
+      std::string_view method_name,
+      std::vector<model::node_id> via = {})
+      : _service_name(service_name)
+      , _method_name(method_name)
+      , _via(std::move(via)) {}
+
+    context(const context&) = default;
+    context(context&&) = default;
+    context& operator=(const context&) = default;
+    context& operator=(context&&) = default;
+    ~context() = default;
+
+    std::string_view service_name() const { return _service_name; }
+    std::string_view method_name() const { return _service_name; }
+    const std::vector<model::node_id>& proxied_nodes() const { return _via; }
+
+    // If the request is being proxied from another broker or not.
+    bool is_proxied() const { return !_via.empty(); }
+    // Return true if the given node has already proxied this request.
+    bool has_visited_node(model::node_id node) const {
+        return std::ranges::find(_via, node) != _via.end();
+    }
+
+private:
+    ss::sstring _service_name;
+    ss::sstring _method_name;
+    // A list of nodes that have proxied this request.
+    //
+    // This is used to service similar purposes as the `Via` HTTP header.
+    //
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Via
+    std::vector<model::node_id> _via;
 };
 
 // Base Exception when handling RPC requests.
