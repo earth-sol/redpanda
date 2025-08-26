@@ -64,6 +64,8 @@ class DatalakeDiskUsageTest(RedpandaTest):
                 "datalake_translator_flush_bytes": 100 * 2**30,
                 "iceberg_target_lag_ms": self.target_lag_sec * 1000,
                 "datalake_scratch_space_size_bytes": 100 * 2**30,
+                # Run space management more frequently to get higher fidelity metrics.
+                "retention_local_trim_interval": 3000,
             },
             *args,
             **kwargs,
@@ -99,7 +101,7 @@ class DatalakeDiskUsageTest(RedpandaTest):
                 self.redpanda,
                 self.topic_name,
                 2**14,
-                2**15,  # ~256mb
+                2**15,  # ~512MB
                 acks=-1,
             )
             producer.start()
