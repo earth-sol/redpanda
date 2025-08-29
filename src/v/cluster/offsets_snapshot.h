@@ -51,6 +51,8 @@ struct group_offsets
         model::topic topic;
         chunked_vector<partition_offset> partitions;
 
+        topic_partitions copy() const { return {topic, partitions.copy()}; }
+
         auto serde_fields() { return std::tie(topic, partitions); }
         friend bool operator==(const topic_partitions&, const topic_partitions&)
           = default;
@@ -63,6 +65,14 @@ struct group_offsets
     chunked_vector<topic_partitions> offsets;
 
     auto serde_fields() { return std::tie(group_id, offsets); }
+
+    group_offsets copy() const {
+        return {
+          .group_id = group_id,
+          .offsets = {
+            std::from_range,
+            offsets | std::views::transform(&topic_partitions::copy)}};
+    }
 
     friend bool operator==(const group_offsets&, const group_offsets&)
       = default;
@@ -78,6 +88,14 @@ struct group_offsets_snapshot
 
     // Consumer groups and their offsets.
     chunked_vector<group_offsets> groups;
+
+    group_offsets_snapshot copy() const {
+        return {
+          .offsets_topic_pid = offsets_topic_pid,
+          .groups = {
+            std::from_range,
+            groups | std::views::transform(&group_offsets::copy)}};
+    }
 
     auto serde_fields() { return std::tie(offsets_topic_pid, groups); }
 
