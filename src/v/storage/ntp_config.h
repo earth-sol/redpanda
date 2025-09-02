@@ -153,14 +153,6 @@ public:
 
     bool has_overrides() const { return _overrides != nullptr; }
 
-    bool has_compacted_override() const {
-        auto cp_override = cleanup_policy_override();
-        if (!cp_override) {
-            return false;
-        }
-        return model::is_compaction_enabled(cp_override.value());
-    }
-
     bool is_compacted() const {
         return model::is_compaction_enabled(cleanup_policy());
     }
