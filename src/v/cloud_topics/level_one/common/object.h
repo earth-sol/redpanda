@@ -11,6 +11,7 @@
 #pragma once
 
 #include "absl/container/btree_map.h"
+#include "base/format_to.h"
 #include "base/seastarx.h"
 #include "base/units.h"
 #include "container/chunked_vector.h"
@@ -100,6 +101,7 @@ struct footer
                 return std::tie(file_position, kafka_offset, max_timestamp);
             }
             bool operator==(const index_entry&) const = default;
+            fmt::iterator format_to(fmt::iterator) const;
         };
         // Index information for l1 data, this is a snapshot of the state at a
         // periodic interval within the partition data. For example, we can
@@ -123,6 +125,7 @@ struct footer
         ss::future<> serde_async_read(iobuf_parser&, serde::header);
         ss::future<> serde_async_write(iobuf&) const;
         bool operator==(const partition&) const = default;
+        fmt::iterator format_to(fmt::iterator) const;
 
         partition copy() const;
     };
@@ -142,6 +145,7 @@ struct footer
     ss::future<> serde_async_write(iobuf&) const;
 
     bool operator==(const footer&) const = default;
+    fmt::iterator format_to(fmt::iterator) const;
 
     // The value returned when an index search doesn't have contain matching
     // data.
@@ -346,57 +350,3 @@ public:
 };
 
 } // namespace cloud_topics::l1
-
-template<>
-struct fmt::formatter<cloud_topics::l1::footer::partition::index_entry> {
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template<typename FormatContext>
-    typename FormatContext::iterator format(
-      const cloud_topics::l1::footer::partition::index_entry& entry,
-      FormatContext& ctx) const {
-        return fmt::format_to(
-          ctx.out(),
-          "{{file_position: {}, kafka_offset: {}, max_timestamp: {}}}",
-          entry.file_position,
-          entry.kafka_offset,
-          entry.max_timestamp);
-    }
-};
-
-template<>
-struct fmt::formatter<cloud_topics::l1::footer::partition> {
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template<typename FormatContext>
-    typename FormatContext::iterator format(
-      const cloud_topics::l1::footer::partition& partition,
-      FormatContext& ctx) const {
-        return fmt::format_to(
-          ctx.out(),
-          "{{file_position: {}, length: {}, first_offset: {}, last_offset: {}, "
-          "max_timestamp: {}, indexes: [{}]}}",
-          partition.file_position,
-          partition.length,
-          partition.first_offset,
-          partition.last_offset,
-          partition.max_timestamp,
-          fmt::join(partition.indexes, ", "));
-    }
-};
-
-template<>
-struct fmt::formatter<cloud_topics::l1::footer> {
-    constexpr auto parse(format_parse_context& ctx) { return ctx.begin(); }
-
-    template<typename FormatContext>
-    typename FormatContext::iterator
-    format(const cloud_topics::l1::footer& index, FormatContext& ctx) const {
-        auto out = fmt::format_to(ctx.out(), "{{partitions: [");
-        for (const auto& [tidp, partition] : index.partitions) {
-            out = fmt::format_to(
-              out, "{{tidp: {}, partition: {}}}, ", tidp, partition);
-        }
-        return fmt::format_to(out, "]}}");
-    }
-};

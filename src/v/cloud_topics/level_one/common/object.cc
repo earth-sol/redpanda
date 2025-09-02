@@ -528,4 +528,36 @@ object_reader::create(ss::file f, size_t offset, size_t length) {
     return create(ss::make_file_input_stream(std::move(f), offset, length));
 }
 
+fmt::iterator
+footer::partition::index_entry::format_to(fmt::iterator it) const {
+    return fmt::format_to(
+      it,
+      "{{file_position: {}, kafka_offset: {}, max_timestamp: {}}}",
+      file_position,
+      kafka_offset,
+      max_timestamp);
+}
+
+fmt::iterator footer::partition::format_to(fmt::iterator it) const {
+    return fmt::format_to(
+      it,
+      "{{file_position: {}, length: {}, first_offset: {}, last_offset: {}, "
+      "max_timestamp: {}, indexes: [{}]}}",
+      file_position,
+      length,
+      first_offset,
+      last_offset,
+      max_timestamp,
+      fmt::join(indexes, ", "));
+}
+
+fmt::iterator footer::format_to(fmt::iterator it) const {
+    auto out = fmt::format_to(it, "{{partitions: [");
+    for (const auto& [tidp, partition] : partitions) {
+        out = fmt::format_to(
+          out, "{{tidp: {}, partition: {}}}, ", tidp, partition);
+    }
+    return fmt::format_to(out, "]}}");
+}
+
 } // namespace cloud_topics::l1
