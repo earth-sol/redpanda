@@ -149,7 +149,8 @@ simple_schema_manager::ensure_table_schema(
 
 ss::future<checked<schema_manager::table_info, schema_manager::errc>>
 simple_schema_manager::get_table_info(
-  const iceberg::table_identifier& table_id) {
+  const iceberg::table_identifier& table_id,
+  std::optional<std::reference_wrapper<iceberg::struct_type>>) {
     auto it = table_info_by_id.find(table_id);
     if (it == table_info_by_id.end()) {
         co_return errc::failed;
@@ -266,7 +267,8 @@ catalog_schema_manager::ensure_table_schema(
 
 ss::future<checked<schema_manager::table_info, schema_manager::errc>>
 catalog_schema_manager::get_table_info(
-  const iceberg::table_identifier& table_id) {
+  const iceberg::table_identifier& table_id,
+  std::optional<std::reference_wrapper<iceberg::struct_type>>) {
     auto gh = maybe_gate();
     if (gh.has_error()) {
         co_return gh.error();
