@@ -15,7 +15,7 @@
 #include "iceberg/compatibility.h"
 #include "iceberg/compatibility_types.h"
 #include "iceberg/datatypes.h"
-#include "iceberg/field_collecting_visitor.h"
+#include "iceberg/schema.h"
 #include "iceberg/table_identifier.h"
 #include "iceberg/transaction.h"
 

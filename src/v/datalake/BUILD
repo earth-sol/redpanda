@@ -14,7 +14,6 @@ redpanda_cc_library(
         "//src/v/features",
         "//src/v/iceberg:compatibility",
         "//src/v/iceberg:compatibility_types",
-        "//src/v/iceberg:field_collecting_visitor",
         "//src/v/iceberg:partition",
         "//src/v/iceberg:schema",
         "//src/v/iceberg:transaction",
