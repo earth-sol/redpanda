@@ -414,6 +414,10 @@ public:
 
     ss::sharded<server>& server() { return _conn->server().container(); }
 
+    bool is_cluster_link_active() const {
+        return _conn->server().container().local().is_cluster_link_active();
+    }
+
 private:
     template<typename T>
     security::auth_result do_authorized(

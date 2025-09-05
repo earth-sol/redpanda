@@ -228,6 +228,11 @@ server::server(
     _read_dist_probe->setup_metrics();
 }
 
+bool server::is_cluster_link_active() const {
+    const auto& clfe = _cluster_link_frontend.local();
+    return clfe.cluster_linking_enabled() && clfe.cluster_link_active();
+}
+
 void server::setup_metrics() {
     namespace sm = ss::metrics;
     if (config::shard_local_cfg().disable_metrics()) {

@@ -251,6 +251,8 @@ public:
         return _cluster_link_frontend.local();
     }
 
+    bool is_cluster_link_active() const;
+
 private:
     void setup_metrics();
 
