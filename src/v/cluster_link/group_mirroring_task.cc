@@ -375,8 +375,62 @@ void group_mirroring_task::handle_offset_commit_response(
 ss::future<chunked_vector<group_mirroring_task::group_offsets>>
 group_mirroring_task::trim_to_partition_highwatermark(
   chunked_vector<group_offsets> offsets) {
-    // TODO: add trimming implementation
-    co_return std::move(offsets);
+    auto& metadata_provider = get_link()->get_partition_metadata_provider();
+
+    chunked_vector<group_offsets> trimmed_offsets;
+    trimmed_offsets.reserve(offsets.size());
+
+    for (auto& g_offsets : offsets) {
+        group_offsets trimmed_g_offsets;
+        trimmed_g_offsets.group_id = std::move(g_offsets.group_id);
+        trimmed_g_offsets.topic_offsets.reserve(g_offsets.topic_offsets.size());
+        for (auto& t_offsets : g_offsets.topic_offsets) {
+            topic_offsets trimmed_t_offsets;
+            trimmed_t_offsets.topic = std::move(t_offsets.topic);
+            trimmed_t_offsets.partition_offsets.reserve(
+              t_offsets.partition_offsets.size());
+            for (auto& po : t_offsets.partition_offsets) {
+                auto maybe_hw
+                  = co_await metadata_provider.get_partition_high_watermark(
+                    ::model::topic_partition_view(
+                      trimmed_t_offsets.topic, po.partition));
+                vlog(
+                  logger().trace,
+                  "Offset trimming for group {}, partition: {}/{}, committed "
+                  "offset: {}, partition hwm: {}",
+                  trimmed_g_offsets.group_id,
+                  trimmed_t_offsets.topic,
+                  po.partition,
+                  po.committed_offset,
+                  maybe_hw);
+                if (!maybe_hw.has_value()) {
+                    vlog(
+                      logger().debug,
+                      "Group: {}, no high watermark for partition {}/{}, "
+                      "skipping offset commit",
+                      trimmed_g_offsets.group_id,
+                      trimmed_t_offsets.topic,
+                      po.partition);
+                    continue;
+                }
+                trimmed_t_offsets.partition_offsets.push_back(
+                  partition_committed_offset{
+                    .partition = po.partition,
+                    .committed_offset = std::min(
+                      *maybe_hw, po.committed_offset),
+                  });
+            }
+            if (!trimmed_t_offsets.partition_offsets.empty()) {
+                trimmed_g_offsets.topic_offsets.push_back(
+                  std::move(trimmed_t_offsets));
+            }
+        }
+        if (!trimmed_g_offsets.topic_offsets.empty()) {
+            trimmed_offsets.push_back(std::move(trimmed_g_offsets));
+        }
+    }
+
+    co_return std::move(trimmed_offsets);
 }
 
 ss::future<std::expected<
