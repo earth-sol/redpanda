@@ -3,23 +3,6 @@ load("//bazel:build.bzl", "redpanda_cc_library")
 package(default_visibility = [":__subpackages__"])
 
 redpanda_cc_library(
-    name = "range_batch_consumer",
-    srcs = [
-        "range_batch_consumer.cc",
-    ],
-    hdrs = [
-        "range_batch_consumer.h",
-    ],
-    deps = [
-        "//src/v/base",
-        "//src/v/bytes:iobuf",
-        "//src/v/model",
-        "@abseil-cpp//absl/container:btree",
-        "@seastar",
-    ],
-)
-
-redpanda_cc_library(
     name = "reconciliation_consumer",
     srcs = [
         "reconciliation_consumer.cc",
