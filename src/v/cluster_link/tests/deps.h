@@ -193,7 +193,8 @@ public:
       ss::shard_id,
       const N&,
       ss::noncopyable_function<
-        ss::future<::result<R, cluster::errc>>(kafka::partition_proxy*)>) {
+        ss::future<::result<R, cluster::errc>>(kafka::partition_proxy*)>,
+      kafka::data::rpc::require_leader) {
         throw std::runtime_error("not implemented");
     }
 
@@ -225,18 +226,20 @@ public:
     ss::future<::result<::model::offset, cluster::errc>> invoke_on_shard(
       ss::shard_id shard_id,
       const ::model::ktp& ktp,
-      ss::noncopyable_function<
-        ss::future<::result<::model::offset, cluster::errc>>(
-          kafka::partition_proxy*)> fn) final {
-        return _impl->invoke_on_shard_impl(shard_id, ktp, std::move(fn));
+      ss::noncopyable_function<ss::future<
+        ::result<::model::offset, cluster::errc>>(kafka::partition_proxy*)> fn,
+      kafka::data::rpc::require_leader require_leader) final {
+        return _impl->invoke_on_shard_impl(
+          shard_id, ktp, std::move(fn), require_leader);
     }
     ss::future<::result<::model::offset, cluster::errc>> invoke_on_shard(
       ss::shard_id shard_id,
       const ::model::ntp& ntp,
-      ss::noncopyable_function<
-        ss::future<::result<::model::offset, cluster::errc>>(
-          kafka::partition_proxy*)> fn) final {
-        return _impl->invoke_on_shard_impl(shard_id, ntp, std::move(fn));
+      ss::noncopyable_function<ss::future<
+        ::result<::model::offset, cluster::errc>>(kafka::partition_proxy*)> fn,
+      kafka::data::rpc::require_leader require_leader) final {
+        return _impl->invoke_on_shard_impl(
+          shard_id, ntp, std::move(fn), require_leader);
     }
 
     ss::future<::result<kafka::data::rpc::partition_offsets, cluster::errc>>
@@ -245,8 +248,10 @@ public:
       const ::model::ktp& ktp,
       ss::noncopyable_function<ss::future<
         ::result<kafka::data::rpc::partition_offsets, cluster::errc>>(
-        kafka::partition_proxy*)> fn) final {
-        return _impl->invoke_on_shard_impl(shard_id, ktp, std::move(fn));
+        kafka::partition_proxy*)> fn,
+      kafka::data::rpc::require_leader require_leader) final {
+        return _impl->invoke_on_shard_impl(
+          shard_id, ktp, std::move(fn), require_leader);
     }
 
 private:
