@@ -116,6 +116,15 @@ update_mirror_topic_properties_cmd::copy() const {
     }
     return copy;
 }
+
+update_cluster_link_configuration_cmd
+update_cluster_link_configuration_cmd::copy() const {
+    update_cluster_link_configuration_cmd copy;
+    copy.connection = connection;
+    copy.link_config = link_config.copy();
+
+    return copy;
+}
 } // namespace cluster_link::model
 
 auto fmt::formatter<cluster_link::model::task_state>::format(
@@ -401,4 +410,15 @@ auto fmt::formatter<cluster_link::model::link_configuration>::format(
       "{{topic_metadata_mirroring_cfg: {}, consumer_groups_mirroring_cfg: {}}}",
       cfg.topic_metadata_mirroring_cfg,
       cfg.consumer_groups_mirroring_cfg);
+}
+
+auto fmt::
+  formatter<cluster_link::model::update_cluster_link_configuration_cmd>::format(
+    const cluster_link::model::update_cluster_link_configuration_cmd& cfg,
+    format_context& ctx) const -> decltype(ctx.out()) {
+    return fmt::format_to(
+      ctx.out(),
+      "{{connection: {}, link_config: {}}}",
+      cfg.connection,
+      cfg.link_config);
 }

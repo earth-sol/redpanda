@@ -520,6 +520,25 @@ struct update_mirror_topic_properties_cmd
     update_mirror_topic_properties_cmd copy() const;
 };
 
+/// \brief Command used to update the configuration of a cluster link
+struct update_cluster_link_configuration_cmd
+  : serde::envelope<
+      update_cluster_link_configuration_cmd,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    connection_config connection;
+    link_configuration link_config;
+
+    friend bool operator==(
+      const update_cluster_link_configuration_cmd&,
+      const update_cluster_link_configuration_cmd&)
+      = default;
+
+    auto serde_fields() { return std::tie(connection, link_config); }
+
+    update_cluster_link_configuration_cmd copy() const;
+};
+
 /// Status report for a task
 struct task_status_report
   : serde::envelope<
@@ -818,5 +837,14 @@ struct fmt::formatter<cluster_link::model::link_configuration>
   : fmt::formatter<string_view> {
     auto format(
       const cluster_link::model::link_configuration& m,
+      format_context& ctx) const -> decltype(ctx.out());
+};
+
+template<>
+struct fmt::formatter<
+  cluster_link::model::update_cluster_link_configuration_cmd>
+  : fmt::formatter<string_view> {
+    auto format(
+      const cluster_link::model::update_cluster_link_configuration_cmd& m,
       format_context& ctx) const -> decltype(ctx.out());
 };
