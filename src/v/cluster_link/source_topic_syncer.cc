@@ -20,6 +20,8 @@
 
 namespace cluster_link {
 
+using properties_set = model::topic_metadata_mirroring_config::properties_set;
+
 namespace {
 const absl::flat_hash_set<ss::sstring> required_topic_properties{
   ss::sstring{kafka::topic_property_max_message_bytes},
@@ -619,8 +621,8 @@ source_topic_syncer::describe_topics(
   ::model::node_id controller_id,
   kafka::api_version describe_configs_version,
   const chunked_vector<::model::topic>& topics,
-  const absl::flat_hash_set<ss::sstring>& configs) {
-    absl::flat_hash_set<ss::sstring> requested_configs_set = configs;
+  const properties_set& configs) {
+    properties_set requested_configs_set = configs;
     requested_configs_set.insert(
       required_topic_properties.begin(), required_topic_properties.end());
     chunked_vector<ss::sstring> requested_configs(
