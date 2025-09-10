@@ -173,6 +173,10 @@ void frontend::unregister_for_updates(notification_id id) {
     _table->unregister_for_updates(id);
 }
 
+std::optional<id_t> frontend::find_link_id_by_name(const name_t& name) const {
+    return _table->find_id_by_name(name);
+}
+
 std::optional<std::reference_wrapper<const metadata>>
 frontend::find_link_by_id(id_t id) const {
     return _table->find_link_by_id(id);

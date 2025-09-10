@@ -42,6 +42,9 @@ public:
     virtual std::optional<std::reference_wrapper<const model::metadata>>
     find_link_by_name(const model::name_t&) const = 0;
 
+    virtual std::optional<model::id_t>
+    find_link_id_by_name(const model::name_t&) const = 0;
+
     virtual chunked_vector<model::id_t> get_all_link_ids() const = 0;
 
     virtual ss::future<::cluster::cluster_link::errc> add_mirror_topic(

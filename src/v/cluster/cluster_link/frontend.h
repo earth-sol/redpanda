@@ -81,6 +81,9 @@ public:
     std::optional<std::reference_wrapper<const ::cluster_link::model::metadata>>
     find_link_by_name(const ::cluster_link::model::name_t& name) const;
 
+    std::optional<::cluster_link::model::id_t>
+    find_link_id_by_name(const ::cluster_link::model::name_t& name) const;
+
     chunked_vector<::cluster_link::model::id_t> get_all_link_ids() const;
 
     std::optional<chunked_hash_map<

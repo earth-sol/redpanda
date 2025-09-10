@@ -55,6 +55,11 @@ public:
         return _plf->find_link_by_name(name);
     }
 
+    std::optional<model::id_t>
+    find_link_id_by_name(const model::name_t& name) const final {
+        return _plf->find_link_id_by_name(name);
+    }
+
     chunked_vector<model::id_t> get_all_link_ids() const override {
         return _plf->get_all_link_ids();
     }
