@@ -60,7 +60,6 @@ public:
       ss::scheduling_group raft_heartbeats_sched_group,
       config_provider_fn,
       config::binding<std::optional<size_t>> max_recovery_memory,
-      config::binding<size_t> default_read_buffer_size,
       ss::sharded<rpc::connection_cache>& clients,
       ss::sharded<storage::api>& storage,
       ss::sharded<coordinated_recovery_throttle>&,

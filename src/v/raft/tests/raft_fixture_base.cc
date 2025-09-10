@@ -423,7 +423,7 @@ raft_node_instance::raft_node_instance(
   , _features(feature_table)
   , _recovery_mem_quota(
       config::mock_binding<std::optional<size_t>>(200_MiB),
-      _default_recovery_read_size.bind())
+      _max_concurrent_recoveries.bind())
   , _recovery_scheduler(
       config::mock_binding<size_t>(64), config::mock_binding(10ms))
   , _leader_clb(std::move(leader_update_clb))

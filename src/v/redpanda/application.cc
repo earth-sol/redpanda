@@ -1634,10 +1634,6 @@ void application::wire_up_redpanda_services(
         ss::sharded_parameter([] {
             return config::shard_local_cfg().raft_max_recovery_memory.bind();
         }),
-        ss::sharded_parameter([] {
-            return config::shard_local_cfg()
-              .raft_recovery_default_read_size.bind();
-        }),
         std::ref(_connection_cache),
         std::ref(storage),
         std::ref(recovery_throttle),

@@ -110,7 +110,6 @@ struct simple_raft_fixture {
                 };
             },
             config::mock_binding<std::optional<size_t>>(std::nullopt),
-            config::mock_binding<size_t>(512_KiB),
             std::ref(_connections),
             std::ref(_storage),
             std::ref(_recovery_throttle),
