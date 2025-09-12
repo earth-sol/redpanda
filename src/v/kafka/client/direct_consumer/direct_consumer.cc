@@ -50,14 +50,14 @@ void direct_consumer::update_configuration(configuration cfg) {
     });
 }
 
-ss::future<>
-direct_consumer::update_fetchers(topic_partition_map<subscription> removals) {
+ss::future<> direct_consumer::update_fetchers(
+  [[maybe_unused]] mutex::units lock_holder,
+  topic_partition_map<subscription> removals) {
     // do not update fetchers before the consumer is started
     if (!_started) {
         co_return;
     }
     auto holder = _gate.hold();
-    auto subscription_lock_holder = co_await _subscriptions_lock.get_units();
     /**
      * Unassign partitions from fetchers that are no longer needed.
      */
@@ -126,6 +126,8 @@ direct_consumer::update_fetchers(topic_partition_map<subscription> removals) {
         ssx::spawn_with_gate(
           _gate, [this] { return _cluster->request_metadata_update(); });
     }
+
+    co_return;
 }
 
 fetcher& direct_consumer::get_fetcher(model::node_id id) {
@@ -146,10 +148,15 @@ fetcher& direct_consumer::get_fetcher(model::node_id id) {
 }
 
 ss::future<> direct_consumer::start() {
+    if (_started) {
+        co_return;
+    }
     _metadata_callback_id = _cluster->register_metadata_cb(
       [this](const metadata_response_data& d) { on_metadata_update(d); });
     _started = true;
-    co_await update_fetchers();
+
+    auto lock_holder = co_await _subscriptions_lock.get_units();
+    co_await update_fetchers(std::move(lock_holder));
 }
 
 ss::future<> direct_consumer::stop() {
@@ -165,6 +172,7 @@ ss::future<> direct_consumer::stop() {
 
 ss::future<>
 direct_consumer::assign_partitions(chunked_vector<topic_assignment> topics) {
+    auto lock_holder = co_await _subscriptions_lock.get_units();
     for (auto& t : topics) {
         auto ec = model::validate_kafka_topic_name(t.topic);
         if (ec) {
@@ -183,11 +191,12 @@ direct_consumer::assign_partitions(chunked_vector<topic_assignment> topics) {
             sub.fetch_offset = p.next_offset;
         }
     }
-    co_await update_fetchers();
+    co_await update_fetchers(std::move(lock_holder));
 }
 
 ss::future<>
 direct_consumer::unassign_topics(chunked_vector<model::topic> topics) {
+    auto lock_holder = co_await _subscriptions_lock.get_units();
     topic_partition_map<subscription> removals;
     for (const auto& topic : topics) {
         vlog(_cluster->logger().trace, "Unassigning topic: {}", topic);
@@ -201,11 +210,12 @@ direct_consumer::unassign_topics(chunked_vector<model::topic> topics) {
         }
         _subscriptions.erase(topic);
     }
-    co_await update_fetchers(std::move(removals));
+    co_await update_fetchers(std::move(lock_holder), std::move(removals));
 }
 
 ss::future<> direct_consumer::unassign_partitions(
   chunked_vector<model::topic_partition> partitions) {
+    auto lock_holder = co_await _subscriptions_lock.get_units();
     topic_partition_map<subscription> removals;
     for (const auto& tp : partitions) {
         vlog(_cluster->logger().trace, "Unassigning partition: {}", tp);
@@ -223,11 +233,12 @@ ss::future<> direct_consumer::unassign_partitions(
             _subscriptions.erase(state_it);
         }
     }
-    co_await update_fetchers(std::move(removals));
+    co_await update_fetchers(std::move(lock_holder), std::move(removals));
 }
 
 ss::future<> direct_consumer::handle_metadata_update() {
-    co_await update_fetchers();
+    auto lock_holder = co_await _subscriptions_lock.get_units();
+    co_await update_fetchers(std::move(lock_holder));
 }
 
 void direct_consumer::on_metadata_update(const metadata_response_data&) {
