@@ -9,10 +9,10 @@
 
 import dataclasses
 import json
-from dataclasses import asdict, dataclass, fields
+from dataclasses import dataclass, fields
 from enum import Enum
 from re import sub
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import requests
 from ducktape.services.service import Service

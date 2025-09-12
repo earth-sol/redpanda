@@ -6,14 +6,13 @@
 #
 # https://github.com/redpanda-data/redpanda/blob/master/licenses/rcl.md
 
-import json
 import os
 import re
 import sys
 import time
 import traceback
 from collections import defaultdict, namedtuple
-from typing import DefaultDict, List, Optional
+from typing import DefaultDict, Optional
 
 from ducktape.mark import matrix
 from ducktape.utils.util import wait_until
@@ -25,11 +24,9 @@ from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.redpanda import (
-    CloudStorageTypeAndUrlStyle,
     RedpandaService,
     SISettings,
     get_cloud_storage_type,
-    get_cloud_storage_type_and_url_style,
 )
 from rptest.tests.redpanda_test import RedpandaTest
 from rptest.util import (
@@ -38,7 +35,6 @@ from rptest.util import (
     segments_count,
     wait_for_local_storage_truncate,
 )
-from rptest.utils.mode_checks import skip_fips_mode
 from rptest.utils.si_utils import (
     NTPR,
     BucketView,

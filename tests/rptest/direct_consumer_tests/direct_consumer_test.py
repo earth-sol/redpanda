@@ -9,12 +9,9 @@
 
 import random
 import threading
-import time
 from typing import Any, Callable
 
-from ducktape.errors import TimeoutError
 from ducktape.tests.test import TestContext
-from ducktape.utils.util import wait_until
 
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin

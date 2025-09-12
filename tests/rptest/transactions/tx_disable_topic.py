@@ -7,9 +7,7 @@
 # the Business Source License, use of this software will be governed
 # by the Apache License, Version 2.0
 
-import operator
 import re
-from time import sleep
 
 import confluent_kafka as ck
 from confluent_kafka import KafkaException

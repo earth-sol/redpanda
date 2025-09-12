@@ -8,7 +8,7 @@
 # by the Apache License, Version 2.0
 
 import requests
-from connectrpc.errors import ConnectError, ConnectErrorCode
+from connectrpc.errors import ConnectErrorCode
 from ducktape.utils.util import wait_until
 
 from rptest.clients.admin.v2 import Admin as AdminV2
@@ -19,7 +19,7 @@ from rptest.services.cluster import cluster
 from rptest.services.redpanda import SaslCredentials, SecurityConfig
 from rptest.tests.redpanda_test import RedpandaTest
 from rptest.tests.schema_registry_test import SchemaRegistryEndpoints
-from rptest.util import expect_exception, expect_http_error
+from rptest.util import expect_http_error
 
 
 def create_user_and_wait(redpanda, admin: Admin, creds: SaslCredentials):

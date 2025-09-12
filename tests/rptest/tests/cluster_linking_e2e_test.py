@@ -14,11 +14,6 @@ from contextlib import nullcontext
 from connectrpc.errors import ConnectError, ConnectErrorCode
 from ducktape.mark import matrix
 
-from rptest.clients.admin.proto.redpanda.core.admin.v2 import (
-    shadow_link_pb2,
-    shadow_link_pb2_connect,
-)
-from rptest.clients.admin.v2 import Admin as AdminV2
 from rptest.clients.rpk import RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin

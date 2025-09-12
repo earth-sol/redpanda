@@ -16,9 +16,7 @@ from confluent_kafka import Producer
 
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
-from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.tests.redpanda_test import RedpandaTest
-from rptest.util import expect_exception
 
 
 def expect_failure_callback(err, msg):

@@ -14,7 +14,6 @@ import subprocess
 import sys
 import threading
 import time
-from ast import main
 from typing import Any, Optional
 
 import numpy
@@ -39,7 +38,6 @@ from rptest.services.redpanda import (
     LoggingConfig,
     MetricsEndpoint,
     PandaproxyConfig,
-    SISettings,
     SchemaRegistryConfig,
 )
 from rptest.tests.redpanda_test import RedpandaTest

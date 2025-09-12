@@ -8,14 +8,13 @@
 # by the Apache License, Version 2.0
 
 from enum import Enum
-from typing import Any, Literal, Optional, Type, TypeVar
+from typing import Any, Type, TypeVar
 
 import kafkatest.version
-from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.zookeeper import ZookeeperService
 
-from rptest.clients.rpk import RpkTool, TopicSpec
+from rptest.clients.rpk import RpkTool
 from rptest.services.admin import Admin
 from rptest.services.kafka import KafkaServiceAdapter
 from rptest.services.redpanda import RedpandaService

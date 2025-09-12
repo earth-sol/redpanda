@@ -103,7 +103,6 @@ from rptest.util import (
     wait_until_with_progress_check,
 )
 from rptest.utils.allow_logs_on_predicate import AllowLogsOnPredicate
-from rptest.utils.expiring_value import ExpiringValue
 from rptest.utils.mode_checks import in_fips_environment
 from rptest.utils.rpenv import sample_license
 

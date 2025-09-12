@@ -16,7 +16,6 @@ from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.services.redpanda import (
-    CloudStorageType,
     SISettings,
     get_cloud_storage_type,
 )

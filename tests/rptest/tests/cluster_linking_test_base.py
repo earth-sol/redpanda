@@ -32,7 +32,6 @@ from rptest.services.multi_cluster_services import (
 )
 from rptest.services.redpanda import LoggingConfig
 from rptest.tests.prealloc_nodes import PreallocNodesTest
-from rptest.tests.redpanda_test import RedpandaTest
 from rptest.utils.node_operations import FailureInjectorBackgroundThread
 
 
