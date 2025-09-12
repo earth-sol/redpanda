@@ -325,6 +325,18 @@ class TLSVersionTestBase(RedpandaTest):
 
         check_ciphers(expected_ciphers)
 
+        self.redpanda.set_cluster_config(
+            values={
+                "tls_min_version": "v1.3",
+            },
+            expect_restart=True,
+        )
+
+        def expected_ciphers_tls1_3(strict: bool):
+            return [(TLSVersion.v1_3, c) for c in self.TLSV1_3_CIPHERS_STRICT]
+
+        check_ciphers(expected_ciphers_tls1_3)
+
     @cluster(num_nodes=3, log_allow_list=PERMITTED_ERROR_MESSAGE)
     @matrix(version=[0, 1, 2, 3])
     def test_change_version(self, version: int):
