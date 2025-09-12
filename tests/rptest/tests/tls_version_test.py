@@ -10,7 +10,7 @@
 import socket
 import subprocess
 from enum import IntEnum
-from typing import Optional
+from typing import List, Optional
 
 from ducktape.cluster.cluster import ClusterNode
 from ducktape.mark import matrix
@@ -52,6 +52,7 @@ class TLSVersionTestProvider(TLSProvider):
 
 PERMITTED_ERROR_MESSAGE = [
     "seastar::tls::verification_error",
+    "SSL routines::no shared cipher",
     "SSL routines::unsupported protocol",
     "sslv3 alert handshake failure",
 ]
@@ -145,6 +146,8 @@ class TLSVersionTestBase(RedpandaTest):
         return (
             "no protocols available" in output
             or "tlsv1 alert protocol version" in output
+            or "handshake failure" in output
+            or "wrong version number" in output
         )
 
     def verify_tls_version(
@@ -177,6 +180,130 @@ class TLSVersionTestBase(RedpandaTest):
                 assert self._output_error(e.output.decode()), (
                     f"Output not expected for failure: {e.output.decode()}"
                 )
+
+    # Default ciphersuites for TLS 1.2 and 1.3
+    TLSV1_2_CIPHERS = [
+        "ECDHE-ECDSA-AES256-GCM-SHA384",
+        "ECDHE-RSA-AES256-GCM-SHA384",
+        "ECDHE-ECDSA-CHACHA20-POLY1305",
+        "ECDHE-RSA-CHACHA20-POLY1305",
+        "ECDHE-ECDSA-AES128-GCM-SHA256",
+        "ECDHE-RSA-AES128-GCM-SHA256",
+    ]
+    TLSV1_2_CIPHERS_WEAK = TLSV1_2_CIPHERS + [
+        "AES256-GCM-SHA384",
+        "DHE-RSA-AES256-GCM-SHA384",
+        "DHE-RSA-AES128-GCM-SHA256",
+        "DHE-RSA-CHACHA20-POLY1305",
+    ]
+    TLSV1_3_CIPHERS = [
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "TLS_AES_128_GCM_SHA256",
+        "TLS_AES_128_CCM_8_SHA256",
+        "TLS_AES_128_CCM_SHA256",
+    ]
+
+    TLSV1_3_CIPHERS_STRICT = [
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256",
+        "TLS_AES_128_GCM_SHA256",
+    ]
+
+    def _filter_by_key_type(self, key_type: TLSKeyType, ciphers: List) -> List:
+        if key_type == TLSKeyType.RSA:
+            # DHE-RSA and ECDHE-RSA require an RSA certificate
+            return [
+                c
+                for c in ciphers
+                if c.startswith("DHE-RSA") or c.startswith("ECDHE-RSA")
+            ]
+        elif key_type == TLSKeyType.ECDSA:
+            return [c for c in ciphers if c.startswith("ECDHE-ECDSA")]
+        else:
+            raise ValueError(f"Unsupported key type: {key_type}")
+
+    def _get_openssl_ciphers(self, key_type: TLSKeyType) -> List:
+        # Get the list of ciphers supported by the installed version of OpenSSL
+        tls_version_str = tls_version_to_openssl(TLSVersion.v1_2)
+        process = subprocess.run(
+            ["openssl", "ciphers", "-s", tls_version_str],
+            text=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self.logger.debug(f"stdout: {process.stdout}")
+        tls1_2_ciphers = [
+            (TLSVersion.v1_2, c)
+            for c in self._filter_by_key_type(
+                key_type=self.key_type, ciphers=process.stdout.strip().split(":")
+            )
+        ]
+
+        return tls1_2_ciphers + [(TLSVersion.v1_3, c) for c in self.TLSV1_3_CIPHERS]
+
+    def _get_default_ciphers(self, key_type: TLSKeyType, strict: bool) -> List:
+        # TLS 1.2 ciphers (only if not strict)
+        tls12_ciphers = []
+        if not strict:
+            tls12_ciphers = [
+                (TLSVersion.v1_2, c)
+                for c in self._filter_by_key_type(key_type, self.TLSV1_2_CIPHERS)
+            ]
+
+        # TLS 1.3 ciphers (strict or normal)
+        tls13_ciphers = [
+            (TLSVersion.v1_3, c)
+            for c in (self.TLSV1_3_CIPHERS_STRICT if strict else self.TLSV1_3_CIPHERS)
+        ]
+
+        ciphers = tls12_ciphers + tls13_ciphers
+        assert ciphers, f"No ciphers found for key type {key_type} strict {strict}"
+
+        return ciphers
+
+    @cluster(num_nodes=1, log_allow_list=PERMITTED_ERROR_MESSAGE)
+    def test_ciphersuite_support(self):
+        """
+        Test all ciphers for TLS 1.2+ across all interfaces filtered by key_type.
+        """
+        interfaces = [
+            (9092, False),
+            (9644, False),
+            (8082, False),
+            (8081, False),
+            (33145, True),
+        ]
+
+        openssl_ciphers = self._get_openssl_ciphers(key_type=self.key_type)
+
+        def check_ciphers(expected_ciphers):
+            for port, strict in interfaces:
+                expected = expected_ciphers(strict)
+                valid_test = len(expected) < len(openssl_ciphers) and len(expected) > 0
+                assert valid_test, (
+                    f"Expecting some expected failures and expected successes for port {port} strict {strict}"
+                )
+                for v, c in openssl_ciphers:
+                    expect_fail = (v, c) not in expected
+                    self.logger.info(
+                        f"Testing port: {port} tls: {v} cipher: {c}, cert: {self.key_type}, expect_fail: {expect_fail}"
+                    )
+
+                    self.verify_tls_version(
+                        node=self.redpanda.nodes[0],
+                        tls_version=v,
+                        expect_fail=expect_fail,
+                        port=port,
+                        cipher=c,
+                    )
+
+        # Check default ciphers
+        def default_ciphers(strict: bool):
+            return self._get_default_ciphers(key_type=self.key_type, strict=strict)
+
+        check_ciphers(default_ciphers)
 
     @cluster(num_nodes=3, log_allow_list=PERMITTED_ERROR_MESSAGE)
     @matrix(version=[0, 1, 2, 3])
