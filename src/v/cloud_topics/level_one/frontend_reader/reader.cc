@@ -204,10 +204,10 @@ ss::future<l1::footer> level_one_log_reader_impl::read_footer(
     auto* abort_source = _config.abort_source
                            ? &_config.abort_source.value().get()
                            : &default_abort_source;
-    auto stream_fut = co_await ss::coroutine::as_future(
-      _io->read_object(extent, abort_source));
-    if (stream_fut.failed()) {
-        auto ex = stream_fut.get_exception();
+    auto read_fut = co_await ss::coroutine::as_future(
+      _io->read_object_as_iobuf(extent, abort_source));
+    if (read_fut.failed()) {
+        auto ex = read_fut.get_exception();
         vlog(
           cd_log.error,
           "Exception opening stream for footer from object {} (pos {} object "
@@ -218,40 +218,28 @@ ss::future<l1::footer> level_one_log_reader_impl::read_footer(
           ex);
         std::rethrow_exception(ex);
     }
-    auto stream_result = stream_fut.get();
-    if (!stream_result.has_value()) {
-        throw std::runtime_error(
-          fmt::format(
-            "Failed to open stream for footer from object {} (pos {} size {}): "
-            "{}",
-            oid,
-            extent.position,
-            object_size,
-            std::to_underlying(stream_result.error())));
-    }
 
-    auto& stream = stream_result.value();
-
-    auto footer_fut = co_await ss::coroutine::as_future(
-      read_iobuf_exactly(stream, footer_total_size));
-    if (footer_fut.failed()) {
-        auto ex = footer_fut.get_exception();
+    auto read_result = read_fut.get();
+    if (!read_result.has_value()) {
         vlog(
           cd_log.error,
-          "Exception reading footer from object {} (pos {} object size {}): {}",
+          "Failed to read footer from object {} (pos {} object size {}): {}",
           oid,
           extent.position,
           object_size,
-          ex);
-        co_await stream.close();
-        std::rethrow_exception(ex);
+          std::to_underlying(read_result.error()));
+        throw std::runtime_error(
+          fmt::format(
+            "Failed to read footer from object {} (pos {} size {}): {}",
+            oid,
+            extent.position,
+            object_size,
+            std::to_underlying(read_result.error())));
     }
 
-    iobuf footer_buf = footer_fut.get();
-    co_await stream.close();
-
     // Parse the footer - we have the complete footer so this should succeed.
-    auto footer_result = co_await l1::footer::read(std::move(footer_buf));
+    auto footer_result = co_await l1::footer::read(
+      std::move(read_result).value());
 
     if (!std::holds_alternative<l1::footer>(footer_result)) {
         vlog(
