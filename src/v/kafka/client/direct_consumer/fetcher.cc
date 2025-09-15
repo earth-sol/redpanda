@@ -701,6 +701,7 @@ void fetcher::reset_partition_offset(model::topic_partition_view tp) {
         return;
     }
     p_it->second.fetch_offset = std::nullopt;
+    p_it->second.assignment_epoch = next_epoch();
 }
 
 namespace {

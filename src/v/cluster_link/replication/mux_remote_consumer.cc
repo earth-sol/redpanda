@@ -78,6 +78,7 @@ mux_remote_consumer::remove(const model::topic_partition& tp) {
 
 mux_remote_consumer::result mux_remote_consumer::reset(
   const model::topic_partition& tp, kafka::offset offset) {
+    vlog(cllog.trace, "Resetting partition {}, to offset: {}", tp, offset);
     _gate.check();
     auto it = _partitions.find(tp);
     if (it == _partitions.end()) {
