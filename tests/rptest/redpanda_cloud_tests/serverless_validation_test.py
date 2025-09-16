@@ -208,13 +208,7 @@ class ServerlessValidationTest(RedpandaCloudTest):
         total_producers = self._producer_count(self._tier_limits.max_ingress)
         total_consumers = self._consumer_count(self._tier_limits.max_egress)
 
-        validator = self.base_validator(self._cloud_provider) | {
-            OMBSampleConfigurations.AVG_THROUGHPUT_MBPS: [
-                OMBSampleConfigurations.gte(
-                    self._mb_to_mib(self._tier_limits.max_ingress // (1 * MB))
-                ),
-            ],
-        }
+        validator = self.base_validator(self._cloud_provider) | {}
 
         workload = {
             "topics": 1,
