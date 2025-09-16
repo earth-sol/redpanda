@@ -78,7 +78,8 @@ public:
     ss::future<bool> sync_in_term(ss::abort_source& as);
 
 private:
-    ss::future<> do_apply(const model::record_batch& batch) override;
+    ss::future<> do_apply(const model::record_batch&) override;
+    void apply_placeholder(const model::record_batch&);
 
     ss::future<raft::local_snapshot_applied>
     apply_local_snapshot(raft::stm_snapshot_header, iobuf&&) override;

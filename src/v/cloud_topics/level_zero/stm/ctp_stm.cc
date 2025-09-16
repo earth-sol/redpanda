@@ -168,20 +168,7 @@ ss::future<> ctp_stm::do_apply(const model::record_batch& batch) {
     vlog(_log.debug, "Applying record batch: {}", batch.header());
 
     if (batch.header().type == model::record_batch_type::dl_placeholder) {
-        // Cherry-pick the placeholder from the record batch
-        vassert(
-          batch.record_count() > 0,
-          "Record batch must have at least one record");
-        iobuf value;
-        batch.for_each_record([&value](model::record&& r) {
-            value = std::move(r).release_value();
-            return ss::stop_iteration::yes;
-        });
-
-        auto placeholder = serde::from_iobuf<dl_placeholder>(std::move(value));
-        auto id = placeholder.id;
-        _state.advance_epoch(id.epoch, batch.header().base_offset);
-
+        apply_placeholder(batch);
     } else if (
       batch.header().type == model::record_batch_type::ctp_stm_command) {
         // Decode the command and apply it to the state.
@@ -211,6 +198,19 @@ ss::future<> ctp_stm::do_apply(const model::record_batch& batch) {
     }
 
     co_return;
+}
+
+void ctp_stm::apply_placeholder(const model::record_batch& batch) {
+    vassert(
+      batch.record_count() > 0, "Record batch must have at least one record");
+    iobuf value;
+    batch.for_each_record([&value](model::record&& r) {
+        value = std::move(r).release_value();
+        return ss::stop_iteration::yes;
+    });
+    auto placeholder = serde::from_iobuf<dl_placeholder>(std::move(value));
+    auto id = placeholder.id;
+    _state.advance_epoch(id.epoch, batch.header().base_offset);
 }
 
 ss::future<raft::local_snapshot_applied>
