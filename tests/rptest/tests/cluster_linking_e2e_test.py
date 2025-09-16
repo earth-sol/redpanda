@@ -152,6 +152,18 @@ class MultiClusterKafkaTest(MultiClusterTestBase):
 
 
 class ShadowLinkBasicTests(ShadowLinkTestBase):
+    def _topics_are_present_in_target_cluster(self, topics):
+        target_rpk = RpkTool(self.target_cluster.service)
+        topics_in_target = {t for t in target_rpk.list_topics()}
+        self.logger.info(f"Topics in target cluster: {topics_in_target}")
+        if len(topics_in_target) < len(topics):
+            return False
+        for t in topics:
+            if t.name not in topics_in_target:
+                return False
+
+        return True
+
     @cluster(num_nodes=6)
     def test_create_simple_link(self):
         shadow_link = self.create_link("test-link")
@@ -220,20 +232,8 @@ class ShadowLinkBasicTests(ShadowLinkTestBase):
 
         self.create_link("test-link")
 
-        def _topics_are_present_in_target_cluster():
-            target_rpk = RpkTool(self.target_cluster.service)
-            topics_in_target = {t for t in target_rpk.list_topics()}
-            self.logger.info(f"Topics in target cluster: {topics_in_target}")
-            if len(topics_in_target) < len(topics):
-                return False
-            for t in topics:
-                if t.name not in topics_in_target:
-                    return False
-
-            return True
-
         wait_until(
-            lambda: _topics_are_present_in_target_cluster(),
+            lambda: self._topics_are_present_in_target_cluster(topics),
             timeout_sec=20,
             err_msg="Failed to find topics in the target cluster",
         )
