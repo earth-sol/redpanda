@@ -265,6 +265,24 @@ private:
       model::partition_id partition,
       const topic_partition_map<epoch_set>& epochs);
 
+    /**
+     * finds a fetcher_state within the map of assigned partitions
+     * returns a reference to its fetch state if found, nullopt otherwise
+     */
+    std::optional<std::reference_wrapper<partition_fetch_state>>
+    find_fetcher_state(
+      const model::topic& topic, model::partition_id partition);
+
+    /**
+     * given a tp and an epoch map compares the current fetcher epoch against
+     * that from the provided map. If either epoch is missing, or the epochs
+     * disagree, the tp is inconsistent.
+     */
+    bool is_consistent_fetcher_epoch(
+      const model::topic& topic,
+      model::partition_id partition_id,
+      const topic_partition_map<epoch_set>& epochs);
+
     ss::future<api_version> get_fetch_request_version() const;
     ss::future<api_version> get_list_offsets_request_version() const;
     ss::future<> do_fetch();

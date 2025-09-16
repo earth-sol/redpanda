@@ -1009,6 +1009,46 @@ fetcher::do_list_offsets(list_offsets_request req) {
     }
 }
 
+std::optional<std::reference_wrapper<fetcher::partition_fetch_state>>
+fetcher::find_fetcher_state(
+  const model::topic& topic, model::partition_id partition) {
+    auto t_it = _partitions.find(topic);
+    if (t_it == _partitions.end()) {
+        return std::nullopt;
+    }
+
+    auto& partition_assignments = t_it->second;
+    auto p_it = partition_assignments.find(partition);
+    if (p_it == partition_assignments.end()) {
+        return std::nullopt;
+    }
+
+    return p_it->second;
+}
+
+bool fetcher::is_consistent_fetcher_epoch(
+  const model::topic& topic,
+  model::partition_id partition_id,
+  const topic_partition_map<epoch_set>& epochs) {
+    // not found in epochs -> inconsistent
+    // not found in assignments -> inconsistent
+    // epochs fetcher epoch != assignments fetcher epoch -> inconsistent
+    // epochs fetcher epoch == assignments fetch epoch -> consistent
+
+    auto maybe_epoch_set = find_epoch_set(topic, partition_id, epochs);
+    if (!maybe_epoch_set) {
+        return false;
+    }
+    auto epoch_set = *maybe_epoch_set;
+
+    auto maybe_fetch_state = find_fetcher_state(topic, partition_id);
+    if (!maybe_fetch_state) {
+        return false;
+    }
+    auto& fetch_state = maybe_fetch_state->get();
+    return fetch_state.fetcher_epoch == epoch_set.fetcher_epoch;
+}
+
 fmt::iterator fetch_session_state::format_to(fmt::iterator it) const {
     return fmt::format_to(
       it,
