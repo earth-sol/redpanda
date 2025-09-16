@@ -12,6 +12,7 @@
 
 #include "absl/container/flat_hash_set.h"
 #include "base/format_to.h"
+#include "kafka/client/direct_consumer/api_types.h"
 #include "kafka/client/direct_consumer/data_queue.h"
 #include "kafka/client/direct_consumer/direct_consumer.h"
 #include "kafka/client/errors.h"
@@ -887,11 +888,10 @@ ss::future<> fetcher::assign_partition(
       tp,
       offset);
 
-    _partitions[tp.topic][tp.partition] = partition_fetch_state{
-      .partition_id = tp.partition,
-      .fetch_offset = offset,
-      .assignment_epoch = next_epoch(),
-      .incremental_include = true};
+    _partitions[tp.topic].insert_or_assign(
+      tp.partition,
+      partition_fetch_state(
+        tp.partition, offset, next_epoch(), subscription_epoch(-1)));
 
     // in the case of fast leadership transfers, we may have a partition both
     // being added and forgotten, in which case, make sure that it is only being

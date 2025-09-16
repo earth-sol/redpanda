@@ -186,13 +186,35 @@ public:
 
 private:
     using assignment_epoch = named_type<uint64_t, struct fetcher_epoch_tag>;
+    /**
+     * Fields required s.t. they are harder to forget.
+     * Defaults:
+     *  - high_watermark: nullopt, not known at instantiation
+     *  - current_leader_epoch: nullopt, not known at instantiation
+     *  - incremental_include: true, new assignments should always be included
+     *    in the next fetch
+     */
     struct partition_fetch_state {
+        partition_fetch_state(
+          model::partition_id partition_id,
+          std::optional<kafka::offset> fetch_offset,
+          assignment_epoch fetcher_epoch,
+          subscription_epoch subscription_epoch) noexcept
+          : partition_id{partition_id}
+          , fetch_offset{fetch_offset}
+          , high_watermark{std::nullopt}
+          , current_leader_epoch{kafka::invalid_leader_epoch}
+          , assignment_epoch{fetcher_epoch}
+          , incremental_include{true}
+          , subscription_epoch{subscription_epoch} {}
+
         model::partition_id partition_id;
         std::optional<kafka::offset> fetch_offset;
         std::optional<kafka::offset> high_watermark;
-        leader_epoch current_leader_epoch{kafka::invalid_leader_epoch};
-        assignment_epoch assignment_epoch{0};
-        bool incremental_include{false};
+        leader_epoch current_leader_epoch;
+        assignment_epoch assignment_epoch;
+        bool incremental_include;
+        subscription_epoch subscription_epoch;
 
         bool include_in_fetch_request() const {
             return fetch_offset.has_value();
