@@ -98,6 +98,10 @@ private:
     ss::rwlock _lock;
     /// Current in-memory state of the STM
     ctp_stm_state _state;
+
+    // The last observed epoch to be applied to the state machine. This value is
+    // used to check for violations of monotonicity in epoch order.
+    cluster_epoch _last_seen_epoch{};
 };
 
 } // namespace cloud_topics

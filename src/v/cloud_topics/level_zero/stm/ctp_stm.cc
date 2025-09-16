@@ -219,6 +219,15 @@ void ctp_stm::apply_placeholder(const model::record_batch& batch) {
     });
     auto placeholder = serde::from_iobuf<dl_placeholder>(std::move(value));
     auto id = placeholder.id;
+    // this assertion is made here rather than inside the state object itself
+    // because the assertion is about the physical content of the log rather
+    // than the computed state.
+    vassert(
+      id.epoch >= _last_seen_epoch,
+      "Observed a non-monotonic epoch sequence {} < {}",
+      id.epoch,
+      _last_seen_epoch);
+    _last_seen_epoch = id.epoch;
     _state.advance_epoch(id.epoch, batch.header().base_offset);
 }
 
