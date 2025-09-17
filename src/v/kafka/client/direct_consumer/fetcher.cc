@@ -150,8 +150,8 @@ ss::future<fetcher::partitions_with_epoch> fetcher::collect_partitions() {
           partitions,
           [&to_process, &ret, inc = _session_state.incremental()](auto& p_fs) {
               partition_fetch_state& fetch_state = p_fs.second;
-              ret.assignment_epochs[to_process.topic][fetch_state.partition_id]
-                = fetch_state.assignment_epoch;
+              ret.fetcher_epochs[to_process.topic][fetch_state.partition_id]
+                = fetch_state.fetcher_epoch;
               if (!fetch_state.fetch_offset.has_value()) {
                   to_process.to_list_offsets.push_back(fetch_state);
                   return;
@@ -276,7 +276,7 @@ bool fetcher::maybe_update_fetch_offset(
   model::partition_id partition_id,
   kafka::offset last_received,
   kafka::offset high_watermark,
-  std::optional<assignment_epoch> maybe_response_epoch) {
+  std::optional<fetcher_epoch> maybe_response_epoch) {
     auto t_it = _partitions.find(topic);
     if (t_it == _partitions.end()) {
         return false;
@@ -300,22 +300,22 @@ bool fetcher::maybe_update_fetch_offset(
           _id,
           topic,
           partition_id,
-          p_it->second.assignment_epoch);
+          p_it->second.fetcher_epoch);
         return false;
     }
 
     const auto response_epoch = maybe_response_epoch.value();
 
-    if (p_it->second.assignment_epoch != response_epoch) {
+    if (p_it->second.fetcher_epoch != response_epoch) {
         vlog(
           logger().trace,
-          "[broker: {}] Ignoring {}/{} reply, assignment epoch changed, "
+          "[broker: {}] Ignoring {}/{} reply, fetcher epoch changed, "
           "request epoch: {}, current epoch: {}",
           _id,
           topic,
           partition_id,
           response_epoch,
-          p_it->second.assignment_epoch);
+          p_it->second.fetcher_epoch);
         return false;
     }
 
@@ -348,11 +348,10 @@ ss::future<> fetcher::do_fetch() {
          * request.
          */
         auto partitions_with_epochs = co_await collect_partitions();
-        auto assignment_epochs = std::move(
-          partitions_with_epochs.assignment_epochs);
+        auto fetcher_epochs = std::move(partitions_with_epochs.fetcher_epochs);
 
         auto list_offsets_err = co_await maybe_initialise_fetch_offsets(
-          partitions_with_epochs.partitions, assignment_epochs);
+          partitions_with_epochs.partitions, fetcher_epochs);
         /**
          */
         if (list_offsets_err != kafka::error_code::none) {
@@ -383,7 +382,7 @@ ss::future<> fetcher::do_fetch() {
           _id, std::move(req), version);
         auto fetch_result = co_await process_fetch_response(
           std::move(response),
-          assignment_epochs,
+          fetcher_epochs,
           partitions_with_epochs.partitions);
 
         if (fetch_result.has_error()) {
@@ -439,10 +438,10 @@ ss::future<> fetcher::do_fetch() {
     }
 }
 
-std::optional<fetcher::assignment_epoch> fetcher::find_assignment_epoch(
+std::optional<fetcher::fetcher_epoch> fetcher::find_fetcher_epoch(
   const model::topic& topic,
   model::partition_id partition,
-  const topic_partition_map<assignment_epoch>& epochs) {
+  const topic_partition_map<fetcher_epoch>& epochs) {
     auto topic_iterator = epochs.find(topic);
 
     if (topic_iterator == epochs.end()) {
@@ -462,7 +461,7 @@ std::optional<fetcher::assignment_epoch> fetcher::find_assignment_epoch(
 ss::future<kafka_result<fetcher::fetch_response_content>>
 fetcher::process_fetch_response(
   fetch_response resp,
-  const topic_partition_map<assignment_epoch>& epochs,
+  const topic_partition_map<fetcher_epoch>& epochs,
   const chunked_vector<partitions_to_process>& partitions) {
     if (resp.data.error_code != kafka::error_code::none) {
         co_return resp.data.error_code;
@@ -579,7 +578,7 @@ fetcher::process_fetch_response(
                 part_data.data = co_await reader_to_chunked_vector(
                   std::move(part_response.records.value()));
 
-                auto maybe_response_epoch = find_assignment_epoch(
+                auto maybe_response_epoch = find_fetcher_epoch(
                   topic_data.topic, part_data.partition_id, epochs);
 
                 bool updated_offset = maybe_update_fetch_offset(
@@ -591,7 +590,7 @@ fetcher::process_fetch_response(
                 if (!updated_offset) {
                     // case when partition is either
                     // 1. partition is not assigned to this fetcher
-                    // 2. assignment epoch changed
+                    // 2. fetcher epoch changed
                     // for either skip
                     continue;
                 }
@@ -646,9 +645,9 @@ fetcher::process_fetch_response(
                   partition_iterator != partition_map.end() && !partition_err) {
                     // compare the epochs before we make an edit
                     const auto assigned_epoch
-                      = partition_iterator->second.assignment_epoch;
+                      = partition_iterator->second.fetcher_epoch;
 
-                    auto maybe_request_epoch = find_assignment_epoch(
+                    auto maybe_request_epoch = find_fetcher_epoch(
                       topic, p.partition_id, epochs);
 
                     if (!maybe_request_epoch) {
@@ -715,7 +714,7 @@ void fetcher::reset_partition_offset(model::topic_partition_view tp) {
         return;
     }
     p_it->second.fetch_offset = std::nullopt;
-    p_it->second.assignment_epoch = next_epoch();
+    p_it->second.fetcher_epoch = next_epoch();
 }
 
 namespace {
@@ -731,7 +730,7 @@ model::timestamp timestamp_for_offset_reset_policy(offset_reset_policy policy) {
 
 ss::future<kafka::error_code> fetcher::maybe_initialise_fetch_offsets(
   const chunked_vector<partitions_to_process>& partitions,
-  const topic_partition_map<assignment_epoch>& epochs) {
+  const topic_partition_map<fetcher_epoch>& epochs) {
     const auto timestamp = timestamp_for_offset_reset_policy(
       _parent->_config.reset_policy);
 
@@ -811,9 +810,9 @@ ss::future<kafka::error_code> fetcher::maybe_initialise_fetch_offsets(
                 continue;
             }
 
-            const auto assigned_epoch = p_it->second.assignment_epoch;
+            const auto assigned_epoch = p_it->second.fetcher_epoch;
 
-            auto maybe_response_epoch = find_assignment_epoch(
+            auto maybe_response_epoch = find_fetcher_epoch(
               response_topic.topic, response_partition.partition_id, epochs);
 
             if (!maybe_response_epoch) {
@@ -833,14 +832,14 @@ ss::future<kafka::error_code> fetcher::maybe_initialise_fetch_offsets(
                 vlog(
                   logger().trace,
                   "[broker: {}] Skipping partition {}/{} list offset response "
-                  "as assignment epoch has changed. request_epoch: {}, "
+                  "as fetcher epoch has changed. request_epoch: {}, "
                   "current_epoch: {}",
                   _id,
                   response_topic.topic,
                   response_partition.partition_id,
                   response_partition.offset,
                   request_epoch,
-                  p_it->second.assignment_epoch);
+                  p_it->second.fetcher_epoch);
                 continue;
             }
             vlog(
