@@ -150,8 +150,10 @@ ss::future<fetcher::partitions_with_epoch> fetcher::collect_partitions() {
           partitions,
           [&to_process, &ret, inc = _session_state.incremental()](auto& p_fs) {
               partition_fetch_state& fetch_state = p_fs.second;
-              ret.fetcher_epochs[to_process.topic][fetch_state.partition_id]
-                = fetch_state.fetcher_epoch;
+              ret.epochs[to_process.topic].insert_or_assign(
+                fetch_state.partition_id,
+                epoch_set(
+                  fetch_state.fetcher_epoch, fetch_state.subscription_epoch));
               if (!fetch_state.fetch_offset.has_value()) {
                   to_process.to_list_offsets.push_back(fetch_state);
                   return;
@@ -348,10 +350,10 @@ ss::future<> fetcher::do_fetch() {
          * request.
          */
         auto partitions_with_epochs = co_await collect_partitions();
-        auto fetcher_epochs = std::move(partitions_with_epochs.fetcher_epochs);
+        auto epochs = std::move(partitions_with_epochs.epochs);
 
         auto list_offsets_err = co_await maybe_initialise_fetch_offsets(
-          partitions_with_epochs.partitions, fetcher_epochs);
+          partitions_with_epochs.partitions, epochs);
         /**
          */
         if (list_offsets_err != kafka::error_code::none) {
@@ -381,9 +383,7 @@ ss::future<> fetcher::do_fetch() {
         auto response = co_await _parent->_cluster->dispatch_to(
           _id, std::move(req), version);
         auto fetch_result = co_await process_fetch_response(
-          std::move(response),
-          fetcher_epochs,
-          partitions_with_epochs.partitions);
+          std::move(response), epochs, partitions_with_epochs.partitions);
 
         if (fetch_result.has_error()) {
             auto ec = fetch_result.error();
@@ -441,7 +441,7 @@ ss::future<> fetcher::do_fetch() {
 std::optional<fetcher::fetcher_epoch> fetcher::find_fetcher_epoch(
   const model::topic& topic,
   model::partition_id partition,
-  const topic_partition_map<fetcher_epoch>& epochs) {
+  const topic_partition_map<epoch_set>& epochs) {
     auto topic_iterator = epochs.find(topic);
 
     if (topic_iterator == epochs.end()) {
@@ -455,13 +455,13 @@ std::optional<fetcher::fetcher_epoch> fetcher::find_fetcher_epoch(
         return std::nullopt;
     }
 
-    return partition_iterator->second;
+    return partition_iterator->second.fetcher_epoch;
 }
 
 ss::future<kafka_result<fetcher::fetch_response_content>>
 fetcher::process_fetch_response(
   fetch_response resp,
-  const topic_partition_map<fetcher_epoch>& epochs,
+  const topic_partition_map<epoch_set>& epochs,
   const chunked_vector<partitions_to_process>& partitions) {
     if (resp.data.error_code != kafka::error_code::none) {
         co_return resp.data.error_code;
@@ -730,7 +730,7 @@ model::timestamp timestamp_for_offset_reset_policy(offset_reset_policy policy) {
 
 ss::future<kafka::error_code> fetcher::maybe_initialise_fetch_offsets(
   const chunked_vector<partitions_to_process>& partitions,
-  const topic_partition_map<fetcher_epoch>& epochs) {
+  const topic_partition_map<epoch_set>& epochs) {
     const auto timestamp = timestamp_for_offset_reset_policy(
       _parent->_config.reset_policy);
 

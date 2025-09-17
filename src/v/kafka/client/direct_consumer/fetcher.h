@@ -248,7 +248,7 @@ private:
     };
 
     struct partitions_with_epoch {
-        topic_partition_map<fetcher_epoch> fetcher_epochs;
+        topic_partition_map<epoch_set> epochs;
         chunked_vector<partitions_to_process> partitions;
     };
     struct fetch_response_content {
@@ -261,7 +261,7 @@ private:
     static std::optional<fetcher_epoch> find_fetcher_epoch(
       const model::topic& topic,
       model::partition_id partition,
-      const topic_partition_map<fetcher_epoch>& epochs);
+      const topic_partition_map<epoch_set>& epochs);
 
     ss::future<api_version> get_fetch_request_version() const;
     ss::future<api_version> get_list_offsets_request_version() const;
@@ -269,14 +269,14 @@ private:
     ss::future<partitions_with_epoch> collect_partitions();
     ss::future<kafka::error_code> maybe_initialise_fetch_offsets(
       const chunked_vector<partitions_to_process>&,
-      const topic_partition_map<fetcher_epoch>& epochs);
+      const topic_partition_map<epoch_set>& epochs);
 
     ss::future<fetch_request>
     make_fetch_request(const chunked_vector<partitions_to_process>&);
 
     ss::future<kafka_result<fetch_response_content>> process_fetch_response(
       fetch_response resp,
-      const topic_partition_map<fetcher_epoch>& epochs,
+      const topic_partition_map<epoch_set>& epochs,
       const chunked_vector<partitions_to_process>& partitions);
     /**
      * Returns false if the partition was not found or the fetch offset was
