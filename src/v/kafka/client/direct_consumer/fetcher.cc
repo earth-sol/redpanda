@@ -505,6 +505,15 @@ fetcher::process_fetch_response(
             part_data.error = part_response.error_code;
             part_data.partition_id = part_response.partition_index;
 
+            auto snapshotted_epochs
+              = find_epoch_set(
+                  topic_data.topic, part_response.partition_index, epochs)
+                  .value_or(
+                    epoch_set{fetcher_epoch(-1), subscription_epoch(-1)});
+
+            part_data.subscription_epoch
+              = snapshotted_epochs.subscription_epoch;
+
             if (part_response.error_code != kafka::error_code::none) {
                 if (
                   part_response.error_code
