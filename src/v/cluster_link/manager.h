@@ -84,14 +84,14 @@ public:
     ss::future<result<void>> delete_cluster_link(model::name_t name);
 
     /// Used to notify that a cluster link has been updated
-    void on_link_change(model::id_t id);
+    void on_link_change(model::id_t id, ::model::revision_id);
     /// Used to notify manager in a change of NTP leadership
     void handle_partition_state_change(
       ::model::ntp ntp,
       ntp_leader is_ntp_leader,
       std::optional<::model::term_id>);
     /// Handles creation and start of a link
-    ss::future<> handle_on_link_change(model::id_t id);
+    ss::future<> handle_on_link_change(model::id_t id, ::model::revision_id);
     /// Handles leadership changes for a given NTP
     /// term will be set if partition still exists on the shard
     /// Will definitely be set if is_ntp_leader == true because assuming

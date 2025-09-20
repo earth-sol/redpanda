@@ -48,7 +48,7 @@ public:
 
     ss::future<result<void>> register_task(task_factory*);
 
-    void update_config(model::metadata);
+    void update_config(model::metadata, ::model::revision_id);
 
     // at the link scope
     bool requires_active_replicators() const;

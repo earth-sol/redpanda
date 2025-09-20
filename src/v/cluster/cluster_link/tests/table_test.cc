@@ -221,7 +221,7 @@ TEST_F_CORO(cluster_link_table_test, callback_test) {
     bool was_called = false;
     id_t link_id{0};
     auto notification_id = _table.local().register_for_updates(
-      [&was_called, &link_id](id_t id) {
+      [&was_called, &link_id](id_t id, model::revision_id) {
           was_called = true;
           link_id = id;
       });
@@ -254,7 +254,7 @@ TEST_F_CORO(cluster_link_table_test, callback_removal) {
     co_await _table.local().apply_update(
       testing::create_upsert_command(model::offset{1}, link.copy()));
     auto notification_id = _table.local().register_for_updates(
-      [&was_called, &link_id](id_t id) {
+      [&was_called, &link_id](id_t id, model::revision_id) {
           was_called = true;
           link_id = id;
       });
@@ -303,7 +303,9 @@ TEST_F_CORO(cluster_link_table_test, callback_snapshot) {
           .bootstrap_servers{net::unresolved_address{"localhost", 9092}}}});
 
     auto notification_id = _table.local().register_for_updates(
-      [&detected_ids](id_t id) { detected_ids.insert(id); });
+      [&detected_ids](id_t id, model::revision_id) {
+          detected_ids.insert(id);
+      });
     auto auto_remove = ss::defer([this, notification_id] {
         _table.local().unregister_for_updates(notification_id);
     });

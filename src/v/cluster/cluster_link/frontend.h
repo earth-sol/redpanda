@@ -91,6 +91,13 @@ public:
       ::cluster_link::model::mirror_topic_metadata>>
     get_mirror_topics_for_link(::cluster_link::model::id_t id) const;
 
+    std::optional<::model::revision_id>
+    get_last_update_revision(const ::cluster_link::model::id_t& id) const;
+
+    /**
+     * Topics that are part of an active shadow link cannot be modified
+     * through the Kafka API unless the topics are in a failed over state.
+     */
     bool is_topic_mutable_for_kafka_api(const model::topic&) const;
 
 private:

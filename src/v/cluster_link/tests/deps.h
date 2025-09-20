@@ -109,6 +109,11 @@ public:
         return _table->get_all_link_ids();
     }
 
+    std::optional<::model::revision_id>
+    get_last_update_revision(const model::id_t& id) const override {
+        return _table->get_link_last_update_revision(id);
+    }
+
     ss::future<::cluster::cluster_link::errc> add_mirror_topic(
       model::id_t id,
       model::add_mirror_topic_cmd cmd,

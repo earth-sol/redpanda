@@ -114,8 +114,14 @@ ss::future<> manager::start() {
     co_await ss::coroutine::switch_to(_scheduling_group);
     vlog(cllog.info, "Starting cluster link manager");
     auto ids = _registry->get_all_link_ids();
-    for (auto id : ids) {
-        co_await handle_on_link_change(id);
+    chunked_hash_map<model::id_t, ::model::revision_id> id_to_revision;
+    for (const auto& id : ids) {
+        auto rev = _registry->get_last_update_revision(id);
+        vassert(rev.has_value(), "Link {} does not have a update revision", id);
+        id_to_revision.emplace(id, *rev);
+    }
+    for (const auto& id : ids) {
+        co_await handle_on_link_change(id, id_to_revision.at(id));
     }
 
     _link_task_reconciler_timer.set_callback([this] {
@@ -288,8 +294,8 @@ ss::future<result<void>> manager::delete_cluster_link(model::name_t name) {
         co_return err_info(
           errc::link_has_active_shadow_topics,
           fmt::format(
-            "Failed to delete cluster link with name '{}'. There are active "
-            "shadow topics.",
+            "Failed to delete cluster link with name '{}'. There are "
+            "active/promoting shadow topics.",
             name));
     }
 
@@ -304,12 +310,13 @@ ss::future<result<void>> manager::delete_cluster_link(model::name_t name) {
     co_return outcome::success();
 }
 
-void manager::on_link_change(model::id_t id) {
+void manager::on_link_change(model::id_t id, ::model::revision_id revision) {
     vlog(cllog.trace, "Cluster link with id={} has changed", id);
     if (_topic_reconciler && _is_controller_leader) {
         _topic_reconciler->trigger(id);
     }
-    _queue.submit([this, id] { return handle_on_link_change(id); });
+    _queue.submit(
+      [this, id, revision] { return handle_on_link_change(id, revision); });
 }
 
 void manager::handle_partition_state_change(
@@ -322,10 +329,15 @@ void manager::handle_partition_state_change(
     });
 }
 
-ss::future<> manager::handle_on_link_change(model::id_t id) {
+ss::future<>
+manager::handle_on_link_change(model::id_t id, ::model::revision_id revision) {
     static constexpr auto retry_delay = 10s;
 
-    vlog(cllog.trace, "Handling cluster link change for id={}", id);
+    vlog(
+      cllog.trace,
+      "Handling cluster link change for id={}, revision={}",
+      id,
+      revision);
     auto link_opt = _registry->find_link_by_id(id);
     if (!link_opt) {
         vlog(cllog.debug, "Detected cluster link id={} has been removed", id);
@@ -361,7 +373,7 @@ ss::future<> manager::handle_on_link_change(model::id_t id) {
           "Updating cluster link id={} with new config: {}",
           id,
           link_metadata);
-        it->second->update_config(link_metadata.copy());
+        it->second->update_config(link_metadata.copy(), revision);
     } else {
         // Create a new link
         vlog(
@@ -439,8 +451,9 @@ ss::future<> manager::handle_on_link_change(model::id_t id) {
               id,
               e,
               retry_delay.count());
-            _queue.submit_delayed(
-              retry_delay, [this, id] { return handle_on_link_change(id); });
+            _queue.submit_delayed(retry_delay, [this, id, revision] {
+                return handle_on_link_change(id, revision);
+            });
         }
     }
 }

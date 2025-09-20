@@ -50,6 +50,9 @@ public:
 
     virtual chunked_vector<model::id_t> get_all_link_ids() const = 0;
 
+    virtual std::optional<::model::revision_id>
+    get_last_update_revision(const model::id_t&) const = 0;
+
     virtual ss::future<::cluster::cluster_link::errc> add_mirror_topic(
       model::id_t,
       model::add_mirror_topic_cmd,

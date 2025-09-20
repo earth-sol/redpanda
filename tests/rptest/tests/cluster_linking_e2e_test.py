@@ -532,7 +532,7 @@ class ShadowLinkBasicTests(ShadowLinkTestBase):
         with expect_exception(
             ConnectError,
             lambda e: str(e)
-            == f"[failed_precondition] Failed to delete cluster link with name '{test_link}'. There are active shadow topics.",
+            == f"[failed_precondition] Failed to delete cluster link with name '{test_link}'. There are active/promoting shadow topics.",
         ):
             self.delete_link(test_link)
 

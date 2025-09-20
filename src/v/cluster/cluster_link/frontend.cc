@@ -230,6 +230,11 @@ frontend::get_mirror_topics_for_link(id_t id) const {
     return mirror_topics;
 }
 
+std::optional<::model::revision_id> frontend::get_last_update_revision(
+  const ::cluster_link::model::id_t& id) const {
+    return _table->get_link_last_update_revision(id);
+}
+
 ss::future<errc> frontend::do_mutation(
   cluster_link_cmd cmd, model::timeout_clock::time_point timeout) {
     auto cluster_leader = _leaders->get_leader(model::controller_ntp);

@@ -174,13 +174,15 @@ ss::future<result<void>> link::register_task(task_factory* tf) {
     co_return co_await do_register_task(std::move(t));
 }
 
-void link::update_config(model::metadata config) {
+void link::update_config(
+  model::metadata config, ::model::revision_id revision) {
     vlog(
       cllog.debug,
-      "Updating cluster link {} ({}): {}",
+      "Updating cluster link {} ({}): {} using revision: {}",
       _config.name,
       _config.uuid,
-      config);
+      config,
+      revision);
     _config = std::move(config);
     maybe_update_sasl_configuration(_config.connection.authn_config);
 

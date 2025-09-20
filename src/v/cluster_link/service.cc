@@ -72,6 +72,11 @@ public:
         return _plf->get_all_link_ids();
     }
 
+    std::optional<::model::revision_id>
+    get_last_update_revision(const model::id_t& id) const override {
+        return _plf->get_last_update_revision(id);
+    }
+
     ss::future<::cluster::cluster_link::errc> add_mirror_topic(
       model::id_t id,
       model::add_mirror_topic_cmd cmd,
@@ -330,7 +335,9 @@ service::delete_cluster_link(const model::name_t& name) {
 
 void service::register_notifications() {
     auto pl_notif_id = _plf->local().register_for_updates(
-      [this](model::id_t id) { _manager->on_link_change(id); });
+      [this](model::id_t id, ::model::revision_id revision) {
+          _manager->on_link_change(id, revision);
+      });
     _notification_cleanups.emplace_back([this, pl_notif_id] {
         _plf->local().unregister_for_updates(pl_notif_id);
     });
