@@ -16,6 +16,7 @@
 #include "cloud_topics/types.h"
 #include "cluster/state_machine_registry.h"
 #include "model/fundamental.h"
+#include "model/timeout_clock.h"
 #include "model/timestamp.h"
 #include "raft/tests/raft_fixture.h"
 #include "test_utils/test.h"
@@ -29,7 +30,7 @@ struct ctp_stm_api_accessor {
     ss::future<std::expected<model::offset, ct::ctp_stm_api_errc>>
     replicated_apply(model::record_batch rb) {
         // This function is used to access the private method of ctp_stm_api
-        return api->replicated_apply(std::move(rb));
+        return api->replicated_apply(std::move(rb), model::no_timeout);
     }
     ct::ctp_stm_api* api;
 };
@@ -243,7 +244,7 @@ TEST_F_CORO(ctp_stm_fixture, test_last_reconciled_offset) {
     // now b1 is reconciled and can be removed alongside its epoch (1).
     // First referenced epoch is now 2.
     co_await api(node(*get_leader()))
-      .advance_reconciled_offset(kafka::offset{0});
+      .advance_reconciled_offset(kafka::offset{0}, model::no_timeout);
 
     // Check that max and max_seen_epochs remain the same
     auto max_epoch_after = api(node(*get_leader())).get_max_epoch();
@@ -263,7 +264,7 @@ TEST_F_CORO(ctp_stm_fixture, test_last_reconciled_offset) {
     // Advance reconciled offset to the b2 batch.
     // Now all epochs can be discarded.
     co_await api(node(*get_leader()))
-      .advance_reconciled_offset(kafka::offset{1});
+      .advance_reconciled_offset(kafka::offset{1}, model::no_timeout);
 
     max_epoch_after = api(node(*get_leader())).get_max_epoch();
     max_seen_epoch_after = api(node(*get_leader())).get_max_seen_epoch();
@@ -315,7 +316,7 @@ TEST_F_CORO(ctp_stm_fixture, test_truncate_all_epochs) {
 
     // Advance reconciled offset to the middle of the first epoch
     co_await api(node(*get_leader()))
-      .advance_reconciled_offset(kafka::offset(50));
+      .advance_reconciled_offset(kafka::offset(50), model::no_timeout);
     ss::abort_source as;
     co_await api(node(*get_leader())).sync_in_term(as);
     inactive_epoch = co_await api(node(*get_leader())).get_inactive_epoch();
@@ -325,7 +326,7 @@ TEST_F_CORO(ctp_stm_fixture, test_truncate_all_epochs) {
 
     // Advance reconciled offset exactly to the end of the first epoch
     co_await api(node(*get_leader()))
-      .advance_reconciled_offset(kafka::offset(99));
+      .advance_reconciled_offset(kafka::offset(99), model::no_timeout);
     inactive_epoch = co_await api(node(*get_leader())).get_inactive_epoch();
     max_epoch = api(node(*get_leader())).get_max_epoch();
     ASSERT_TRUE_CORO(inactive_epoch);
@@ -349,16 +350,16 @@ TEST_F_CORO(ctp_stm_fixture, test_start_offset) {
     auto start_offset = leader_api.get_start_offset();
     ASSERT_EQ_CORO(start_offset, kafka::offset{0});
 
-    co_await leader_api.set_start_offset(kafka::offset{1});
+    co_await leader_api.set_start_offset(kafka::offset{1}, model::no_timeout);
 
     start_offset = leader_api.get_start_offset();
     ASSERT_EQ_CORO(start_offset, kafka::offset{1});
 
-    co_await leader_api.set_start_offset(kafka::offset{2});
+    co_await leader_api.set_start_offset(kafka::offset{2}, model::no_timeout);
     start_offset = leader_api.get_start_offset();
     ASSERT_EQ_CORO(start_offset, kafka::offset{2});
 
-    co_await leader_api.set_start_offset(kafka::offset{1});
+    co_await leader_api.set_start_offset(kafka::offset{1}, model::no_timeout);
     start_offset = leader_api.get_start_offset();
     ASSERT_EQ_CORO(start_offset, kafka::offset{2});
 }

@@ -53,10 +53,14 @@ public:
     kafka::offset get_last_reconciled_offset() const;
 
     ss::future<std::expected<std::monostate, ctp_stm_api_errc>>
-    advance_reconciled_offset(kafka::offset last_reconciled_offset);
+    advance_reconciled_offset(
+      kafka::offset last_reconciled_offset,
+      model::timeout_clock::time_point deadline);
 
     ss::future<std::expected<std::monostate, ctp_stm_api_errc>>
-    set_start_offset(kafka::offset new_start_offset);
+    set_start_offset(
+      kafka::offset new_start_offset,
+      model::timeout_clock::time_point deadline);
 
     kafka::offset get_start_offset() const;
 
@@ -92,8 +96,8 @@ public:
 private:
     /// Replicate a record batch and wait for it to be applied to the ctp_stm.
     /// Returns the offset at which the batch was applied.
-    ss::future<std::expected<model::offset, ctp_stm_api_errc>>
-    replicated_apply(model::record_batch&& batch);
+    ss::future<std::expected<model::offset, ctp_stm_api_errc>> replicated_apply(
+      model::record_batch&& batch, model::timeout_clock::time_point deadline);
 
 private:
     retry_chain_node _rtc;

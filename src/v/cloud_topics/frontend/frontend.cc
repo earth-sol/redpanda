@@ -251,6 +251,7 @@ frontend::sync_effective_start(model::timeout_clock::duration duration) {
                              as.request_abort();
                          });
     bool synced = co_await _ctp_stm_api->sync_in_term(as);
+    as.request_abort();
     co_await std::move(timeout_fut);
     if (!synced) {
         co_return std::unexpected(frontend_errc::timeout);
