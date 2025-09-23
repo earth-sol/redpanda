@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func getDefaultMode(
+func GetDefaultMode(
 	nic Nic, cpuMask string, cpuMasks irq.CPUMasks,
 ) (irq.Mode, error) {
 	if nic.IsHwInterface() {
@@ -58,7 +58,7 @@ func getDefaultMode(
 			return "", err
 		}
 		for _, slave := range slaves {
-			slaveDefaultMode, err := getDefaultMode(slave, cpuMask, cpuMasks)
+			slaveDefaultMode, err := GetDefaultMode(slave, cpuMask, cpuMasks)
 			if err != nil {
 				return "", err
 			}
@@ -77,7 +77,7 @@ func getEffectiveMode(mode irq.Mode, nic Nic, effectiveCPUMask string, cpuMasks 
 	var err error
 	effectiveMode := mode
 	if mode == irq.Default {
-		effectiveMode, err = getDefaultMode(nic, effectiveCPUMask, cpuMasks)
+		effectiveMode, err = GetDefaultMode(nic, effectiveCPUMask, cpuMasks)
 		if err != nil {
 			return "", err
 		}
