@@ -262,6 +262,15 @@ private:
     ntp_to_topic_id_partition(const model::ntp& ntp) const;
 
 private:
+    /*
+     * Retry metastore add_objects calls on transport errors.
+     * Other metastore errors are not retried.
+     */
+    ss::future<std::expected<l1::metastore::add_response, l1::metastore::errc>>
+    add_objects_with_retry(
+      std::unique_ptr<l1::metastore::object_metadata_builder> meta_builder,
+      l1::metastore::term_offset_map_t terms);
+
     data_plane_api* _data_plane;
     l1::io* _l1_io;
     l1::metastore* _metastore;
