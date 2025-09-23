@@ -458,6 +458,10 @@ func prestart(
 // Check whether we are net tuned correctly and in dedicated mode. If so, return
 // the cpuset for the non-interrupt cores ("MaskForComputations").
 func checkNetDedicatedMode(fs afero.Fs, y *config.RedpandaYaml) (string, error) {
+	if !y.Rpk.Tuners.GetAllowDedicatedInterruptMode() {
+		return "", nil
+	}
+
 	params := factory.TunerParams{}
 	err := factory.FillTunerParamsWithValuesFromConfig(&params, y)
 	if err != nil {

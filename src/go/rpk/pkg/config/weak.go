@@ -436,6 +436,7 @@ func (rpkc *RpkNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		Overprovisioned                weakBool             `yaml:"overprovisioned"`
 		SMP                            *weakInt             `yaml:"smp"`
 		CoresPerDedicatedInterruptCore *weakInt             `yaml:"cores_per_dedicated_interrupt_core"`
+		AllowDedicatedInterruptMode    *weakBool            `yaml:"allow_dedicated_interrupt_mode"`
 	}
 	if err := n.Decode(&internal); err != nil {
 		return err
@@ -482,6 +483,7 @@ func (rpkc *RpkNodeConfig) UnmarshalYAML(n *yaml.Node) error {
 		return errors.New("cores_per_dedicated_interrupt_core must be greater than 1")
 	}
 	rpkc.Tuners.CoresPerDedicatedInterruptCore = (*int)(internal.CoresPerDedicatedInterruptCore)
+	rpkc.Tuners.AllowDedicatedInterruptMode = (*bool)(internal.AllowDedicatedInterruptMode)
 	return nil
 }
 

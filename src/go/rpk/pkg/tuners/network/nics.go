@@ -40,7 +40,7 @@ func GetDefaultMode(
 		//   - no cpuset specified in config
 		//   - --smp is compatible
 		var mode irq.Mode
-		if numOfPUs >= uint(t.GetCoresPerDedicatedInterruptCore()) {
+		if numOfPUs >= uint(t.GetCoresPerDedicatedInterruptCore()) && t.GetAllowDedicatedInterruptMode() {
 			mode = irq.Dedicated
 		} else {
 			mode = irq.Mq

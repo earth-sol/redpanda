@@ -176,6 +176,8 @@ type (
 		WellKnownIo              string `yaml:"well_known_io,omitempty" json:"well_known_io"`
 		// Use GetCoresPerDedicatedInterruptCore to read
 		CoresPerDedicatedInterruptCore *int `yaml:"cores_per_dedicated_interrupt_core,omitempty" json:"cores_per_dedicated_interrupt_core"`
+		// Use GetAllowDedicatedInterruptMode to read
+		AllowDedicatedInterruptMode *bool `yaml:"allow_dedicated_interrupt_mode,omitempty" json:"allow_dedicated_interrupt_mode"`
 	}
 
 	RpkKafkaAPI struct {
@@ -206,6 +208,13 @@ func (t *RpkNodeTuners) GetCoresPerDedicatedInterruptCore() int {
 		return *t.CoresPerDedicatedInterruptCore
 	}
 	return 16
+}
+
+func (t *RpkNodeTuners) GetAllowDedicatedInterruptMode() bool {
+	if t.AllowDedicatedInterruptMode != nil {
+		return *t.AllowDedicatedInterruptMode
+	}
+	return false
 }
 
 func (t *TLS) Config(fs afero.Fs) (*tls.Config, error) {
