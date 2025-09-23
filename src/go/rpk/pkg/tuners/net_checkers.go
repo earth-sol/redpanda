@@ -39,6 +39,9 @@ type NetCheckersFactory interface {
 	NewRfsTableSizeChecker() Checker
 	NewListenBacklogChecker() Checker
 	NewSynBacklogChecker() Checker
+	// Check if all the interfaces run in dedicated mode and return the mask for
+	// computations if so. Empty string otherwise.
+	DedicatedMaskForComputations(interfaces []string) string
 }
 
 type netCheckersFactory struct {
@@ -66,6 +69,25 @@ func NewNetCheckersFactory(
 		balanceService: balanceService,
 		cpuMasks:       cpuMasks,
 	}
+}
+
+func (f *netCheckersFactory) DedicatedMaskForComputations(interfaces []string) string {
+	for _, ifaceName := range interfaces {
+		nic := network.NewNic(f.fs, f.irqProcFile, f.irqDeviceInfo, f.ethtool, ifaceName)
+		mode, err := network.GetDefaultMode(nic, "all", f.cpuMasks)
+		if err != nil {
+			return ""
+		}
+		if mode != irq.Dedicated {
+			return ""
+		}
+	}
+
+	mask, err := f.cpuMasks.CPUMaskForComputations(irq.Dedicated, "all")
+	if err != nil {
+		return ""
+	}
+	return mask
 }
 
 func (f *netCheckersFactory) NewNicIRQAffinityStaticChecker(
