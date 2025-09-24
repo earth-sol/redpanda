@@ -50,6 +50,11 @@ public:
 
     void update_config(model::metadata);
 
+    // at the link scope
+    bool requires_active_replicators() const;
+    // per topic
+    bool requires_active_replicators(const ::model::topic&) const;
+
     ss::future<> handle_on_leadership_change(
       ::model::ntp ntp,
       ntp_leader is_ntp_leader,

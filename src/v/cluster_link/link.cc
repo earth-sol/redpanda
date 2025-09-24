@@ -188,6 +188,62 @@ void link::update_config(model::metadata config) {
         vlog(cllog.trace, "Updating config for task {}", t->name());
         t->update_config(_config);
     }
+
+    // reconcile the replicators. We do not need replicators running
+    // if the link is not active or a specific topic in the link is not
+    // active.
+    if (!requires_active_replicators()) {
+        vlog(
+          cllog.debug,
+          "Link {} is not active, stopping all replicators",
+          _config.name);
+        _replication_mgr.stop_replicators();
+    } else {
+        for (const auto& [topic, _] : _config.state.mirror_topics) {
+            if (requires_active_replicators(topic)) {
+                continue;
+            }
+            vlog(
+              cllog.debug,
+              "Topic {} on link {} is not active, stopping its replicators",
+              topic,
+              _config.name);
+            _replication_mgr.stop_replicators(topic);
+        }
+    }
+}
+
+bool link::requires_active_replicators() const {
+    switch (_config.state.status) {
+    case model::link_status::active:
+        // check below for topic status overrides
+        return true;
+    case model::link_status::paused:
+        return false;
+    }
+}
+
+bool link::requires_active_replicators(const ::model::topic& topic) const {
+    if (!requires_active_replicators()) {
+        return false;
+    }
+    const auto& mts = _config.state.mirror_topics;
+    auto it = mts.find(topic);
+    if (it == mts.end()) {
+        return false;
+    }
+    switch (it->second.status) {
+    case model::mirror_topic_status::active:
+        return true;
+    case model::mirror_topic_status::failed:
+    case model::mirror_topic_status::paused:
+    case model::mirror_topic_status::failing_over:
+    case model::mirror_topic_status::failed_over:
+    case model::mirror_topic_status::promoting:
+    case model::mirror_topic_status::promoted:
+        return false;
+    }
+    __builtin_unreachable();
 }
 
 ss::future<> link::handle_on_leadership_change(
@@ -211,7 +267,15 @@ ss::future<> link::handle_on_leadership_change(
           _link_id,
           ntp,
           is_ntp_leader);
-        if (is_ntp_leader) {
+        auto needs_replicators = requires_active_replicators(ntp.tp.topic);
+        if (!needs_replicators) {
+            vlog(
+              cllog.info,
+              "[{}] Topic {} is not active, will stop any active replicators",
+              _link_id,
+              ntp.tp.topic);
+        }
+        if (is_ntp_leader && needs_replicators) {
             vassert(
               term, "Term must be set when leadership is assumed: {}", ntp);
             _replication_mgr.start_replicator(ntp, *term);
