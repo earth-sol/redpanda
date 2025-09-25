@@ -25,7 +25,6 @@ redpanda_test_cc_library(
     ],
     hdrs = [
         "async.h",
-        "fixture.h",
         "gtest_exception.h",
         "gtest_utils.h",
         "test.h",
@@ -34,8 +33,9 @@ redpanda_test_cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
-        ":fixture",
         "//src/v/base",
+        "//src/v/model:timeout_clock",
+        "//src/v/ssx:sformat",
         "@fmt",
         "@googletest//:gtest",
         "@seastar",
