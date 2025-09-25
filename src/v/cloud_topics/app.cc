@@ -159,7 +159,7 @@ ss::future<> app::wire_up_notifications() {
               if (partition) {
                   r.attach_partition(ntp, tidp, std::move(*partition));
               } else {
-                  r.detach_partition(ntp);
+                  r.detach(ntp);
               }
           });
     });

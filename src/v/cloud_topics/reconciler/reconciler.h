@@ -35,7 +35,8 @@ class frontend;
 
 namespace cloud_topics::reconciler {
 
-enum class reconcile_error { build_or_put_failure, metadata_failure };
+class source;
+enum class reconcile_error : uint8_t { build_or_put_failure, metadata_failure };
 
 /*
  * The reconciler is the cloud topics subsystem responsible for lifting
@@ -69,40 +70,13 @@ public:
       const model::ntp&,
       model::topic_id_partition,
       ss::lw_shared_ptr<cluster::partition>);
-    void detach_partition(const model::ntp&);
+    void attach_source(ss::shared_ptr<source>);
+    void detach(const model::ntp&);
 
 private:
-    /*
-     * An attached partition is a partition that the reconciler is tracking and
-     * periodically processing. Partitions are attached/detached via upcalls
-     * from the cluster module. The reconciler operates on the leaders of
-     * partitions with affinity to the local shard.
-     */
-    struct attached_partition_info {
-        explicit attached_partition_info(
-          model::topic_id_partition tidp,
-          ss::lw_shared_ptr<cluster::partition> p)
-          : tidp(tidp)
-          , partition(std::move(p)) {}
-
-        model::topic_id_partition tidp;
-
-        ss::lw_shared_ptr<cluster::partition> partition;
-
-        /*
-         * Last reconciled offset. this forms the starting offset when querying
-         * the partition for new data. In later versions of the system this will
-         * be stored in and queried from the partition itself.
-         * TODO: Rename this, and set it using the L0 LRO and the L1 metastore.
-         */
-        kafka::offset lro;
-    };
-
-    using attached_partition = ss::lw_shared_ptr<attached_partition_info>;
-
     // NB: Partition attachment is the only part using ntps instead of
     //     topic id partitions.
-    chunked_hash_map<model::ntp, attached_partition> _partitions;
+    chunked_hash_map<model::ntp, ss::shared_ptr<source>> _sources;
 
 private:
     static constexpr size_t max_object_size = 64_MiB;
@@ -139,7 +113,7 @@ private:
      * Metadata about a partition in an L1 object, used for committing.
      */
     struct partition_commit_info {
-        attached_partition partition;
+        ss::shared_ptr<source> source;
         partition_metadata metadata;
     };
 
@@ -158,33 +132,26 @@ private:
     ssx::semaphore _control_sem{0, "reconciler::semaphore"};
 
     /*
-     * Copy leader partitions from the attached partitions map into a new
-     * container. Shuffles the partitions to avoid starvation during
-     * reconciliation.
-     */
-    chunked_vector<attached_partition> collect_leader_partitions() const;
-
-    /*
-     * One round of reconciliation in which data from one or more partitions
+     * One round of reconciliation in which data from one or more sources
      * may be reconciled into an L1 object. Operates on the set of currently
      * attached partitions.
      */
     ss::future<> reconcile();
 
     /*
-     * Reconcile a set of partitions into an object with id `oid`.
+     * Reconcile a set of sources into an object with id `oid`.
      * The metastore must have previously assigned `oid` to each partition
      * in `partitions`. Returns metadata on success, or an error if building,
      * uploading, or metadata operations fail.
      */
     ss::future<std::expected<built_object_metadata, reconcile_error>>
-    reconcile_partitions(
+    reconcile_sources(
       const l1::object_id& oid,
-      const chunked_vector<attached_partition>& partitions);
+      const chunked_vector<ss::shared_ptr<source>>& partitions);
 
     /*
      * Build and upload an object with id `oid` using the provided context.
-     * Reads data from `partitions` and packages it into the object.
+     * Reads data from `sources` and packages it into the object.
      * Returns metadata on success, or an error if no data was added or
      * if the build/upload fails.
      */
@@ -192,7 +159,7 @@ private:
     build_and_put_object(
       const l1::object_id& oid,
       builder_context& ctx,
-      const chunked_vector<attached_partition>& partitions);
+      const chunked_vector<ss::shared_ptr<source>>& sources);
 
     /*
      * Create a new builder_context for constructing an L1 object.
@@ -202,7 +169,7 @@ private:
 
     /*
      * Build an object described by `ctx` and containing data from
-     * `partitions`, which must all belong to the same L1 domain.
+     * `sources`, which must all belong to the same L1 domain.
      *
      * Returns empty metadata if no data was added to the object.
      * Returns an error if building fails.
@@ -210,14 +177,14 @@ private:
     ss::future<std::expected<built_object_metadata, reconcile_error>>
     build_object(
       builder_context& ctx,
-      const chunked_vector<attached_partition>& partitions);
+      const chunked_vector<ss::shared_ptr<source>>& sources);
 
     /*
-     * Add partition data to an L1 object builder. Returns the partition
+     * Add source data to an L1 object builder. Returns the source
      * metadata if any batches were consumed, nullopt otherwise.
      */
-    ss::future<std::optional<partition_metadata>> add_partition_to_object(
-      builder_context& ctx, const attached_partition& partition);
+    ss::future<std::optional<partition_metadata>>
+    add_partition_to_object(builder_context& ctx, ss::shared_ptr<source> src);
 
     /*
      * Upload an object to cloud storage with the specified id.
@@ -228,7 +195,7 @@ private:
 
     /*
      * Add an object's metadata to the metastore metadata builder.
-     * Adds partition metadata for all partitions in the object.
+     * Adds sources metadata for all sources in the object.
      * Returns an error if any metadata operation fails.
      */
     ss::future<std::expected<void, reconcile_error>> add_object_metadata(
@@ -238,20 +205,12 @@ private:
 
     /*
      * Commit multiple objects to the L1 metastore in a single operation.
-     * Updates the LRO (last reconciled offset) for each partition based on
+     * Updates the LRO (last reconciled offset) for each source based on
      * the committed data, using corrections from the metastore if provided.
      */
     ss::future<std::expected<void, reconcile_error>> commit_objects(
       const chunked_vector<built_object_metadata>& objects,
       std::unique_ptr<l1::metastore::object_metadata_builder> meta_builder);
-
-    /*
-     * Build a partition reader that returns batches to be reconciled.
-     * Reading will start from the last reconcilied offset. If there is no
-     * data that needs to be reconciled then an empty reader is returned.
-     */
-    ss::future<model::record_batch_reader>
-    make_reader(frontend*, kafka::offset start_offset, size_t);
 
 private:
     /*

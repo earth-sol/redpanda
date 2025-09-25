@@ -16,7 +16,6 @@
 #include "model/record.h"
 #include "model/timestamp.h"
 
-#include <seastar/core/coroutine.hh>
 #include <seastar/core/future.hh>
 
 #include <optional>

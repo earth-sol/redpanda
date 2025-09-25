@@ -12,6 +12,8 @@
 
 #include "model/timestamp.h"
 
+#include <seastar/core/coroutine.hh>
+
 namespace cloud_topics::reconciler {
 
 reconciliation_consumer::reconciliation_consumer(
