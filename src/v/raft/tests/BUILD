@@ -237,20 +237,12 @@ redpanda_cc_gtest(
     deps = [
         ":simple_record_fixture",
         "//src/v/base",
-        "//src/v/config",
-        "//src/v/model",
         "//src/v/raft",
-        "//src/v/random:generators",
-        "//src/v/storage",
-        "//src/v/storage:record_batch_builder",
         "//src/v/test_utils:gtest",
         "//src/v/test_utils:random",
-        "//src/v/test_utils:seastar_boost",
-        "//src/v/utils:unresolved_address",
         "@fmt",
         "@googletest//:gtest",
         "@seastar",
-        "@seastar//:testing",
     ],
 )
 
@@ -264,15 +256,11 @@ redpanda_cc_gtest(
     deps = [
         ":raft_fixture",
         ":raft_fixture_retry_policy",
-        "//src/v/config",
         "//src/v/model",
         "//src/v/raft",
-        "//src/v/storage",
         "//src/v/test_utils:gtest",
-        "//src/v/utils:unresolved_address",
         "@fmt",
         "@seastar",
-        "@seastar//:testing",
     ],
 )
 
@@ -373,12 +361,8 @@ redpanda_cc_gtest(
     deps = [
         ":raft_fixture",
         ":raft_fixture_retry_policy",
-        "//src/v/model",
         "//src/v/raft",
-        "//src/v/raft/tests:stm_raft_fixture",
-        "//src/v/storage",
-        "//src/v/test_utils:fixture",
-        "//src/v/test_utils:seastar_boost",
+        "//src/v/test_utils:gtest",
         "@googletest//:gtest",
         "@seastar//:testing",
     ],
@@ -392,12 +376,8 @@ redpanda_cc_gtest(
     ],
     deps = [
         ":raft_fixture",
-        "//src/v/finjector",
-        "//src/v/model",
-        "//src/v/raft",
-        "//src/v/test_utils:seastar_boost",
+        "//src/v/test_utils:gtest",
         "@googletest//:gtest",
-        "@seastar//:testing",
     ],
 )
 
@@ -412,11 +392,10 @@ redpanda_cc_gtest(
         ":raft_fixture_retry_policy",
         "//src/v/raft",
         "//src/v/raft/tests:stm_raft_fixture",
-        "//src/v/test_utils:seastar_boost",
+        "//src/v/test_utils:gtest",
         "//src/v/utils:directory_walker",
         "@googletest//:gtest",
         "@seastar",
-        "@seastar//:testing",
     ],
 )
 
