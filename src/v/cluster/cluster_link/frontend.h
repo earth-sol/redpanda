@@ -29,6 +29,7 @@ class frontend : public ss::peering_sharded_service<frontend> {
       cluster::cluster_link_upsert_cmd,
       cluster::cluster_link_remove_cmd,
       cluster::cluster_link_add_mirror_topic_cmd,
+      cluster::cluster_link_delete_mirror_topic_cmd,
       cluster::cluster_link_update_mirror_topic_status_cmd,
       cluster::cluster_link_update_mirror_topic_properties_cmd,
       cluster::cluster_link_update_cluster_link_configuration_cmd>;
@@ -53,6 +54,10 @@ public:
     ss::future<errc> add_mirror_topic(
       ::cluster_link::model::id_t,
       ::cluster_link::model::add_mirror_topic_cmd,
+      model::timeout_clock::time_point);
+    ss::future<errc> delete_mirror_topic(
+      ::cluster_link::model::id_t,
+      ::cluster_link::model::delete_mirror_topic_cmd,
       model::timeout_clock::time_point);
     ss::future<errc> update_mirror_topic_status(
       ::cluster_link::model::id_t,
