@@ -52,6 +52,18 @@ def _parse_bytes(value):
     return int(value) * factor
 
 def _test_options():
+    """
+    Returns common data dependencies and environment variables for Redpanda tests.
+
+    This function provides a centralized place to define common settings for all
+    C++ tests, ensuring consistency and making it easier to manage test
+    configurations.
+
+    Returns:
+        A tuple containing:
+        - A list of common data dependencies needed by tests (e.g., suppression files).
+        - A dictionary of common environment variables for test execution.
+    """
     data = [
         "//:ubsan_suppressions",
         "//:lsan_suppressions",
@@ -67,6 +79,8 @@ def _test_options():
         "ASAN_SYMBOLIZER_PATH": "$(rootpath @current_llvm_toolchain//:llvm-symbolizer)",
         "LSAN_OPTIONS": "suppressions=$(rootpath //:lsan_suppressions)",
         "UBSAN_OPTIONS": "halt_on_error=1:abort_on_error=1:report_error_type=1:suppressions=$(rootpath //:ubsan_suppressions)",
+        # see https://redpandadata.atlassian.net/wiki/x/BwDSUw
+        "REDPANDA_RNG_SEEDING_MODE_DEFAULT": "fixed",
     }
     return data, env
 
