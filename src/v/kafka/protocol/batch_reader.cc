@@ -131,6 +131,11 @@ batch_reader::do_load_slice(model::timeout_clock::time_point tp) {
         };
         const auto consume_one = [this, &batches]() {
             auto kba = consume_batch();
+
+            if (kba.short_read && _tolerate_partial)
+              [[unlikely]] {
+                return ss::now();
+            }
             if (likely(kba.v2_format && kba.valid_crc && kba.batch)) {
                 batches.push_back(std::move(*kba.batch));
                 return ss::now();
