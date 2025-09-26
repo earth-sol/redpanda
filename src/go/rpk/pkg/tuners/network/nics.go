@@ -15,7 +15,9 @@ import (
 	"fmt"
 
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/config"
+	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/tuners/ethtool"
 	"github.com/redpanda-data/redpanda/src/go/rpk/pkg/tuners/irq"
+	et "github.com/safchain/ethtool"
 	"go.uber.org/zap"
 )
 
@@ -172,6 +174,49 @@ func GetHwInterfaceIRQsDistribution(
 		IRQsDistribution[irq] = mask
 	}
 	return IRQsDistribution, nil
+}
+
+// Returns the current ethtool channel config and the target (possibly lowered) channel config as required by the RX channel tuner.
+func GetCurrentAndTargetChannels(
+	nic Nic,
+	mode irq.Mode,
+	cpuMask string,
+	cpuMasks irq.CPUMasks,
+	t config.RpkNodeTuners,
+	ethtool ethtool.EthtoolWrapper,
+) (currentChannels et.Channels, targetChannels et.Channels, err error) {
+	effectiveCPUMask, err := cpuMasks.BaseCPUMask(cpuMask)
+	if err != nil {
+		return et.Channels{}, et.Channels{}, err
+	}
+
+	effectiveMode, err := getEffectiveMode(mode, nic, effectiveCPUMask, cpuMasks, t)
+	if err != nil {
+		return et.Channels{}, et.Channels{}, err
+	}
+
+	irqMask, err := cpuMasks.CPUMaskForIRQs(effectiveMode, effectiveCPUMask, t)
+	if err != nil {
+		return et.Channels{}, et.Channels{}, err
+	}
+
+	puCount, err := cpuMasks.GetNumberOfPUs(irqMask)
+	if err != nil {
+		return et.Channels{}, et.Channels{}, err
+	}
+
+	currentChannels, err = ethtool.GetChannels(nic.Name())
+	if err != nil {
+		return et.Channels{}, et.Channels{}, err
+	}
+
+	targetChannels = currentChannels
+	targetChannels.RxCount = min(currentChannels.MaxRx, uint32(puCount))
+	targetChannels.CombinedCount = min(currentChannels.MaxCombined, uint32(puCount))
+
+	zap.L().Sugar().Debugf("Got current channels for '%s': %+v, target channels: %+v", nic.Name(), currentChannels, targetChannels)
+
+	return currentChannels, targetChannels, nil
 }
 
 func CollectIRQs(nic Nic) ([]int, error) {
