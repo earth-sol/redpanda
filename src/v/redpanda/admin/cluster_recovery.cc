@@ -13,16 +13,58 @@
 #include "cluster/cluster_recovery_manager.h"
 #include "cluster/cluster_recovery_table.h"
 #include "cluster/controller.h"
+#include "json/validator.h"
+#include "model/fundamental.h"
 #include "redpanda/admin/api-doc/shadow_indexing.json.hh"
 #include "redpanda/admin/server.h"
+#include "redpanda/admin/util.h"
+#include "utils/uuid.h"
 
 #include <optional>
+#include <string_view>
+
+namespace {
+
+json::validator make_initialize_cluster_recovery_validator() {
+    const std::string_view schema = R"({
+  "type": "object",
+  "properties": {
+    "cluster_uuid_override": {
+      "type": "string",
+      "format": "uuid"
+    }
+  },
+  "additionalProperties": false
+})";
+    return json::validator(schema);
+}
+
+} // namespace
 
 ss::future<std::unique_ptr<ss::http::reply>>
 admin_server::initialize_cluster_recovery(
   std::unique_ptr<ss::http::request> request,
   std::unique_ptr<ss::http::reply> reply) {
+    static thread_local auto body_validator(
+      make_initialize_cluster_recovery_validator());
+
+    std::optional<model::cluster_uuid> cluster_uuid_override;
+
+    auto doc = co_await parse_optional_json_body(request.get());
+    if (doc.has_value()) {
+        admin::apply_validator(body_validator, *doc);
+
+        if (doc->HasMember("cluster_uuid_override")) {
+            cluster_uuid_override = model::cluster_uuid(
+              uuid_t::from_string((*doc)["cluster_uuid_override"].GetString()));
+            if (!cluster_uuid_override.has_value()) {
+                throw ss::httpd::bad_request_exception("Invalid UUID format");
+            }
+        }
+    }
+
     reply->set_content_type("json");
+
     if (config::node().recovery_mode_enabled()) {
         throw ss::httpd::bad_request_exception(
           "Cluster restore is not available, recovery mode enabled");
@@ -39,8 +81,9 @@ admin_server::initialize_cluster_recovery(
     auto result = ss::httpd::shadow_indexing_json::init_recovery_result{};
     auto error_res
       = co_await _controller->get_cluster_recovery_manager().invoke_on(
-        cluster::cluster_recovery_manager::shard, [bucket](auto& mgr) {
-            return mgr.initialize_recovery(bucket, std::nullopt);
+        cluster::cluster_recovery_manager::shard,
+        [bucket, cluster_uuid_override](auto& mgr) {
+            return mgr.initialize_recovery(bucket, cluster_uuid_override);
         });
     if (error_res.has_error()) {
         switch (error_res.error()) {

@@ -637,6 +637,23 @@ admin_server::parse_json_body(ss::http::request* req) {
     }
 }
 
+ss::future<std::optional<json::Document>>
+admin_server::parse_optional_json_body(ss::http::request* req) {
+    json::Document doc;
+    auto content = co_await ss::util::read_entire_stream_contiguous(
+      *req->content_stream);
+    if (content.empty()) {
+        co_return std::nullopt;
+    }
+    doc.Parse(content);
+    if (doc.HasParseError()) {
+        throw ss::httpd::bad_request_exception(
+          fmt::format("JSON parse error: {}", doc.GetParseError()));
+    } else {
+        co_return doc;
+    }
+}
+
 namespace {
 
 /**
