@@ -20,12 +20,10 @@ redpanda_cc_library(
     hdrs = [
         "generators.h",
     ],
-    implementation_deps = [
-        "@abseil-cpp//absl/random",
-    ],
     visibility = ["//visibility:public"],
     deps = [
         "//src/v/base",
+        "@abseil-cpp//absl/random",
         "@seastar",
     ],
 )

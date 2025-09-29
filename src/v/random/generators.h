@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "absl/random/random.h"
 #include "base/seastarx.h"
 
 #include <seastar/core/sstring.hh>
@@ -27,6 +28,7 @@ struct random_state_accessor;
 // Random generators useful for testing.
 namespace random_generators {
 
+// tag to select the random-seed constructor
 struct random_seed_tag {};
 
 /**
@@ -41,8 +43,8 @@ struct random_seed_tag {};
  */
 class rng {
 public:
-    using seed_type = uint32_t;
-    using engine_type = std::default_random_engine;
+    using seed_type = uint64_t;
+    using engine_type = absl::random_internal::pcg64_2018_engine;
 
     // Initializes an rng object using the _default_ seed
     // policy, which is fixed in most contexts, but random in
