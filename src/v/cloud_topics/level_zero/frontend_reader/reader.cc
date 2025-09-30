@@ -24,9 +24,6 @@
 
 namespace cloud_topics {
 
-// TODO: add config
-static constexpr size_t L0_max_bytes_per_metadata_fetch = 4_KiB;
-
 level_zero_log_reader_impl::level_zero_log_reader_impl(
   cloud_topic_log_reader_config& cfg,
   ss::lw_shared_ptr<cluster::partition> ctp,
@@ -157,10 +154,28 @@ storage::local_log_reader_config level_zero_log_reader_impl::ctp_read_config() {
       kafka::offset_cast(_config.start_offset));
     auto max_offset = ot_state->to_log_offset(
       kafka::offset_cast(_config.max_offset));
+
+    /*
+     * Used to set max_bytes on the log reader for the L0 CTP. Placeholder
+     * batches in the CTP lack a payload, so a few small batches may materialize
+     * into a large read. For example, a placeholder batch is roughly 110 bytes.
+     * If the maximum read size is set to 4K, then ~40 batches will be returned
+     * per read. If each materialized batch is 1 MB then the reader will be able
+     * to stream 40 MB without performing another read from the CTP. The default
+     * Kafka fetch size is 64 MB, so it is useful to read more than 4K.
+     *
+     * Default to the size of the segment reader buffer (32 KiB at the time of
+     * writing). This is a small size used across all existing workloads, and
+     * for cloud topics it provides plenty of metadata to drive large scans when
+     * materialized batches are big.
+     */
+    const auto ctp_reader_max_bytes
+      = storage::local_log_reader_config::segment_reader_max_buffer_size;
+
     storage::local_log_reader_config cfg(
       start_offset,
       max_offset,
-      _config.max_bytes,
+      ctp_reader_max_bytes,
       // We need to fetch both raft data batches for transaction control
       // markers as well as placeholder batches to hydrate from object
       // storage, so we don't include a typefilter and instead postfilter
@@ -169,16 +184,11 @@ storage::local_log_reader_config level_zero_log_reader_impl::ctp_read_config() {
       _config.first_timestamp,
       _config.abort_source,
       _config.client_address);
+
+    // The cloud topics reader (user of this log reader) operates in kafka
+    // offset space so this automatic translation saves a few steps.
     cfg.translate_offsets = model::translate_offsets::yes;
-    // This parameter defines how many bytes we want to fetch
-    // from the underlying partition in one go.
-    // The L0 meta batches are small, so we can fetch a lot of them in a
-    // single request and then gradually materialize them.
-    // The 'cfg.max_bytes' doesn't limit the size of the materialized
-    // batches, because it is fetching L0 meta batches, which have different
-    // size. In order to know the size of the materialized batches we need
-    // to fetch L0 meta batches first and then parse them.
-    cfg.max_bytes = L0_max_bytes_per_metadata_fetch;
+
     return cfg;
 }
 
