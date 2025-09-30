@@ -877,7 +877,8 @@ public:
       std::string_view desc,
       base_property::metadata meta,
       T def,
-      std::vector<T> values)
+      std::vector<T> values,
+      std::optional<legacy_default<T>> ld = std::nullopt)
       : property<T>(
           conf,
           name,
@@ -900,7 +901,8 @@ public:
               } else {
                   return std::nullopt;
               }
-          })
+          },
+          std::move(ld))
       , _values(values) {}
 
     std::optional<validation_error>
