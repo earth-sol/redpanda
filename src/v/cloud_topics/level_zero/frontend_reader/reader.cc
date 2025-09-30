@@ -166,7 +166,6 @@ ss::future<> level_zero_log_reader_impl::fetch_metadata(
         storage::local_log_reader_config cfg(
           start_offset,
           max_offset,
-          _config.min_bytes,
           _config.max_bytes,
           // We need to fetch both raft data batches for transaction control
           // markers as well as placeholder batches to hydrate from object
