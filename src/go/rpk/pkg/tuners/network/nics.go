@@ -23,14 +23,6 @@ func GetDefaultMode(
 	nic Nic, cpuMask string, cpuMasks irq.CPUMasks, t config.RpkNodeTuners,
 ) (irq.Mode, error) {
 	if nic.IsHwInterface() {
-		rxQueuesCount, err := nic.GetRxQueueCount()
-		if err != nil {
-			return "", err
-		}
-		numOfCores, err := cpuMasks.GetNumberOfCores(cpuMask)
-		if err != nil {
-			return "", err
-		}
 		numOfPUs, err := cpuMasks.GetNumberOfPUs(cpuMask)
 		if err != nil {
 			return "", err
@@ -46,8 +38,8 @@ func GetDefaultMode(
 			mode = irq.Mq
 		}
 
-		zap.L().Sugar().Debugf("Using '%s' mode for '%s': '%d' cores, '%d' PUs and '%d' rx queues",
-			mode, nic.Name(), numOfCores, numOfPUs, rxQueuesCount)
+		zap.L().Sugar().Debugf("Using '%s' mode for '%s': '%d' PUs",
+			mode, nic.Name(), numOfPUs)
 
 		return mode, nil
 	}
