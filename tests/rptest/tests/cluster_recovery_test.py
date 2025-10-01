@@ -237,7 +237,7 @@ class ClusterRecoveryWithNameTest(RedpandaTest):
     @cluster(
         num_nodes=1,
         log_allow_list=[
-            "Error starting cluster recovery request: Cluster misconfiguration",
+            "Error starting cluster recovery request. Check logs for details.",
             "Error starting cluster recovery request: No matching metadata",
         ],
     )
@@ -257,7 +257,7 @@ class ClusterRecoveryWithNameTest(RedpandaTest):
         assert excinfo.value.response.status_code == 500
         assert (
             excinfo.value.response.json()["message"]
-            == "Error starting cluster recovery request: Cluster misconfiguration"
+            == "Error starting cluster recovery request. Check logs for details."
         ), excinfo.value.response.json()["message"]
 
         self.logger.info(
@@ -410,4 +410,6 @@ class ClusterRecoveryWithNameTest(RedpandaTest):
     def _cluster_recovery_complete(self):
         state = self.redpanda._admin.get_cluster_recovery_status().json()["state"]
         self.logger.debug(f"Cluster recovery state: {state}")
+        if "failed" in state:
+            raise RuntimeError(f"Cluster recovery failed with state: {state}")
         return "inactive" in state

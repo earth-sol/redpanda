@@ -10,18 +10,14 @@
 #include "cluster/cluster_recovery_manager.h"
 
 #include "base/seastarx.h"
-#include "cloud_storage/cache_service.h"
 #include "cloud_storage/remote.h"
-#include "cloud_storage/remote_file.h"
 #include "cluster/cloud_metadata/cluster_manifest.h"
+#include "cluster/cloud_metadata/error_outcome.h"
 #include "cluster/cloud_metadata/manifest_downloads.h"
 #include "cluster/cluster_recovery_table.h"
 #include "cluster/cluster_utils.h"
 #include "cluster/commands.h"
-#include "cluster/config_frontend.h"
 #include "cluster/errc.h"
-#include "cluster/logger.h"
-#include "cluster/security_frontend.h"
 #include "config/configuration.h"
 
 #include <seastar/core/abort_source.hh>
@@ -79,26 +75,33 @@ cluster_recovery_manager::sync_leader(ss::abort_source& as) {
     co_return synced_term;
 }
 
-ss::future<result<cluster::errc, cloud_metadata::error_outcome>>
+ss::future<checked<void, cluster_recovery_manager::errc>>
 cluster_recovery_manager::initialize_recovery(
   cloud_storage_clients::bucket_name bucket) {
     if (!_remote.local_is_initialized()) {
-        co_return cluster::errc::invalid_request;
+        vlog(clusterlog.warn, "Cloud storage is not configured/initialized");
+        co_return errc::misconfigured;
     }
     if (config::node().recovery_mode_enabled()) {
-        co_return cluster::errc::feature_disabled;
+        vlog(
+          clusterlog.warn, "Node is in recovery mode, cannot start recovery");
+        co_return errc::misconfigured;
     }
     auto synced_term = co_await sync_leader(_sharded_as.local());
     if (!synced_term.has_value()) {
-        co_return cluster::errc::not_leader_controller;
+        vlog(clusterlog.warn, "Not leader, cannot start recovery");
+        co_return errc::not_a_leader;
     }
     if (_recovery_table.local().is_recovery_active()) {
-        co_return cluster::errc::cluster_already_exists;
+        co_return errc::already_in_progress;
     }
     if (
       !_raft0->is_leader()
       || !_storage.local().get_cluster_uuid().has_value()) {
-        co_return cluster::errc::not_leader_controller;
+        vlog(
+          clusterlog.warn,
+          "Lost leadership or storage uuid disappeared, cannot start recovery");
+        co_return errc::not_a_leader;
     }
     const auto& ignored_uuid = _storage.local().get_cluster_uuid().value();
     auto cluster_name = config::shard_local_cfg().cloud_storage_cluster_name();
@@ -113,7 +116,12 @@ cluster_recovery_manager::initialize_recovery(
           "Error finding cluster manifests in bucket {}: {}",
           bucket,
           cluster_manifest_res.error());
-        co_return cluster_manifest_res.error();
+        if (
+          cluster_manifest_res.error()
+          == cloud_metadata::error_outcome::no_matching_metadata) {
+            co_return errc::no_matching_metadata;
+        }
+        co_return errc::unknown;
     }
     auto& manifest = cluster_manifest_res.value();
     vlog(clusterlog.info, "Found cluster manifest for recovery: {}", manifest);
@@ -129,14 +137,14 @@ cluster_recovery_manager::initialize_recovery(
       cluster_recovery_init_cmd(0, std::move(data)),
       model::timeout_clock::now() + 30s,
       synced_term);
-    if (errc != errc::success) {
+    if (errc != cluster::errc::success) {
         vlog(
           clusterlog.warn,
           "Error replicating recovery initialization command: {}",
           errc.message());
-        co_return cluster::errc::replication_error;
+        co_return errc::unknown;
     }
-    co_return cluster::errc::success;
+    co_return outcome::success();
 }
 
 ss::future<cluster::errc> cluster_recovery_manager::replicate_update(
@@ -160,7 +168,7 @@ ss::future<cluster::errc> cluster_recovery_manager::replicate_update(
       cluster_recovery_update_cmd(0, std::move(data)),
       model::timeout_clock::now() + 30s,
       std::make_optional(term));
-    if (errc != errc::success) {
+    if (errc != cluster::errc::success) {
         vlog(
           clusterlog.warn,
           "Error replicating recovery update command: {}",

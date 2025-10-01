@@ -40,35 +40,37 @@ admin_server::initialize_cluster_recovery(
         cluster::cluster_recovery_manager::shard,
         [bucket](auto& mgr) { return mgr.initialize_recovery(bucket); });
     if (error_res.has_error()) {
-        throw ss::httpd::base_exception{
-          ssx::sformat(
-            "Error starting cluster recovery request: {}", error_res.error()),
-          ss::http::reply::status_type::internal_server_error};
-    }
-    auto err = error_res.value();
-    if (err == cluster::errc::not_leader_controller) {
-        throw co_await redirect_to_leader(*request, model::controller_ntp);
-    }
-    if (err == cluster::errc::cluster_already_exists) {
-        throw ss::httpd::base_exception{
-          "Recovery already active", ss::http::reply::status_type::conflict};
-    }
-    if (err == cluster::errc::invalid_request) {
-        throw ss::httpd::base_exception{
-          "Cloud storage not available",
-          ss::http::reply::status_type::bad_request};
-    }
-    // Generic other errors. Just give up and throw.
-    if (err != cluster::errc::success) {
-        throw ss::httpd::base_exception{
-          "Error starting cluster recovery request",
-          ss::http::reply::status_type::internal_server_error};
+        switch (error_res.error()) {
+        case cluster::cluster_recovery_manager::errc::success:
+            vassert(false, "unreachable");
+        case cluster::cluster_recovery_manager::errc::unknown:
+            throw ss::httpd::base_exception{
+              ssx::sformat(
+                "Error starting cluster recovery request. Check logs for "
+                "details."),
+              ss::http::reply::status_type::internal_server_error};
+        case cluster::cluster_recovery_manager::errc::not_a_leader:
+            throw co_await redirect_to_leader(*request, model::controller_ntp);
+        case cluster::cluster_recovery_manager::errc::misconfigured:
+            throw ss::httpd::base_exception{
+              "Cluster is misconfigured for recovery. Check logs for details.",
+              ss::http::reply::status_type::bad_request};
+        case cluster::cluster_recovery_manager::errc::no_matching_metadata:
+            throw ss::httpd::base_exception{
+              "Error starting cluster recovery request: No matching metadata",
+              ss::http::reply::status_type::internal_server_error};
+        case cluster::cluster_recovery_manager::errc::already_in_progress:
+            throw ss::httpd::base_exception{
+              "Recovery already active",
+              ss::http::reply::status_type::conflict};
+        }
     }
 
     result.status = "Recovery initialized";
     reply->set_status(ss::http::reply::status_type::accepted, result.to_json());
     co_return reply;
 }
+
 ss::future<ss::json::json_return_type>
 admin_server::get_cluster_recovery(std::unique_ptr<ss::http::request> req) {
     if (need_redirect_to_leader(model::controller_ntp, _metadata_cache)) {
