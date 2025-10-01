@@ -49,7 +49,9 @@ struct op_context {
     public:
         response_placeholder(fetch_response::iterator, op_context* ctx);
 
-        void set(fetch_response::partition_response&&);
+        void set(
+          fetch_response::partition_response&&,
+          std::optional<fetch_memory_units>&&);
 
         const model::topic& topic() { return _it->partition->topic; }
         model::partition_id partition_id() {
