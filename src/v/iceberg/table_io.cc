@@ -19,10 +19,8 @@ ss::future<checked<table_metadata, metadata_io::errc>>
 table_io::download_table_meta(const table_metadata_path& path) {
     return download_object<table_metadata>(
       path(), "iceberg::table_metadata", [](iobuf b) {
-          iobuf_parser p(std::move(b));
-          auto sz = p.bytes_left();
           json::Document parsed;
-          parsed.Parse(p.read_string(sz));
+          parsed.Parse(b.linearize_to_string());
           return parse_table_meta(parsed);
       });
 }
@@ -40,9 +38,7 @@ ss::future<checked<size_t, metadata_io::errc>> table_io::upload_table_meta(
 ss::future<checked<int, metadata_io::errc>>
 table_io::download_version_hint(const version_hint_path& path) {
     return download_object<int>(path(), "iceberg::version_hint", [](iobuf b) {
-        iobuf_parser p(std::move(b));
-        auto sz = p.bytes_left();
-        auto version_str = p.read_string(sz);
+        auto version_str = b.linearize_to_string();
         return std::stoi(version_str);
     });
 }
