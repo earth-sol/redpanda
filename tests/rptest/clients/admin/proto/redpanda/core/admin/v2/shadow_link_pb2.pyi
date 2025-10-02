@@ -606,19 +606,19 @@ class ShadowLinkClientOptions(google.protobuf.message.Message):
     source_cluster_id: builtins.str
     'If provided, this is the expected ID of the source cluster.  If it does\n    not match then the connection will be rejected.  If provided, this value\n    must match the `ClusterId` field returned in the Kafka Metadata response\n    message\n    '
     metadata_max_age_ms: builtins.int
-    'Max metadata age\n    If 0 is provided, defaults to 10 seconds\n    '
+    'Max metadata age.\n    If 0 is provided, defaults to 10 seconds\n    '
     connection_timeout_ms: builtins.int
-    'Connection timeout\n    If 0 is provided, defaults to 1 second\n    '
+    'Connection timeout.\n    If 0 is provided, defaults to 1 second\n    '
     retry_backoff_ms: builtins.int
-    'Retry base backoff\n    If 0 is provided, defaults to 100ms\n    '
+    'Retry base backoff.\n    If 0 is provided, defaults to 100ms\n    '
     fetch_wait_max_ms: builtins.int
-    'Fetch request timeout\n    If 0 is provided, defaults to 500ms\n    '
+    'Fetch request timeout.\n    If 0 is provided, defaults to 500ms\n    '
     fetch_min_bytes: builtins.int
-    'Fetch min bytes\n    If 0 is provided, defaults to 5 MiB\n    '
+    'Fetch min bytes.\n    If 0 is provided, defaults to 5 MiB\n    '
     fetch_max_bytes: builtins.int
-    'Fetch max bytes\n    If 0 is provided, defaults to 20 MiB\n    '
+    'Fetch max bytes.\n    If 0 is provided, defaults to 20 MiB\n    '
     fetch_partition_max_bytes: builtins.int
-    'Fetch partition max bytes\n    If 0 is provided, defaults to 1 MiB\n    '
+    'Fetch partition max bytes.\n    If 0 is provided, defaults to 1 MiB\n    '
 
     @property
     def bootstrap_servers(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
