@@ -198,8 +198,8 @@ state_machine::insert_linearizable_barrier(
      * Inject leader barrier and wait until returned offset is applied
      */
 
-    return _raft->linearizable_barrier(timeout).then(
-      [this, timeout](result<model::offset> r) {
+    return _raft->linearizable_barrier(timeout)
+      .then([this, timeout](result<model::offset> r) {
           if (!r) {
               return ss::make_ready_future<
                 result<std::pair<model::offset, model::term_id>>>(r.error());
@@ -210,6 +210,12 @@ state_machine::insert_linearizable_barrier(
               return result<std::pair<model::offset, model::term_id>>(
                 std::make_pair(r.value(), _raft->get_term(r.value())));
           });
+      })
+      .handle_exception([](const std::exception_ptr& e) {
+          if (ssx::is_shutdown_exception(e)) {
+              return ssx::now<result<model::offset>>(errc::shutting_down);
+          }
+          return ss::make_exception_future<result<model::offset>>(e);
       });
 }
 
