@@ -443,6 +443,10 @@ def redpanda_cc_bench(
         "//src/v/test_utils:rpbench_hooks",
     )
 
+    env = {
+        # see https://redpandadata.atlassian.net/wiki/x/BwDSUw
+        "REDPANDA_RNG_SEEDING_MODE_DEFAULT": "fixed",
+    } | env
 
     tags = tags + ["bench"]
 
