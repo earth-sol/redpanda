@@ -172,7 +172,7 @@ type NameFilter struct {
 	FilterType FilterType `json:"filter_type,omitempty" yaml:"filter_type,omitempty"`
 	// The resource name, or "*"
 	// Note if "*", must be the _only_ character
-	// and `pattern_type` must be `PATTERN_TYPE_LITERAL`
+	// and `pattern_type` must be `LITERAL`
 	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 }
 
