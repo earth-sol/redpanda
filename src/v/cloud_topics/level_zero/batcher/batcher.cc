@@ -44,6 +44,9 @@ batcher<Clock>::batcher(
   , _bucket(std::move(bucket))
   , _upload_timeout(
       config::shard_local_cfg().cloud_storage_segment_upload_timeout_ms.bind())
+  , _upload_backoff_interval(
+      config::shard_local_cfg()
+        .cloud_storage_upload_loop_initial_backoff_ms.bind())
   , _upload_interval(
       config::shard_local_cfg()
         .cloud_storage_upload_loop_initial_backoff_ms
@@ -82,8 +85,8 @@ batcher<Clock>::upload_object(object_id id, iobuf payload) {
         basic_retry_chain_node<Clock> local_rtc(
           Clock::now() + _upload_timeout(),
           // Backoff doesn't matter, the operation never retries
-          100ms,
-          retry_strategy::disallow,
+          _upload_backoff_interval(),
+          retry_strategy::backoff,
           &_rtc);
 
         auto path = object_path_factory::level_zero_path(id);
