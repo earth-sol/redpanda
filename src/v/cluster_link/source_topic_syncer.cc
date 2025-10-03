@@ -29,6 +29,14 @@ const absl::flat_hash_set<ss::sstring> required_topic_properties{
   ss::sstring{kafka::topic_property_timestamp_type},
 };
 
+/*
+ * This map contains topic properties that will be overridden when creating
+ * mirror topics.
+ */
+const absl::flat_hash_map<ss::sstring, ss::sstring>
+  topic_configuration_overrides{
+    {{ss::sstring(kafka::topic_property_remote_allow_gaps), "true"}}};
+
 const absl::flat_hash_set<::model::topic> topic_denylist{
   ::model::kafka_consumer_offsets_topic,
 };
@@ -79,6 +87,28 @@ validate_and_get_configs_from_response(
             configs.emplace(c.name, *c.value);
         }
     }
+
+    // apply overrides
+    for (const auto& [k, v] : topic_configuration_overrides) {
+        auto it = configs.find(k);
+        if (it != configs.end()) {
+            vlog(
+              logger.debug,
+              "Overriding topic property {} value from {} to {}",
+              k,
+              it->second,
+              v);
+            it->second = v;
+        } else {
+            vlog(
+              logger.trace,
+              "Adding topic property override {} with value {}",
+              k,
+              v);
+            configs.emplace(k, v);
+        }
+    }
+
     return configs;
 }
 
