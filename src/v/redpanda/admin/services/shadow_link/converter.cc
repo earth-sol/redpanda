@@ -66,16 +66,32 @@ constexpr auto to_filter_type(proto::admin::filter_type f) {
 }
 
 constexpr auto mirror_topic_state_to_shadow_topic_state(
-  cluster_link::model::mirror_topic_state s) {
+  cluster_link::model::mirror_topic_status s) {
     switch (s) {
-    case cluster_link::model::mirror_topic_state::active:
+    case cluster_link::model::mirror_topic_status::active:
         return proto::admin::shadow_topic_state::active;
-    case cluster_link::model::mirror_topic_state::failed:
+    case cluster_link::model::mirror_topic_status::failed:
         return proto::admin::shadow_topic_state::faulted;
-    case cluster_link::model::mirror_topic_state::paused:
+    case cluster_link::model::mirror_topic_status::paused:
         return proto::admin::shadow_topic_state::paused;
-    case cluster_link::model::mirror_topic_state::promoted:
+    case cluster_link::model::mirror_topic_status::promoted:
         return proto::admin::shadow_topic_state::promoted;
+    case cluster_link::model::mirror_topic_status::failing_over:
+        return proto::admin::shadow_topic_state::failing_over;
+    case cluster_link::model::mirror_topic_status::failed_over:
+        return proto::admin::shadow_topic_state::failed_over;
+    case cluster_link::model::mirror_topic_status::promoting:
+        return proto::admin::shadow_topic_state::promoting;
+    }
+}
+
+constexpr auto convert_link_status(cluster_link::model::link_status s) {
+    using proto::admin::shadow_link_state;
+    switch (s) {
+    case cluster_link::model::link_status::active:
+        return shadow_link_state::active;
+    case cluster_link::model::link_status::paused:
+        return shadow_link_state::paused;
     }
 }
 
@@ -347,6 +363,8 @@ create_authn_settings(const authentication_configuration& authn_config) {
 /// \throws std::invalid_argument If key and cert are inconsistent
 void set_tls_settings(
   cluster_link::model::connection_config& config, const tls_settings& tls) {
+    config.tls_enabled = cluster_link::model::connection_config::tls_enabled_t{
+      tls.get_enabled()};
     tls.visit_tls_settings(
       [&config](const tls_file_settings& file) {
           if (!file.get_ca_path().empty()) {
@@ -522,6 +540,7 @@ struct tls_visitor {
 
 tls_settings create_tls_settings(const cluster_link::model::metadata& md) {
     tls_settings tls;
+    tls.set_enabled(bool(md.connection.tls_enabled));
     if (md.connection.ca.has_value()) {
         ss::visit(
           md.connection.ca.value(),
@@ -564,8 +583,8 @@ create_shadow_link_client_options(const cluster_link::model::metadata& md) {
     options.set_client_id(ss::sstring{md.connection.client_id});
 
     if (
-      md.connection.ca.has_value() || md.connection.cert.has_value()
-      || md.connection.key.has_value()) {
+      md.connection.tls_enabled || md.connection.ca.has_value()
+      || md.connection.cert.has_value() || md.connection.key.has_value()) {
         options.set_tls_settings(create_tls_settings(md));
     }
 
@@ -816,7 +835,7 @@ create_shadow_topic_statuses(const cluster_link::model::link_state& state) {
         shadow_topic_status status;
         status.set_name(ss::sstring{topic});
         status.set_state(
-          mirror_topic_state_to_shadow_topic_state(metadata.state));
+          mirror_topic_state_to_shadow_topic_state(metadata.status));
         statuses.emplace_back(std::move(status));
     }
 
@@ -826,10 +845,8 @@ create_shadow_topic_statuses(const cluster_link::model::link_state& state) {
 shadow_link_status
 create_shadow_link_status(const cluster_link::model::metadata& md) {
     shadow_link_status status;
-
-    status.set_state(proto::admin::shadow_link_state::active);
+    status.set_state(convert_link_status(md.state.status));
     status.set_shadow_topic_statuses(create_shadow_topic_statuses(md.state));
-
     return status;
 }
 
@@ -912,10 +929,11 @@ void set_client_id(cluster_link::model::metadata& md) {
 
 cluster_link::model::metadata
 convert_create_to_metadata(create_shadow_link_request req) {
-    cluster_link::model::metadata metadata;
-
     try {
-        return shadow_link_to_metadata(std::move(req.get_shadow_link()));
+        auto metadata = shadow_link_to_metadata(
+          std::move(req.get_shadow_link()));
+        metadata.state.status = cluster_link::model::link_status::active;
+        return metadata;
     } catch (const std::invalid_argument& e) {
         throw serde::pb::rpc::invalid_argument_exception(
           ssx::sformat("Invalid cluster link configuration: {}", e.what()));
