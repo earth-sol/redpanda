@@ -12,6 +12,7 @@
 #pragma once
 
 #include "absl/container/flat_hash_set.h"
+#include "base/format_to.h"
 #include "cluster_link/errc.h"
 #include "container/chunked_hash_map.h"
 #include "model/fundamental.h"
@@ -909,6 +910,23 @@ struct aggregated_shadow_topic_report {
       = default;
 };
 using report_result_t = std::expected<aggregated_shadow_topic_report, errc>;
+
+struct delete_shadow_link_cmd
+  : serde::envelope<
+      delete_shadow_link_cmd,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    name_t link_name;
+    bool force{false};
+
+    friend bool
+    operator==(const delete_shadow_link_cmd&, const delete_shadow_link_cmd&)
+      = default;
+
+    auto serde_fields() { return std::tie(link_name, force); }
+
+    fmt::iterator format_to(fmt::iterator) const;
+};
 } // namespace cluster_link::model
 
 namespace cluster_link::rpc {
