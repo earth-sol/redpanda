@@ -835,6 +835,7 @@ proto::admin::kafka_connection connection_context::to_proto() const {
 
     auto auth_info = proto::admin::authentication_info{};
     auth_info.set_user_principal(ss::sstring{get_principal().name()});
+    res.set_authentication_info(std::move(auth_info));
 
     // TODO: fill out the response with the remaining fields
 
