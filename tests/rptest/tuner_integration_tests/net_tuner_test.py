@@ -271,3 +271,65 @@ class AwsNetTunerTest(NetTunerTest):
         )
 
         self._test_tune_net_dedicated_core(expected_interrupt_setup, 2)
+
+
+# Targets 4 core virtio (this is what our current ansible targets) machines
+class GcpNetTunerTest(NetTunerTest):
+    def get_interrupt_match(self) -> str:
+        return "virtio1-(input|output)"
+
+    def _test_irq_balance(self):
+        # no irq-balance on GCP ubu images
+        pass
+
+    @cluster(num_nodes=1)
+    def test_tune_net_mq(self):
+        expected_interrupt_setup = self.ExpectedInterruptSetup(
+            interrupts_masks=["1", "1", "4", "4", "2", "2", "8", "8"],
+            redpanda_cores={0, 1, 2, 3},
+            rps_cpu_mask="0",
+            rps_cpu_flow_count=0,
+            rfs_table_size=self.TARGET_RFS_TABLE_SIZE,
+            rx_tx_queue_count=4,
+        )
+
+        self._test_tune_net_mq(expected_interrupt_setup)
+
+    @cluster(num_nodes=1)
+    def test_tune_net_dedicated_1_core(self):
+        expected_interrupt_setup = self.ExpectedInterruptSetup(
+            interrupts_masks=["8", "8", "8", "8", "8", "8", "8", "8"],
+            redpanda_cores={0, 1, 2},
+            rps_cpu_mask="7",
+            rps_cpu_flow_count=int(self.TARGET_RFS_TABLE_SIZE / 1),
+            rfs_table_size=self.TARGET_RFS_TABLE_SIZE,
+            rx_tx_queue_count=1,
+        )
+
+        self._test_tune_net_dedicated_core(expected_interrupt_setup, 4)
+
+    @cluster(num_nodes=1)
+    def test_tune_net_dedicated_1_core_no_rps_rfs(self):
+        expected_interrupt_setup = self.ExpectedInterruptSetup(
+            interrupts_masks=["8", "8", "8", "8", "8", "8", "8", "8"],
+            redpanda_cores={0, 1, 2},
+            rps_cpu_mask="0",
+            rps_cpu_flow_count=0,
+            rfs_table_size=self.TARGET_RFS_TABLE_SIZE,
+            rx_tx_queue_count=1,
+        )
+
+        self._test_tune_net_dedicated_core(expected_interrupt_setup, 4, False)
+
+    @cluster(num_nodes=1)
+    def test_tune_net_dedicated_2_cores(self):
+        expected_interrupt_setup = self.ExpectedInterruptSetup(
+            interrupts_masks=["4", "4", "8", "8", "4", "4", "8", "8"],
+            redpanda_cores={0, 1},
+            rps_cpu_mask="3",
+            rps_cpu_flow_count=int(self.TARGET_RFS_TABLE_SIZE / 2),
+            rfs_table_size=self.TARGET_RFS_TABLE_SIZE,
+            rx_tx_queue_count=2,
+        )
+
+        self._test_tune_net_dedicated_core(expected_interrupt_setup, 2)
