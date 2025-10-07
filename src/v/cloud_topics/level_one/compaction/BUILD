@@ -121,6 +121,7 @@ redpanda_cc_library(
         "//src/v/container:chunked_hash_map",
         "//src/v/model",
         "//src/v/ssx:future_util",
+        "//src/v/ssx:work_queue",
         "@seastar",
     ],
 )
@@ -247,6 +248,38 @@ redpanda_cc_library(
     deps = [
         ":meta",
         "//src/v/model",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
+    name = "scheduler",
+    srcs = [
+        "scheduler.cc",
+    ],
+    hdrs = [
+        "scheduler.h",
+    ],
+    implementation_deps = [
+        "//src/v/ssx:future_util",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        ":committer",
+        ":committing_policy",
+        ":log_collector",
+        ":log_info_collector",
+        ":logger",
+        ":meta",
+        ":scheduling_policies",
+        ":worker",
+        "//src/v/cloud_topics/level_one/common:file_io",
+        "//src/v/cloud_topics/level_one/metastore:replicated_metastore",
+        "//src/v/cluster",
+        "//src/v/config",
+        "//src/v/container:intrusive",
+        "//src/v/model",
+        "//src/v/ssx:semaphore",
         "@seastar",
     ],
 )
