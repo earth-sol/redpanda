@@ -701,6 +701,7 @@ group_mirroring_task::update_group_coordinators() {
                   "Error finding coordinator for {} - {}",
                   coord.key,
                   coord.error_code);
+                errored = true;
                 continue;
             }
             auto it = _groups_to_mirror.find(
@@ -734,15 +735,17 @@ group_mirroring_task::update_group_coordinators() {
                             *result);
                           entry.second.coordinator_id = *result;
                       } else {
-                          errored |= true;
+                          vlog(
+                            logger().warn,
+                            "Failed to find coordinator for group {} - {}",
+                            entry.first,
+                            result.error());
+                          errored = true;
                       }
                   });
           });
     }
-
-    if (!errored) {
-        _needs_coordinator_update = false;
-    }
+    _needs_coordinator_update = errored;
     co_return result_t{};
 }
 
