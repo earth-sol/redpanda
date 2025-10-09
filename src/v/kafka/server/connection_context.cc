@@ -913,6 +913,7 @@ proto::admin::kafka_connection connection_context::to_proto() const {
     res.set_transactional_id(get_last_str(_attributes.last_transactional_id));
     res.set_group_id(get_last_str(_attributes.last_group_id));
     res.set_group_instance_id(get_last_str(_attributes.last_group_instance_id));
+    res.set_group_member_id(get_last_str(_attributes.last_group_member_id));
 
     using tracker_t = connection_attributes::request_state::tracker_t;
     auto now = tracker_t::clock::now();

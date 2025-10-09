@@ -102,6 +102,8 @@ ss::future<response_ptr> txn_offset_commit_handler::handle(
     ctx.connection()->attributes().last_group_id.update(request.data.group_id);
     ctx.connection()->attributes().last_group_instance_id.update(
       request.data.group_instance_id);
+    ctx.connection()->attributes().last_group_member_id.update(
+      request.data.member_id);
 
     if (unlikely(ctx.recovery_mode_enabled())) {
         return ctx.respond(

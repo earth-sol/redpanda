@@ -500,6 +500,8 @@ ss::future<response_ptr> heartbeat_handler::handle(
     ctx.connection()->attributes().last_group_id.update(request.data.group_id);
     ctx.connection()->attributes().last_group_instance_id.update(
       request.data.group_instance_id);
+    ctx.connection()->attributes().last_group_member_id.update(
+      request.data.member_id);
 
     if (unlikely(ctx.recovery_mode_enabled())) {
         co_return co_await ctx.respond(
@@ -616,6 +618,8 @@ process_result_stages sync_group_handler::handle(
     ctx.connection()->attributes().last_group_id.update(request.data.group_id);
     ctx.connection()->attributes().last_group_instance_id.update(
       request.data.group_instance_id);
+    ctx.connection()->attributes().last_group_member_id.update(
+      request.data.member_id);
 
     if (ctx.recovery_mode_enabled()) {
         return process_result_stages::single_stage(
@@ -853,6 +857,8 @@ process_result_stages join_group_handler::handle(
     ctx.connection()->attributes().last_group_id.update(request.data.group_id);
     ctx.connection()->attributes().last_group_instance_id.update(
       request.data.group_instance_id);
+    ctx.connection()->attributes().last_group_member_id.update(
+      request.data.member_id);
 
     if (ctx.recovery_mode_enabled()) {
         return process_result_stages::single_stage(
@@ -877,6 +883,8 @@ process_result_stages join_group_handler::handle(
       std::move(ctx),
       [f = std::move(stages.result)](request_context& ctx) mutable {
           return f.then([&ctx](join_group_response response) {
+              ctx.connection()->attributes().last_group_member_id.update(
+                response.data.member_id);
               return ctx.respond(std::move(response));
           });
       });
@@ -2024,6 +2032,8 @@ offset_commit_handler::handle(request_context ctx, ss::smp_service_group ssg) {
     ctx.connection()->attributes().last_group_id.update(request.data.group_id);
     ctx.connection()->attributes().last_group_instance_id.update(
       request.data.group_instance_id);
+    ctx.connection()->attributes().last_group_member_id.update(
+      request.data.member_id);
 
     // check authorization for this group
     const auto group_authorized = ctx.authorized(
