@@ -9,6 +9,7 @@ redpanda_test_cc_library(
         "//src/v/cloud_topics:app",
         "//src/v/cloud_topics/level_one/metastore:simple_stm",
         "//src/v/cluster/tests:cluster_test_fixture",
+        "//src/v/kafka/server/tests:kafka_test_utils",
         "//src/v/model",
         "//src/v/raft",
     ],
