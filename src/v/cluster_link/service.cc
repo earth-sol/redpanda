@@ -27,6 +27,7 @@
 #include "kafka/client/direct_consumer/direct_consumer.h"
 #include "kafka/server/group_router.h"
 #include "kafka/server/snc_quota_manager.h"
+#include "ssx/future-util.h"
 
 #include <seastar/coroutine/switch_to.hh>
 
@@ -344,54 +345,39 @@ service::service(
   , _hm_frontend(hm_frontend)
   , _security_fe(security_fe)
   , _smp_group(smp_group)
-  , _scheduling_group(scheduling_group) {}
+  , _scheduling_group(scheduling_group)
+  , _queue(_scheduling_group, [](const std::exception_ptr& ex) {
+      vlog(cllog.warn, "unexpected shadow link service error: {}", ex);
+  }) {
+    _enable_shadow_linking.watch(
+      [this]() { handle_enable_shadow_link_change(); });
+}
 
 service::~service() = default;
 
 ss::future<> service::start() {
     vlog(cllog.info, "Starting cluster link service");
     co_await ss::coroutine::switch_to(_scheduling_group);
-    _manager = std::make_unique<manager>(
-      _self,
-      partition_leader_cache::make_default(_partition_leaders_table),
-      partition_manager::make_default(
-        _shard_table, _partition_manager, _smp_group),
-      topic_metadata_cache::make_default(_metadata_cache),
-      topic_creator::make_default(_controller),
-      security_service::make_default(_security_fe),
-      std::make_unique<link_registry_adapter>(&_plf->local(), this),
-      std::make_unique<default_link_factory>(
-        _partition_manager, _snc_quota_mgr),
-      std::make_unique<cluster_factory>(),
-      std::make_unique<kafka_consumer_groups_router>(_group_router),
-      std::make_unique<health_monitor_based_partition_metadata_provider>(
-        _hm_frontend),
-      30s, // Temporary until we have a proper configuration for this
-      config::shard_local_cfg().default_topic_replication.bind(),
-      _scheduling_group);
-
-    co_await _manager->register_task_factory<source_topic_syncer_factory>();
-    co_await _manager->register_task_factory<group_mirroring_task_factory>();
-    co_await _manager->register_task_factory<security_migrator_factory>();
-
-    // Register notifications before the manager starts.  The manager will
-    // have a constructed the underlying workqueue to start in a paused
-    // state and will pick up the notifications once it has started
-    register_notifications();
-    co_await _manager->start();
+    auto units = co_await _shadow_link_config_mutex.get_units(_as);
+    if (_enable_shadow_linking()) {
+        co_await maybe_start_manager();
+    }
 }
 
 ss::future<> service::stop() {
     vlog(cllog.info, "Stopping cluster link service");
 
-    if (_manager) {
-        co_await _manager->stop();
-        _manager.reset(nullptr);
-    }
+    _shadow_link_config_mutex.broken();
+    co_await _queue.shutdown();
+    _as.request_abort();
+    co_await _gate.close();
+
+    co_await maybe_stop_manager();
 }
 
 ss::future<cl_result<model::metadata>>
 service::upsert_cluster_link(model::metadata md) {
+    auto h = _gate.hold();
     return with_manager([md = std::move(md)](manager* mgr) mutable {
         return mgr->upsert_cluster_link(std::move(md));
     });
@@ -409,6 +395,7 @@ cl_result<chunked_vector<model::metadata>> service::list_cluster_links() {
 
 ss::future<cl_result<model::metadata>> service::update_cluster_link(
   model::name_t name, model::update_cluster_link_configuration_cmd cmd) {
+    auto h = _gate.hold();
     return with_manager(
       [name = std::move(name), cmd = std::move(cmd)](manager* mgr) mutable {
           return mgr->update_cluster_link(std::move(name), std::move(cmd));
@@ -419,6 +406,7 @@ ss::future<cl_result<model::metadata>> service::update_mirror_topic_status(
   model::name_t link_name,
   ::model::topic topic,
   model::mirror_topic_status status) {
+    auto h = _gate.hold();
     return with_manager([link_name = std::move(link_name),
                          topic = std::move(topic),
                          status](manager* mgr) mutable {
@@ -429,6 +417,7 @@ ss::future<cl_result<model::metadata>> service::update_mirror_topic_status(
 
 ss::future<cl_result<model::metadata>>
 service::failover_link_topics(model::name_t link_name) {
+    auto h = _gate.hold();
     return with_manager(
       [link_name = std::move(link_name)](manager* mgr) mutable {
           return mgr->failover_link_topics(std::move(link_name));
@@ -437,6 +426,7 @@ service::failover_link_topics(model::name_t link_name) {
 
 ss::future<cl_result<void>>
 service::delete_cluster_link(model::name_t name, bool force_delete_link) {
+    auto h = _gate.hold();
     return with_manager(
       [name = std::move(name), force_delete_link](manager* mgr) mutable {
           return mgr->delete_cluster_link(std::move(name), force_delete_link);
@@ -492,8 +482,87 @@ errc service::check_manager_state() {
     return errc::success;
 }
 
+void service::handle_enable_shadow_link_change() {
+    _queue.submit([this] {
+        return do_handle_enable_shadow_link_change().handle_exception(
+          [](std::exception_ptr ex) {
+              auto lvl = ssx::is_shutdown_exception(ex) ? ss::log_level::debug
+                                                        : ss::log_level::error;
+              vlogl(
+                cllog,
+                lvl,
+                "Error occurred while handling change in shadow link config: "
+                "{}",
+                ex);
+          });
+    });
+}
+
+ss::future<> service::do_handle_enable_shadow_link_change() {
+    auto units = co_await _shadow_link_config_mutex.get_units(_as);
+    if (_enable_shadow_linking()) {
+        vlog(cllog.info, "Enabling shadow linking");
+        co_await maybe_start_manager();
+    } else {
+        vlog(cllog.info, "Disabling shadow linking");
+        co_await maybe_stop_manager();
+    }
+}
+
+ss::future<> service::maybe_start_manager() {
+    if (_manager) {
+        co_return;
+    }
+    _manager = std::make_unique<manager>(
+      _self,
+      partition_leader_cache::make_default(_partition_leaders_table),
+      partition_manager::make_default(
+        _shard_table, _partition_manager, _smp_group),
+      topic_metadata_cache::make_default(_metadata_cache),
+      topic_creator::make_default(_controller),
+      security_service::make_default(_security_fe),
+      std::make_unique<link_registry_adapter>(&_plf->local(), this),
+      std::make_unique<default_link_factory>(
+        _partition_manager, _snc_quota_mgr),
+      std::make_unique<cluster_factory>(),
+      std::make_unique<kafka_consumer_groups_router>(_group_router),
+      std::make_unique<health_monitor_based_partition_metadata_provider>(
+        _hm_frontend),
+      30s, // Temporary until we have a proper configuration for this
+      config::shard_local_cfg().default_topic_replication.bind(),
+      _scheduling_group);
+    co_await _manager->register_task_factory<source_topic_syncer_factory>();
+    co_await _manager->register_task_factory<group_mirroring_task_factory>();
+    co_await _manager->register_task_factory<security_migrator_factory>();
+
+    // Register notifications before the manager starts.  The manager will
+    // have a constructed the underlying workqueue to start in a paused
+    // state and will pick up the notifications once it has started
+    register_notifications();
+    auto manager_start = co_await ss::coroutine::as_future(_manager->start());
+    if (manager_start.failed()) {
+        auto ex = manager_start.get_exception();
+        vlog(cllog.error, "Failed to start cluster link manager: {}", ex);
+        unregister_notifications();
+        _manager.reset(nullptr);
+
+        std::rethrow_exception(ex);
+    }
+    std::move(manager_start).get();
+}
+
+ss::future<> service::maybe_stop_manager() {
+    if (!_manager) {
+        co_return;
+    }
+    unregister_notifications();
+    auto mgr = std::exchange(_manager, nullptr);
+    co_await mgr->stop();
+}
+
 ss::future<rpc::shadow_topic_report_response> service::shard_local_topic_report(
   const model::id_t& link_id, const ::model::topic& topic) {
+    auto h = _gate.hold();
     if (auto err = check_manager_state(); err != errc::success) {
         co_return rpc::shadow_topic_report_response{.err_code = err};
     }
@@ -539,6 +608,7 @@ ss::future<rpc::shadow_topic_report_response> service::shard_local_topic_report(
 ss::future<rpc::shadow_topic_report_response>
 service::node_local_shadow_topic_report(
   rpc::shadow_topic_report_request request) {
+    auto h = _gate.hold();
     if (auto err = check_manager_state(); err != errc::success) {
         co_return rpc::shadow_topic_report_response{.err_code = err};
     }
@@ -613,6 +683,7 @@ service::shadow_topic_report(
 
 ss::future<model::report_result_t>
 service::shadow_topic_report(model::id_t link_id, const ::model::topic& topic) {
+    auto h = _gate.hold();
     // farms out requests to all nodes with replicas of the topic
     // and then aggregates the results
     // generate a list of brokers with replicas of the topic

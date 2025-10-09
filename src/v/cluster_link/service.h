@@ -21,6 +21,8 @@
 #include "kafka/server/fwd.h"
 #include "model/fundamental.h"
 #include "rpc/fwd.h"
+#include "ssx/work_queue.h"
+#include "utils/mutex.h"
 
 #include <seastar/core/gate.hh>
 #include <seastar/core/sharded.hh>
@@ -141,6 +143,10 @@ private:
     void register_notifications();
     void unregister_notifications();
     errc check_manager_state();
+    void handle_enable_shadow_link_change();
+    ss::future<> do_handle_enable_shadow_link_change();
+    ss::future<> maybe_start_manager();
+    ss::future<> maybe_stop_manager();
 
     template<typename Func, typename Ret = std::invoke_result_t<Func, manager*>>
     requires std::invocable<Func, manager*>
@@ -190,5 +196,9 @@ private:
     std::unique_ptr<manager> _manager;
     std::vector<ss::deferred_action<ss::noncopyable_function<void()>>>
       _notification_cleanups;
+    ssx::work_queue _queue;
+
+    ss::abort_source _as;
+    mutex _shadow_link_config_mutex{"shadow_link/config"};
 };
 } // namespace cluster_link
