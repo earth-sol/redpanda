@@ -1796,6 +1796,14 @@ configuration::configuration()
       "then no limit is enforced.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       std::nullopt)
+  , kafka_max_message_size_upper_limit_bytes(
+      *this,
+      "kafka_max_message_size_upper_limit_bytes",
+      "Maximum allowed value for the `max.message.size` topic "
+      "property. When set to `null`, then no limit is enforced.",
+      {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
+      100_MiB,
+      {.min = 1})
   , compaction_ctrl_update_interval_ms(
       *this,
       "compaction_ctrl_update_interval_ms",
