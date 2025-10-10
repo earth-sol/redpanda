@@ -240,39 +240,32 @@ ss::future<checked<event, errc>> write_pipeline<Clock>::stage::wait_until(
   typename Clock::time_point deadline,
   ss::abort_source* maybe_as) noexcept {
     auto [sub, as] = choose_abort_source(maybe_as);
-    while (true) {
-        l0::event_filter<Clock> filter(
-          l0::event_type::new_write_request, _ps, deadline);
-        auto event_fut = co_await ss::coroutine::as_future(
-          _parent->subscribe(filter, *as));
-        if (event_fut.failed()) {
-            auto err = event_fut.get_exception();
-            if (ssx::is_shutdown_exception(err)) {
-                co_return errc::shutting_down;
-            }
-            co_return errc::unexpected_failure;
-        }
-        auto event = event_fut.get();
-        switch (event.type) {
-        case l0::event_type::shutting_down:
+    l0::event_filter<Clock> filter(
+      l0::event_type::new_write_request,
+      _ps,
+      deadline,
+      {.min_pending_write_bytes = max_bytes});
+    auto event_fut = co_await ss::coroutine::as_future(
+      _parent->subscribe(filter, *as));
+    if (event_fut.failed()) {
+        auto err = event_fut.get_exception();
+        if (ssx::is_shutdown_exception(err)) {
             co_return errc::shutting_down;
-        case l0::event_type::new_write_request:
-            if (
-              event.pending_write_bytes < max_bytes
-              && Clock::now() < deadline) {
-                // Ignore all write requests until timed
-                // out or enough data.
-                continue;
-            }
-            [[fallthrough]];
-        case l0::event_type::err_timedout:
-            break;
-        case l0::event_type::new_read_request:
-        case l0::event_type::none:
-            vassert(false, "Read request added to the write pipeline");
         }
-        co_return event;
+        co_return errc::unexpected_failure;
     }
+    auto event = event_fut.get();
+    switch (event.type) {
+    case l0::event_type::shutting_down:
+        co_return errc::shutting_down;
+    case l0::event_type::new_write_request:
+    case l0::event_type::err_timedout:
+        break;
+    case l0::event_type::new_read_request:
+    case l0::event_type::none:
+        vassert(false, "Read request added to the write pipeline");
+    }
+    co_return event;
 }
 
 template<class Clock>
