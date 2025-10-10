@@ -555,17 +555,17 @@ FIXTURE_TEST(test_delete_from_archive_truncation, delete_records_e2e_fixture) {
     // Truncate within the bounds of the first archive segment. Nothing should
     // be removed.
     auto& spillover = stm_manifest.get_spillover_map();
-    auto first_seg_commit_offset
+    auto first_spill_commit_offset
       = *spillover.get_committed_offset_column().at_index(0);
-    auto first_seg_delta_end
+    auto first_spill_delta_end
       = *spillover.get_delta_offset_end_column().at_index(0);
-    auto first_seg_last_kafka_offset = first_seg_commit_offset
-                                       - first_seg_delta_end;
+    auto first_spill_last_kafka_offset = first_spill_commit_offset
+                                         - first_spill_delta_end;
     deleter
       .delete_records_from_partition(
         topic_name,
         model::partition_id(0),
-        model::offset(first_seg_last_kafka_offset),
+        model::offset(first_spill_last_kafka_offset),
         5s)
       .get();
     BOOST_REQUIRE(archiver->sync_for_tests().get());
@@ -581,7 +581,7 @@ FIXTURE_TEST(test_delete_from_archive_truncation, delete_records_e2e_fixture) {
       .delete_records_from_partition(
         topic_name,
         model::partition_id(0),
-        model::offset(first_seg_last_kafka_offset + 1),
+        model::offset(first_spill_last_kafka_offset + 1),
         5s)
       .get();
     BOOST_REQUIRE(archiver->sync_for_tests().get());
