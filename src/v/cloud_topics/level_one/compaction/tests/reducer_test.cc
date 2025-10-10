@@ -136,7 +136,7 @@ TEST_F(ReducerTestFixture, Reducer) {
       start_offset, last_offset));
 
     auto committer = l1::compaction_committer(
-      std::make_unique<never_commit>(), &_metastore, &_io);
+      std::make_unique<never_commit>(), &_io, &_metastore);
     auto committer_stop = ss::defer([&committer] { committer.stop().get(); });
     auto src = std::make_unique<l1::compaction_source>(
       ntp,
