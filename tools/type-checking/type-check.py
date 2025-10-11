@@ -556,7 +556,7 @@ class TypeCheck:
             print(f"Promotion check passed on {file_count} files")
         else:
             print(
-                f"{self.info}The updated type-check-strictness.json should be in your working tree now, run:"
+                f"{self.info} The updated type-check-strictness.json should be in your working tree now, run:"
             )
             print("git add tools/type-checking/type-check-strictness.json")
             print("to add it to your stage and try again.")
