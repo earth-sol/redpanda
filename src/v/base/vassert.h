@@ -61,15 +61,23 @@ inline void assert_failed_thunk0(
 #define STR_VASSERT2(x) #x
 #define STR_VASSERT(x) STR_VASSERT2(x)
 
-/** Meant to be used in the same way as assert(condition, msg);
- * which means we use the negative conditional.
- * i.e.:
- *
- * open_fileset::~open_fileset() noexcept {
- *   vassert(_closed, "fileset not closed");
- * }
- *
- */
+/// Assertion macro that's always enabled, including in release builds.
+///
+/// This macro provides detailed error messages and backtraces when assertions
+/// fail. Unlike standard assert(), vassert() remains active in release builds,
+/// making it suitable for critical invariant checking in production code.
+///
+/// Use dassert() for expensive debug-only checks that should be compiled out
+/// in release builds.
+///
+/// Meant to be used in the same way as assert(condition, msg);
+/// which means we use the negative conditional.
+/// i.e.:
+///
+/// open_fileset::~open_fileset() noexcept {
+///   vassert(_closed, "fileset not closed");
+/// }
+
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define vassert(x, msg, args...)                                               \
     /* NOLINTNEXTLINE(cppcoreguidelines-avoid-do-while) */                     \
