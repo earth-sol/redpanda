@@ -443,14 +443,6 @@ void redpanda_thread_fixture::configure(
         config.get("iceberg_enabled").set_value(iceberg_enabled);
 
         if (development_enable_cloud_topics) {
-            const auto time_since_epoch
-              = std::chrono::system_clock::now().time_since_epoch();
-            config
-              .get(
-                "enable_developmental_unrecoverable_data_corrupting_"
-                "features")
-              .set_value(ssx::sformat("{}", time_since_epoch));
-
             config.get("development_enable_cloud_topics").set_value(true);
         }
 
