@@ -11,7 +11,10 @@
 #pragma once
 
 #include "base/format_to.h"
+#include "container/chunked_vector.h"
 #include "model/fundamental.h"
+#include "model/record.h"
+#include "ssx/semaphore.h"
 
 namespace cluster_link::replication {
 struct partition_offsets_report {
@@ -23,4 +26,10 @@ struct partition_offsets_report {
 
     fmt::iterator format_to(fmt::iterator) const;
 };
+
+struct fetch_data {
+    chunked_vector<::model::record_batch> batches;
+    ssx::semaphore_units units;
+};
+
 } // namespace cluster_link::replication

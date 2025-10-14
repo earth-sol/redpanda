@@ -131,7 +131,8 @@ ss::future<> partition_replicator::replicate_and_wait(
   replicate_ctx ctx, ss::gate& gate, ss::abort_source& as) {
     static constexpr auto large_timeout
       = std::chrono::duration_cast<model::timeout_clock::duration>(5min);
-    auto stages = _sink->replicate(std::move(ctx.batches), large_timeout, as);
+    auto stages = _sink->replicate(
+      std::move(ctx.fdata.batches), large_timeout, as);
     auto enqueue_f = co_await ss::coroutine::as_future(
       std::move(stages.request_enqueued));
     std::exception_ptr eptr = nullptr;
@@ -167,7 +168,7 @@ ss::future<> partition_replicator::replicate_and_wait(
        begin = ctx.begin,
        end = ctx.end,
        inflight = std::move(ctx.inflight_units),
-       data = std::move(ctx.data_units),
+       data = std::move(ctx.fdata.units),
        &as]() mutable {
           return handle_replication_result(std::move(f), begin, end)
             .then([&as](bool success) {
@@ -214,11 +215,13 @@ ss::future<> partition_replicator::fetch_and_replicate() {
                 continue;
             }
             co_await replicate_and_wait(
-              {.begin = data.batches.front().base_offset(),
-               .end = data.batches.back().last_offset(),
-               .batches = std::move(data.batches),
-               .inflight_units = std::move(inflight_units),
-               .data_units = std::move(data.units)},
+              {
+                .begin = data.batches.front().base_offset(),
+                .end = data.batches.back().last_offset(),
+                .fdata
+                = {.batches = std::move(data.batches), .units = std::move(data.units)},
+                .inflight_units = std::move(inflight_units),
+              },
               gate,
               as);
         }

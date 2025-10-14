@@ -12,6 +12,7 @@
 
 #include "base/format_to.h"
 #include "cluster_link/replication/partition_data_queue.h"
+#include "cluster_link/replication/types.h"
 #include "container/chunked_hash_map.h"
 #include "kafka/client/direct_consumer/api_types.h"
 #include "kafka/client/direct_consumer/direct_consumer.h"
@@ -81,7 +82,7 @@ public:
      * are add() and reset() (atleast once). add() adds the partition to the
      * consumer and reset() sets the initial offset for fetching.
      */
-    ss::future<std::expected<partition_data_queue::fetch_data, errc>>
+    ss::future<std::expected<fetch_data, errc>>
     fetch(const ::model::topic_partition&, ss::abort_source&);
     /**
      * Update the configuration of the consumer.

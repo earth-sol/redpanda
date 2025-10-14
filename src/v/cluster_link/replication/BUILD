@@ -11,7 +11,9 @@ redpanda_cc_library(
     visibility = ["//src/v/cluster_link:__subpackages__"],
     deps = [
         "//src/v/base",
+        "//src/v/container:chunked_vector",
         "//src/v/model",
+        "//src/v/ssx:semaphore",
     ],
 )
 
@@ -25,6 +27,7 @@ redpanda_cc_library(
     ],
     visibility = ["//src/v/cluster_link:__subpackages__"],
     deps = [
+        ":types",
         "//src/v/container:chunked_hash_map",
         "//src/v/container:chunked_vector",
         "//src/v/kafka/protocol",
@@ -98,9 +101,9 @@ redpanda_cc_library(
     ],
     visibility = ["__subpackages__"],
     deps = [
+        ":types",
         "//src/v/container:chunked_vector",
         "//src/v/model",
-        "//src/v/ssx:semaphore",
         "@seastar",
     ],
 )

@@ -23,6 +23,7 @@
 #include "cluster_link/model/types.h"
 #include "cluster_link/replication/deps.h"
 #include "cluster_link/replication/mux_remote_consumer.h"
+#include "cluster_link/replication/types.h"
 #include "cluster_link/security_migrator.h"
 #include "cluster_link/shadow_linking_rpc_service.h"
 #include "cluster_link/source_topic_syncer.h"
@@ -288,8 +289,7 @@ public:
         return ss::now();
     }
 
-    ss::future<replication::data_source::data>
-    fetch_next(ss::abort_source& as) final {
+    ss::future<replication::fetch_data> fetch_next(ss::abort_source& as) final {
         auto holder = _gate.hold();
         auto result = co_await _consumer.fetch(_tp, as);
         if (!result.has_value()) [[unlikely]] {
@@ -306,7 +306,7 @@ public:
                 err));
         }
         auto [batches, units] = std::move(*result);
-        co_return data_source::data{
+        co_return replication::fetch_data{
           .batches = std::move(batches), .units = std::move(units)};
     }
 

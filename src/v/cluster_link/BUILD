@@ -208,6 +208,7 @@ redpanda_cc_library(
         "//src/v/cluster/utils:partition_change_notifier_api",
         "//src/v/cluster_link/replication:deps",
         "//src/v/cluster_link/replication:mux_remote_consumer",
+        "//src/v/cluster_link/replication:types",
         "//src/v/kafka/client/direct_consumer",
         "//src/v/kafka/data/rpc",
         "//src/v/kafka/server",

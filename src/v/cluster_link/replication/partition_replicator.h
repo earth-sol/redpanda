@@ -77,9 +77,8 @@ private:
     struct replicate_ctx {
         ::model::offset begin;
         ::model::offset end;
-        chunked_vector<::model::record_batch> batches;
+        fetch_data fdata;
         ssx::semaphore_units inflight_units;
-        ssx::semaphore_units data_units;
     };
     ss::future<> fetch_and_replicate();
     ss::future<>

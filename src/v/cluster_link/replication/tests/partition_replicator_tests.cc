@@ -11,6 +11,7 @@
 #include "base/units.h"
 #include "cluster_link/replication/partition_replicator.h"
 #include "cluster_link/replication/tests/deps_test_impl.h"
+#include "cluster_link/replication/types.h"
 #include "kafka/protocol/errors.h"
 #include "model/tests/random_batch.h"
 #include "ssx/future-util.h"
@@ -49,7 +50,7 @@ public:
     int num_resets() const { return _num_resets; }
     int num_fetches() const { return _num_fetches; }
 
-    ss::future<data_source::data> fetch_next(ss::abort_source& as) final {
+    ss::future<fetch_data> fetch_next(ss::abort_source& as) final {
         _num_fetches++;
         auto holder = _gate.hold();
         while (_data.batches.empty()) {
@@ -90,7 +91,7 @@ private:
     kafka::offset _next_to_consume;
     int _num_fetches = 0;
     int _num_resets = 0;
-    data _data;
+    fetch_data _data;
     ss::gate _gate;
     ssx::semaphore _max_memory{5_MiB, "test_data_source"};
 };

@@ -113,8 +113,7 @@ mux_remote_consumer::result mux_remote_consumer::reset(
     return {};
 }
 
-ss::future<
-  std::expected<partition_data_queue::fetch_data, mux_remote_consumer::errc>>
+ss::future<std::expected<fetch_data, mux_remote_consumer::errc>>
 mux_remote_consumer::fetch(
   const model::topic_partition& tp, ss::abort_source& as) {
     auto holder = _gate.hold();
