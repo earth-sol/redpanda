@@ -326,6 +326,24 @@ void direct_consumer::on_metadata_update(const metadata_update&) {
     ssx::spawn_with_gate(_gate, [this] { return handle_metadata_update(); });
 }
 
+void direct_consumer::maybe_update_source_partition_offsets(
+  model::topic_partition_view tp, source_partition_offsets offsets) {
+    auto it = _subscriptions.find(tp.topic);
+    if (it == _subscriptions.end()) {
+        return;
+    }
+    auto p_it = it->second.find(tp.partition);
+    if (p_it == it->second.end()) {
+        return;
+    }
+    auto& sub = p_it->second;
+    if (
+      offsets.last_offset_update_timestamp
+      > sub.last_known_source_offsets.last_offset_update_timestamp) {
+        sub.last_known_source_offsets = offsets;
+    }
+}
+
 direct_consumer::~direct_consumer() = default;
 
 std::ostream&

@@ -155,6 +155,9 @@ private:
     void filter_stale_subscriptions(
       chunked_vector<fetched_topic_data>& responses_to_filter);
 
+    void maybe_update_source_partition_offsets(
+      model::topic_partition_view tp, source_partition_offsets offsets);
+
     cluster* _cluster;
 
     offset_reset_policy _reset_policy
