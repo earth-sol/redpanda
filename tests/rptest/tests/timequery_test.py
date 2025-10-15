@@ -359,6 +359,11 @@ class TimeQueryTest(RedpandaTest, BaseTimeQuery):
         else:
             self.redpanda.add_extra_rp_conf({"log_segment_size": self.log_segment_size})
 
+        # `test_timequery_with_local_gc` attempts to set the `log_segment_size` lower than the minimum
+        # value of 1_MiB- disable bounded property checks to allow this.
+        self.redpanda.set_environment(
+            {"__REDPANDA_TEST_DISABLE_BOUNDED_PROPERTY_CHECKS": "ON"}
+        )
         self.redpanda.start()
 
     def _do_test_timequery(
@@ -803,7 +808,7 @@ class TestReadReplicaTimeQuery(RedpandaTest):
             }
             rpk_rr_cluster.create_topic(self.topic_name, config=conf)
         except:
-            self.logger.warn(f"Failed to create a read-replica topic")
+            self.logger.warn("Failed to create a read-replica topic")
             return False
         return True
 
