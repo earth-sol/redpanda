@@ -59,6 +59,8 @@ class BaseTimeQuery:
                 "redpanda.remote.read": "true",
                 "redpanda.remote.write": "true",
                 "retention.local.target.bytes": local_retention,
+                # See comment about disabling `retention.ms` below.
+                "retention.local.target.ms": -1,
             }.items():
                 self.client().alter_topic_config(topic.name, k, v)
             desc = self.client().describe_topic_configs(topic.name)
