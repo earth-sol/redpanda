@@ -11,6 +11,7 @@
 
 #pragma once
 
+#include "base/format_to.h"
 #include "model/fundamental.h"
 #include "model/record_batch_reader.h"
 #include "raft/fundamental.h"
@@ -21,6 +22,7 @@
 #include "serde/rw/envelope.h"
 #include "serde/rw/scalar.h"
 #include "utils/named_type.h"
+#include "utils/to_string.h"
 
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/scheduling.hh>
@@ -669,6 +671,92 @@ struct remake_learner_state_reply
     operator<<(std::ostream& o, const remake_learner_state_reply& r) {
         fmt::print(o, "success: {}", r.success);
         return o;
+    }
+
+    auto serde_fields() { return std::tie(success); }
+
+    is_success success = is_success::no;
+};
+
+struct get_compaction_mcco_request
+  : serde::envelope<
+      get_compaction_mcco_request,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    fmt::iterator format_to(fmt::iterator it) const {
+        return fmt::format_to(
+          it,
+          "{{node_id: {}, target_node_id: {}, group: {}}}",
+          node_id,
+          target_node_id,
+          group);
+    }
+
+    auto serde_fields() { return std::tie(node_id, target_node_id, group); }
+
+    raft::group_id target_group() const { return group; }
+    vnode source_node() const { return node_id; }
+    vnode target_node() const { return target_node_id; }
+
+    vnode node_id;
+    vnode target_node_id;
+    raft::group_id group;
+};
+
+struct get_compaction_mcco_reply
+  : serde::envelope<
+      get_compaction_mcco_reply,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using is_success = ss::bool_class<struct get_compaction_mcco_tag>;
+
+    fmt::iterator format_to(fmt::iterator it) const {
+        return fmt::format_to(it, "mcco: {}", mcco);
+    }
+
+    auto serde_fields() { return std::tie(mcco); }
+
+    std::optional<model::offset> mcco{};
+};
+
+struct distribute_compaction_mtro_request
+  : serde::envelope<
+      distribute_compaction_mtro_request,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    fmt::iterator format_to(fmt::iterator it) const {
+        return fmt::format_to(
+          it,
+          "{{node_id: {}, target_node_id: {}, group: {}, mtro: {}}}",
+          node_id,
+          target_node_id,
+          group,
+          mtro);
+    }
+
+    auto serde_fields() {
+        return std::tie(node_id, target_node_id, group, mtro);
+    }
+
+    raft::group_id target_group() const { return group; }
+    vnode source_node() const { return node_id; }
+    vnode target_node() const { return target_node_id; }
+
+    vnode node_id;
+    vnode target_node_id;
+    raft::group_id group;
+    model::offset mtro{};
+};
+
+struct distribute_compaction_mtro_reply
+  : serde::envelope<
+      distribute_compaction_mtro_reply,
+      serde::version<0>,
+      serde::compat_version<0>> {
+    using is_success = ss::bool_class<struct distribute_compaction_mtro_tag>;
+
+    fmt::iterator format_to(fmt::iterator it) const {
+        return fmt::format_to(it, "success: {}", success);
     }
 
     auto serde_fields() { return std::tie(success); }

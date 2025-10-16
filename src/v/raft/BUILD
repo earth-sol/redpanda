@@ -165,6 +165,7 @@ redpanda_cc_library(
         "//src/v/utils:named_type",
         "//src/v/utils:notification_list",
         "//src/v/utils:prefix_logger",
+        "//src/v/utils:to_string",
         "@abseil-cpp//absl/container:btree",
         "@abseil-cpp//absl/container:flat_hash_map",
         "@abseil-cpp//absl/container:flat_hash_set",
