@@ -86,6 +86,7 @@ redpanda_cc_library(
         "//src/v/cluster_link/model",
         "//src/v/cluster_link/replication:deps",
         "//src/v/cluster_link/replication:link_replication_mgr",
+        "//src/v/cluster_link/replication:partition_replicator",
         "//src/v/cluster_link/replication:types",
         "//src/v/container:chunked_vector",
         "//src/v/kafka/client:cluster",
