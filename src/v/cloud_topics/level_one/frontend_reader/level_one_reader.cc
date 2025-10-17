@@ -60,48 +60,49 @@ ss::future<model::record_batch_reader::storage_t>
 level_one_log_reader_impl::do_load_slice(
   model::timeout_clock::time_point deadline) {
     try {
-    chunked_circular_buffer<model::record_batch> res;
+        chunked_circular_buffer<model::record_batch> res;
 
-    // First switch: ensure batches are materialized or the reader
-    // reaches end-of-stream.
-    switch (_state) {
-    case state::empty: {
-        auto obj = co_await lookup_object_for_offset(_next_offset, deadline);
-        if (obj.has_value()) {
-            _state = state::ready;
-          _current_obj = std::move(obj.value());
-        } else {
-            _state = state::end_of_stream;
+        // First switch: ensure batches are materialized or the reader
+        // reaches end-of-stream.
+        switch (_state) {
+        case state::empty: {
+            auto obj = co_await lookup_object_for_offset(
+              _next_offset, deadline);
+            if (obj.has_value()) {
+                _state = state::ready;
+                _current_obj = std::move(obj.value());
+            } else {
+                _state = state::end_of_stream;
+            }
         }
-    }
-        [[fallthrough]];
-    case state::ready:
-        co_await materialize_batches(deadline);
-        [[fallthrough]];
-    case state::materialized:
-    case state::end_of_stream:
-        // Handled in the next switch statement.
-        break;
-    }
+            [[fallthrough]];
+        case state::ready:
+            co_await materialize_batches(deadline);
+            [[fallthrough]];
+        case state::materialized:
+        case state::end_of_stream:
+            // Handled in the next switch statement.
+            break;
+        }
 
-    // Second switch: enforces that the reader has materialized batches
-    // or reached end-of-stream.
-    switch (_state) {
-    case state::empty:
-    case state::ready:
-        vassert(
-          false,
-          "Invalid reader state after materialization for {} ({}): got {}",
-          _ntp,
-          _tidp,
-          std::to_underlying(_state));
-    case state::materialized:
-        consume_materialized_batches(&res);
-        [[fallthrough]];
-    case state::end_of_stream:
-        break;
-    }
-    co_return res;
+        // Second switch: enforces that the reader has materialized batches
+        // or reached end-of-stream.
+        switch (_state) {
+        case state::empty:
+        case state::ready:
+            vassert(
+              false,
+              "Invalid reader state after materialization for {} ({}): got {}",
+              _ntp,
+              _tidp,
+              std::to_underlying(_state));
+        case state::materialized:
+            consume_materialized_batches(&res);
+            [[fallthrough]];
+        case state::end_of_stream:
+            break;
+        }
+        co_return res;
     } catch (...) {
         vlog(
           _log.error, "Reader caught exception: {}", std::current_exception());
