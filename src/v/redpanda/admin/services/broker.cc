@@ -123,9 +123,11 @@ ss::future<connection_gather_result> gather_connections(
           process_conn(conn_ptr->to_proto());
       });
 
-    const auto& closed_conns = server.list_closed_connections();
+    auto closed_conns = server.list_closed_connections();
     for (auto& elem : closed_conns) {
-        process_conn(std::move(*elem));
+        auto elem_copy = co_await proto::admin::kafka_connection::from_proto(
+          co_await elem->to_proto());
+        process_conn(std::move(elem_copy));
     }
 
     co_return result;
