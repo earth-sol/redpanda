@@ -21,6 +21,7 @@
 #include "model/fundamental.h"
 #include "model/metadata.h"
 #include "ssx/async_algorithm.h"
+#include "utils/mutex.h"
 #include "utils/named_type.h"
 
 #include <seastar/core/abort_source.hh>
@@ -93,8 +94,9 @@ public:
       model::term_id term) {
         { f(tp_ns, pid, leader, term) } -> std::same_as<void>;
     }
-    ss::future<> for_each_leader(Func&& f) const {
-        auto version_snapshot = _version;
+    ss::future<> for_each_leader(Func&& f) {
+        auto holder = _gate.hold();
+        auto u = co_await _mutex.get_units();
         ssx::async_counter counter;
         for (auto& [tp_ns, partition_leaders] : _topic_leaders) {
             co_await ssx::async_for_each_counter(
@@ -117,14 +119,14 @@ public:
         }
     }
 
-    void remove_leader(const model::ntp&, model::revision_id);
+    ss::future<> remove_leader(const model::ntp&, model::revision_id);
 
-    void reset();
+    ss::future<> reset();
 
-    void update_partition_leader(
+    ss::future<> update_partition_leader(
       const model::ntp&, model::term_id, std::optional<model::node_id>);
 
-    void update_partition_leader(
+    ss::future<> update_partition_leader(
       const model::ntp&,
       model::revision_id,
       model::term_id,
@@ -157,7 +159,7 @@ public:
      *
      * @throws if the set of leaders changes during iteration.
      */
-    ss::future<leaders_info_t> get_leaders() const;
+    ss::future<leaders_info_t> get_leaders();
 
     uint64_t leaderless_partition_count() const {
         return _leaderless_partition_count;
@@ -236,6 +238,7 @@ private:
      */
     version _version{0};
     version _topic_map_version{0};
+    mutex _mutex{"leaders_table/state"};
     ss::gate _gate;
     ss::abort_source& _as;
 };

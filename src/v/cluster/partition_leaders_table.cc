@@ -32,7 +32,10 @@ partition_leaders_table::partition_leaders_table(
   : _topic_table(topic_table)
   , _as(as.local()) {}
 
-ss::future<> partition_leaders_table::stop() { return _gate.close(); }
+ss::future<> partition_leaders_table::stop() {
+    _mutex.broken();
+    return _gate.close();
+}
 
 std::optional<
   std::reference_wrapper<const partition_leaders_table::leader_meta>>
@@ -77,17 +80,19 @@ std::optional<leader_term> partition_leaders_table::get_leader_term(
                 : std::nullopt;
 }
 
-void partition_leaders_table::update_partition_leader(
+ss::future<> partition_leaders_table::update_partition_leader(
   const model::ntp& ntp,
   model::term_id term,
   std::optional<model::node_id> leader_id) {
     // we set revision_id to invalid, this way we will skip revision check
-    update_partition_leader(ntp, model::revision_id{}, term, leader_id);
+    return update_partition_leader(ntp, model::revision_id{}, term, leader_id);
 }
 
 ss::future<> partition_leaders_table::update_with_node_report(
   const node_health_report_ptr& node_report) {
     ssx::async_counter counter;
+    auto holder = _gate.hold();
+    auto u = co_await _mutex.get_units();
     for (const auto& [tp_ns, partitions] : node_report->topics) {
         /**
          * Here we minimize the number of topic table and topic map lookups by
@@ -267,11 +272,13 @@ void partition_leaders_table::do_update_partition_leader(
     }
 }
 
-void partition_leaders_table::update_partition_leader(
+ss::future<> partition_leaders_table::update_partition_leader(
   const model::ntp& ntp,
   model::revision_id revision_id,
   model::term_id term,
   std::optional<model::node_id> leader_id) {
+    auto holder = _gate.hold();
+    auto u = co_await _mutex.get_units();
     const auto is_controller = ntp == model::controller_ntp;
     /**
      * Use revision to differentiate updates for the topic that was
@@ -289,7 +296,7 @@ void partition_leaders_table::update_partition_leader(
           clusterlog.trace,
           "can't update leadership of the removed topic {}",
           ntp);
-        return;
+        co_return;
     }
 
     auto [t_it, new_topic_entry] = _topic_leaders.try_emplace(
@@ -328,15 +335,17 @@ ss::future<model::node_id> partition_leaders_table::wait_for_leader(
       });
 }
 
-void partition_leaders_table::remove_leader(
+ss::future<> partition_leaders_table::remove_leader(
   const model::ntp& ntp, model::revision_id revision) {
+    auto holder = _gate.hold();
+    auto u = co_await _mutex.get_units();
     auto t_it = _topic_leaders.find(model::topic_namespace_view(ntp));
     if (t_it == _topic_leaders.end()) {
-        return;
+        co_return;
     }
     auto p_it = t_it->second.find(ntp.tp.partition);
     if (p_it == t_it->second.end()) {
-        return;
+        co_return;
     }
 
     // ignore updates with old revision
@@ -361,8 +370,10 @@ void partition_leaders_table::remove_leader(
     }
 }
 
-void partition_leaders_table::reset() {
+ss::future<> partition_leaders_table::reset() {
     vlog(clusterlog.trace, "resetting leaders");
+    auto holder = _gate.hold();
+    auto u = co_await _mutex.get_units();
     _topic_leaders.clear();
     _leaderless_partition_count = 0;
     ++_version;
@@ -370,7 +381,9 @@ void partition_leaders_table::reset() {
 }
 
 ss::future<partition_leaders_table::leaders_info_t>
-partition_leaders_table::get_leaders() const {
+partition_leaders_table::get_leaders() {
+    auto holder = _gate.hold();
+    auto u = co_await _mutex.get_units();
     leaders_info_t ans;
     ans.reserve(_topic_leaders.size());
     auto version_snapshot = _version;

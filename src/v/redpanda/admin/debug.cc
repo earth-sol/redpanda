@@ -278,7 +278,7 @@ void admin_server::register_debug_routes() {
       [this](std::unique_ptr<ss::http::request>) {
           vlog(adminlog.info, "Request to reset leaders info");
           return _metadata_cache
-            .invoke_on_all([](auto& mc) { mc.reset_leaders(); })
+            .invoke_on_all([](auto& mc) { return mc.reset_leaders(); })
             .then(
               [] { return ss::json::json_return_type(ss::json::json_void()); });
       });
