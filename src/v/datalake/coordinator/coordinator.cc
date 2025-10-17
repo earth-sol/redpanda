@@ -859,7 +859,7 @@ coordinator::sync_get_usage_stats() {
 
 ss::future<
   checked<chunked_hash_map<model::topic, topic_state>, coordinator::errc>>
-coordinator::sync_get_topic_state(chunked_vector<model::topic> topics) {
+coordinator::sync_get_topic_state(chunked_vector<model::topic> topics_filter) {
     auto gate = maybe_gate();
     if (gate.has_error()) {
         co_return gate.error();
@@ -870,7 +870,13 @@ coordinator::sync_get_topic_state(chunked_vector<model::topic> topics) {
     }
 
     chunked_hash_map<model::topic, topic_state> result;
-    for (const auto& topic : topics) {
+    if (topics_filter.empty()) {
+        for (const auto& [t, state] : stm_->state().topic_to_state) {
+            result.emplace(t, state.copy());
+        }
+        co_return result;
+    }
+    for (const auto& topic : topics_filter) {
         auto topic_it = stm_->state().topic_to_state.find(topic);
         if (topic_it != stm_->state().topic_to_state.end()) {
             result.insert({topic, topic_it->second.copy()});

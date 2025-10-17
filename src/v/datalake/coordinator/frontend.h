@@ -84,6 +84,8 @@ public:
     std::optional<model::partition_id>
     coordinator_partition(const model::topic&) const;
 
+    std::optional<int32_t> coordinator_partition_count() const;
+
 private:
     using proto_t = datalake::coordinator::rpc::impl::
       datalake_coordinator_rpc_client_protocol;

@@ -32,7 +32,9 @@ service DatalakeService {
 }
 
 message CoordinatorGetStateRequest {
-    repeated string topics = 1;
+    // Names of topics whose state to return. If empty, returns state for all
+    // topics.
+    repeated string topics_filter = 1;
 }
 
 message CoordinatorGetStateResponse {

@@ -51,16 +51,18 @@ global___LifecycleState = LifecycleState
 @typing.final
 class CoordinatorGetStateRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
-    TOPICS_FIELD_NUMBER: builtins.int
+    TOPICS_FILTER_FIELD_NUMBER: builtins.int
 
     @property
-    def topics(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+    def topics_filter(self) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[builtins.str]:
+        """Names of topics whose state to return. If empty, returns state for all
+        topics.
+        """
+
+    def __init__(self, *, topics_filter: collections.abc.Iterable[builtins.str] | None=...) -> None:
         ...
 
-    def __init__(self, *, topics: collections.abc.Iterable[builtins.str] | None=...) -> None:
-        ...
-
-    def ClearField(self, field_name: typing.Literal['topics', b'topics']) -> None:
+    def ClearField(self, field_name: typing.Literal['topics_filter', b'topics_filter']) -> None:
         ...
 global___CoordinatorGetStateRequest = CoordinatorGetStateRequest
 

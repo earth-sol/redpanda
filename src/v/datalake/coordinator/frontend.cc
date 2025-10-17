@@ -254,6 +254,15 @@ frontend::coordinator_partition(const model::topic& topic) const {
     return model::partition_id{static_cast<int32_t>(partition)};
 }
 
+std::optional<int32_t> frontend::coordinator_partition_count() const {
+    const auto md = _metadata->local().get_topic_metadata_ref(
+      model::datalake_coordinator_nt);
+    if (!md) {
+        return std::nullopt;
+    }
+    return md->get().get_configuration().partition_count;
+}
+
 ss::future<bool> frontend::ensure_topic_exists() {
     // todo: make these configurable.
     static constexpr int16_t default_replication_factor = 3;
@@ -462,7 +471,8 @@ ss::future<get_topic_state_reply> frontend::get_topic_state_locally(
           if (!partition) {
               return ssx::now(get_topic_state_reply{errc::not_leader});
           }
-          return partition->sync_get_topic_state(std::move(request.topics))
+          return partition
+            ->sync_get_topic_state(std::move(request.topics_filter))
             .then([](auto result) {
                 get_topic_state_reply resp{};
                 if (result.has_error()) {

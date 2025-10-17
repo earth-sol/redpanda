@@ -361,12 +361,14 @@ struct get_topic_state_request
     get_topic_state_request() = default;
     explicit get_topic_state_request(
       model::partition_id coordinator_partition,
-      chunked_vector<model::topic> topics)
+      chunked_vector<model::topic> topics_filter)
       : coordinator_partition(coordinator_partition)
-      , topics(std::move(topics)) {}
+      , topics_filter(std::move(topics_filter)) {}
 
     model::partition_id coordinator_partition;
-    chunked_vector<model::topic> topics;
+
+    // Topics to return. If empty, returns all topics.
+    chunked_vector<model::topic> topics_filter;
 
     model::partition_id get_coordinator_partition() const {
         return coordinator_partition;
@@ -375,7 +377,9 @@ struct get_topic_state_request
     friend std::ostream&
     operator<<(std::ostream&, const get_topic_state_request&);
 
-    auto serde_fields() { return std::tie(coordinator_partition, topics); }
+    auto serde_fields() {
+        return std::tie(coordinator_partition, topics_filter);
+    }
 };
 
 } // namespace datalake::coordinator

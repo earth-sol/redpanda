@@ -135,9 +135,9 @@ std::ostream&
 operator<<(std::ostream& o, const get_topic_state_request& request) {
     fmt::print(
       o,
-      "{{coordinator_partition: {}, topics: {}}}",
+      "{{coordinator_partition: {}, topics_filter: {}}}",
       request.coordinator_partition,
-      request.topics);
+      request.topics_filter);
     return o;
 }
 } // namespace datalake::coordinator

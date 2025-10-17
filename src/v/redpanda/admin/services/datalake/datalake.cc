@@ -125,28 +125,43 @@ datalake_service_impl::coordinator_get_state(
 
     // Group topics by coordinator partition.
     chunked_hash_map<model::partition_id, chunked_vector<model::topic>>
-      topics_by_partition;
-    for (const auto& topic_name : req.get_topics()) {
-        model::topic topic{topic_name};
-        auto partition_opt = _coordinator_fe->local().coordinator_partition(
-          topic);
-        if (!partition_opt.has_value()) {
+      topics_filter_by_partition;
+    if (req.get_topics_filter().empty()) {
+        auto partition_count_opt
+          = _coordinator_fe->local().coordinator_partition_count();
+        if (!partition_count_opt.has_value()) {
             throw serde::pb::rpc::unavailable_exception(
               fmt::format(
-                "Datalake coordinator couldn't get coordinator partition for "
-                "{}",
-                topic));
+                "Datalake coordinator couldn't get coordinator partition "
+                "count"));
         }
-        topics_by_partition[partition_opt.value()].emplace_back(
-          std::move(topic));
+        for (auto p = 0; p < partition_count_opt.value(); ++p) {
+            topics_filter_by_partition.emplace(
+              model::partition_id{p}, chunked_vector<model::topic>());
+        }
+    } else {
+        for (const auto& topic_name : req.get_topics_filter()) {
+            model::topic topic{topic_name};
+            auto partition_opt = _coordinator_fe->local().coordinator_partition(
+              topic);
+            if (!partition_opt.has_value()) {
+                throw serde::pb::rpc::unavailable_exception(
+                  fmt::format(
+                    "Datalake coordinator couldn't get coordinator partition "
+                    "for {}",
+                    topic));
+            }
+            topics_filter_by_partition[partition_opt.value()].emplace_back(
+              std::move(topic));
+        }
     }
 
     // Send out the RPCs.
     chunked_hash_map<model::topic, datalake::coordinator::topic_state>
       topic_states;
-    for (const auto& [partition_id, topics] : topics_by_partition) {
+    for (auto& [partition_id, topics_filter] : topics_filter_by_partition) {
         datalake::coordinator::get_topic_state_request fe_req{
-          partition_id, topics.copy()};
+          partition_id, std::move(topics_filter)};
         auto fe_res = co_await _coordinator_fe->local().get_topic_state(
           std::move(fe_req));
 

@@ -76,11 +76,22 @@ class DatalakeAdminEndpointTest(RedpandaTest):
             dl.wait_for_translation(topic1, msg_count=count)
             dl.wait_for_translation(topic2, msg_count=count)
 
-            # Call the coordinator_get_state admin endpoint.
+            # Call the coordinator_get_state admin endpoint. First with a
+            # topics filter.
             admin: admin_v2.Admin = admin_v2.Admin(self.redpanda)
             request = admin_v2.datalake_pb.CoordinatorGetStateRequest(
-                topics=[topic1, topic2]
+                topics_filter=[topic1]
             )
+            response: admin_v2.datalake_pb.CoordinatorGetStateResponse = (
+                admin.datalake().coordinator_get_state(request)
+            )
+            assert len(response.topic_states) == 1, (
+                f"Response should contain 2 topics: {response.topic_states}"
+            )
+
+            # Then get both topics (empty topics filter) and do some sanity
+            # checks.
+            request = admin_v2.datalake_pb.CoordinatorGetStateRequest()
             response: admin_v2.datalake_pb.CoordinatorGetStateResponse = (
                 admin.datalake().coordinator_get_state(request)
             )
@@ -175,9 +186,7 @@ class DatalakeAdminEndpointTest(RedpandaTest):
                 Returns true iff there are pending entries for partition 0.
                 """
                 admin: admin_v2.Admin = admin_v2.Admin(self.redpanda)
-                request = admin_v2.datalake_pb.CoordinatorGetStateRequest(
-                    topics=[topic]
-                )
+                request = admin_v2.datalake_pb.CoordinatorGetStateRequest()
                 response: admin_v2.datalake_pb.CoordinatorGetStateResponse = (
                     admin.datalake().coordinator_get_state(request)
                 )
