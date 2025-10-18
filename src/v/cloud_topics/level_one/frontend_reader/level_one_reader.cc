@@ -9,10 +9,8 @@
  */
 #include "cloud_topics/level_one/frontend_reader/level_one_reader.h"
 
-#include "bytes/iostream.h"
 #include "cloud_topics/level_one/metastore/retry.h"
 #include "cloud_topics/logger.h"
-#include "config/configuration.h"
 #include "model/fundamental.h"
 #include "model/timeout_clock.h"
 #include "utils/retry_chain_node.h"
@@ -20,7 +18,6 @@
 #include <seastar/coroutine/as_future.hh>
 
 #include <exception>
-#include <iterator>
 #include <utility>
 
 namespace cloud_topics {
@@ -51,48 +48,79 @@ level_one_log_reader_impl::level_one_log_reader_impl(
     vlog(_log.debug, "New reader created {}", _config);
 }
 
+/*
+ * Error handling
+ * ==============
+ *
+ * Exceptions should not be used unless you intend for the exception to be
+ * propogated back to the user of a model::record_batch_reader. In this case an
+ * exception that carries a string message can be useful for debugging.
+ */
 ss::future<model::record_batch_reader::storage_t>
 level_one_log_reader_impl::do_load_slice(
   model::timeout_clock::time_point deadline) {
-    chunked_circular_buffer<model::record_batch> res;
+    try {
+        // First switch: ensure batches are materialized or the reader
+        // reaches end-of-stream.
+        switch (_state) {
+        case state::empty: {
+            auto obj = co_await lookup_object_for_offset(
+              _next_offset, deadline);
+            if (obj.has_value()) {
+                _state = state::ready;
+                _current_obj = std::move(obj.value());
+            } else {
+                _state = state::end_of_stream;
+            }
+        }
+            [[fallthrough]];
+        case state::ready:
+            if (_state == state::end_of_stream) {
+                break;
+            }
+            vassert(
+              _current_obj.has_value(),
+              "Expected to have current object in ready state");
+            _batches = co_await materialize_batches_from_object_offset(
+              _current_obj.value(), _next_offset, deadline);
+            _state = state::materialized;
+            [[fallthrough]];
+        case state::materialized:
+        case state::end_of_stream:
+            // Handled in the next switch statement.
+            break;
+        }
 
-    // First switch: ensure batches are materialized or the reader
-    // reaches end-of-stream.
-    switch (_state) {
-    case state::empty:
-        co_await fetch_metadata(deadline);
-        [[fallthrough]];
-    case state::ready:
-        co_await materialize_batches(deadline);
-        [[fallthrough]];
-    case state::materialized:
-    case state::end_of_stream:
-        // Handled in the next switch statement.
-        break;
-    }
+        // Second switch: enforces that the reader has materialized batches
+        // or reached end-of-stream.
+        switch (_state) {
+        case state::empty:
+        case state::ready:
+            vassert(
+              false,
+              "Invalid reader state after materialization for {} ({}): got {}",
+              _ntp,
+              _tidp,
+              std::to_underlying(_state));
+        case state::materialized:
+            _state = state::empty;
+            co_return consume_materialized_batches();
+            [[fallthrough]];
+        case state::end_of_stream:
+            co_return chunked_circular_buffer<model::record_batch>{};
+        }
 
-    // Second switch: enforces that the reader has materialized batches
-    // or reached end-of-stream.
-    switch (_state) {
-    case state::empty:
-    case state::ready:
-        vassert(
-          false,
-          "Invalid reader state after materialization for {} ({}): got {}",
-          _ntp,
-          _tidp,
-          std::to_underlying(_state));
-    case state::materialized:
-        consume_materialized_batches(&res);
-        [[fallthrough]];
-    case state::end_of_stream:
-        break;
+    } catch (...) {
+        vlog(
+          _log.error, "Reader caught exception: {}", std::current_exception());
+        _state = state::end_of_stream;
+        throw;
     }
-    co_return res;
 }
 
-ss::future<> level_one_log_reader_impl::fetch_metadata(
-  model::timeout_clock::time_point /*deadline*/) {
+ss::future<std::optional<level_one_log_reader_impl::current_object>>
+level_one_log_reader_impl::lookup_object_for_offset(
+  kafka::offset offset, model::timeout_clock::time_point /*deadline*/) {
     vassert(
       _state == state::empty,
       "Invalid state for metadata fetch: {}",
@@ -102,21 +130,19 @@ ss::future<> level_one_log_reader_impl::fetch_metadata(
       !_current_obj.has_value(),
       "Empty state should not have a current object");
 
-    if (_next_offset > _config.max_offset) {
+    if (offset > _config.max_offset) {
         vlog(
           _log.debug,
           "L1 reader next_offset {} > max_offset {}: ending "
           "stream",
-          _next_offset,
+          offset,
           _config.max_offset);
-        _state = state::end_of_stream;
-        co_return;
+        co_return std::nullopt;
     }
 
     if (is_over_limit(0)) {
         vlog(_log.debug, "L1 reader over byte budget: ending stream");
-        _state = state::end_of_stream;
-        co_return;
+        co_return std::nullopt;
     }
 
     ss::abort_source default_abort_source;
@@ -125,50 +151,42 @@ ss::future<> level_one_log_reader_impl::fetch_metadata(
                            : &default_abort_source;
     retry_chain_node rtc = l1::make_default_metastore_rtc(*abort_source);
     auto response = co_await l1::retry_metastore_op(
-      [this]()
-        -> ss::future<
-          std::expected<l1::metastore::object_response, l1::metastore::errc>> {
-          return _metastore->get_first_ge(_tidp, _next_offset);
+      [this, offset]
+      -> ss::future<
+        std::expected<l1::metastore::object_response, l1::metastore::errc>> {
+          return _metastore->get_first_ge(_tidp, offset);
       },
       rtc);
     if (!response.has_value()) {
         switch (response.error()) {
         case l1::metastore::errc::out_of_range:
             vlog(
-              _log.debug,
-              "No L1 objects found at offset {} or later",
-              _next_offset);
-            _state = state::end_of_stream;
-            co_return;
+              _log.debug, "No L1 objects found at offset {} or later", offset);
+            co_return std::nullopt;
+
         case l1::metastore::errc::missing_ntp:
             vlog(_log.debug, "Partition not tracked in metastore");
-            _state = state::end_of_stream;
-            co_return;
+            co_return std::nullopt;
+
         default:
-            vlog(
-              _log.error,
-              "Failed to query metastore offset {}: {}",
-              _next_offset,
-              response.error());
-            _state = state::end_of_stream;
             throw std::runtime_error(_log.format(
               "Metastore query failed offset {}: {}",
-              _next_offset,
+              offset,
               response.error()));
         }
     }
 
     auto& obj = response.value();
-    vlog(_log.debug, "Found L1 object {} at offset {}", obj.oid, _next_offset);
+    vlog(_log.debug, "Found L1 object {} at offset {}", obj.oid, offset);
 
     auto footer = co_await read_footer(
       obj.oid, obj.footer_pos, obj.object_size);
-    _current_obj = current_object{
+
+    co_return current_object{
       .oid = obj.oid,
       .footer = std::move(footer),
       .last_offset = obj.last_offset,
     };
-    _state = state::ready;
 }
 
 ss::future<l1::footer> level_one_log_reader_impl::read_footer(
@@ -239,8 +257,10 @@ ss::future<l1::footer> level_one_log_reader_impl::read_footer(
     co_return std::get<l1::footer>(std::move(footer_result));
 }
 
-ss::future<>
+ss::future<chunked_circular_buffer<model::record_batch>>
 level_one_log_reader_impl::read_batches(l1::object_reader& reader) {
+    chunked_circular_buffer<model::record_batch> batches;
+
     while (true) {
         auto result = co_await reader.read_next();
 
@@ -265,15 +285,20 @@ level_one_log_reader_impl::read_batches(l1::object_reader& reader) {
             _config.bytes_consumed += batch_size;
 
             // If we make it past all that, emit the batch.
-            _batches.push_back(std::move(batch));
+            batches.push_back(std::move(batch));
         } else {
             // End of data.
             break;
         }
     }
+
+    co_return batches;
 }
 
-ss::future<> level_one_log_reader_impl::materialize_batches(
+ss::future<chunked_circular_buffer<model::record_batch>>
+level_one_log_reader_impl::materialize_batches_from_object_offset(
+  const current_object& object,
+  kafka::offset offset,
   model::timeout_clock::time_point /*deadline*/) {
     // Could be EOS because there are no more objects, but
     // there should never be materialized batches remaining.
@@ -281,35 +306,25 @@ ss::future<> level_one_log_reader_impl::materialize_batches(
       _batches.empty(),
       "Materialize batches called with batches already materialized");
 
-    if (_state == state::end_of_stream) {
-        co_return;
-    }
-
     vassert(
       _state == state::ready,
       "Invalid state to materialize batches: {}",
       std::to_underlying(_state));
 
-    // I wish I had ADTs to enforce these invariants...
-    vassert(
-      _current_obj.has_value(),
-      "Expected to have current object in ready state");
-
-    auto seek_res = _current_obj->footer.file_position_before_kafka_offset(
-      _tidp, _next_offset);
+    auto seek_res = object.footer.file_position_before_kafka_offset(
+      _tidp, offset);
     if (seek_res == l1::footer::npos) {
         // Perhaps this object spans offsets in the metastore but has
         // no data because of compaction.
         vlog(
           _log.debug,
           "No data in object {}: materializing 0 batches",
-          _current_obj->oid);
-        _state = state::materialized;
-        co_return;
+          object.oid);
+        co_return chunked_circular_buffer<model::record_batch>{};
     }
 
     l1::object_extent extent{
-      .id = _current_obj->oid,
+      .id = object.oid,
       .position = seek_res.file_position,
       .size = seek_res.length,
     };
@@ -324,9 +339,8 @@ ss::future<> level_one_log_reader_impl::materialize_batches(
         vlog(
           _log.error,
           "Exception opening stream for L1 object {}: {}",
-          _current_obj->oid,
+          object.oid,
           ex);
-        _state = state::end_of_stream;
         std::rethrow_exception(ex);
     }
     auto stream_result = stream_fut.get();
@@ -334,12 +348,11 @@ ss::future<> level_one_log_reader_impl::materialize_batches(
         vlog(
           _log.error,
           "Failed to open stream for L1 object {}: {}",
-          _current_obj->oid,
+          object.oid,
           std::to_underlying(stream_result.error()));
-        _state = state::end_of_stream;
         throw std::runtime_error(_log.format(
           "Failed to open stream for L1 object {}: {}",
-          _current_obj->oid,
+          object.oid,
           std::to_underlying(stream_result.error())));
     }
 
@@ -347,13 +360,8 @@ ss::future<> level_one_log_reader_impl::materialize_batches(
     auto read_fut = co_await ss::coroutine::as_future(read_batches(*reader));
     if (read_fut.failed()) {
         auto ex = read_fut.get_exception();
-        vlog(
-          _log.error,
-          "Exception reading L1 object {}: {}",
-          _current_obj->oid,
-          ex);
+        vlog(_log.error, "Exception reading L1 object {}: {}", object.oid, ex);
         co_await close_reader_safe(reader);
-        _state = state::end_of_stream;
         std::rethrow_exception(ex);
     }
 
@@ -364,31 +372,33 @@ ss::future<> level_one_log_reader_impl::materialize_batches(
       _log.debug,
       "Materialized {} batches from L1 object {}",
       _batches.size(),
-      _current_obj->oid);
-    _state = state::materialized;
+      object.oid);
+
+    co_return read_fut.get();
 }
 
-void level_one_log_reader_impl::consume_materialized_batches(
-  chunked_circular_buffer<model::record_batch>* dest) {
+chunked_circular_buffer<model::record_batch>
+level_one_log_reader_impl::consume_materialized_batches() {
     vlog(_log.debug, "Consuming {} materialized batches", _batches.size());
 
-    dest->swap(_batches);
+    auto batches = std::exchange(_batches, {});
 
     // Increment the next offset for the next metastore query.
     // The offset is always incremented so the reader makes
     // progress even if the offset range in the object is
     // smaller than the metastore's metadata about the offset
     // range covered by the object (because of, e.g. compaction).
-    auto last_offset = dest->empty()
+    auto last_offset = batches.empty()
                          ? _current_obj
                              .transform(
                                [](const auto& obj) { return obj.last_offset; })
                              .value_or(_next_offset)
-                         : model::offset_cast(dest->back().last_offset());
+                         : model::offset_cast(batches.back().last_offset());
     _next_offset = kafka::next_offset(last_offset);
 
     _current_obj.reset();
-    _state = state::empty;
+
+    return batches;
 }
 
 void level_one_log_reader_impl::print(std::ostream& o) {

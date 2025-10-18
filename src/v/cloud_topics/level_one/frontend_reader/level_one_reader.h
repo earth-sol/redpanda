@@ -90,17 +90,40 @@ private:
         kafka::offset last_offset;
     };
 
-    ss::future<> fetch_metadata(model::timeout_clock::time_point deadline);
+    /*
+     * Contacts the L1 metastore to retrieve metadata for an L1 object that
+     * contains the target offset.
+     */
+    ss::future<std::optional<current_object>> lookup_object_for_offset(
+      kafka::offset, model::timeout_clock::time_point deadline);
 
-    ss::future<> materialize_batches(model::timeout_clock::time_point deadline);
+    /*
+     * Materialize batches from the L1 object starting from the given offset.
+     */
+    ss::future<chunked_circular_buffer<model::record_batch>>
+    materialize_batches_from_object_offset(
+      const current_object&,
+      kafka::offset,
+      model::timeout_clock::time_point deadline);
 
-    void consume_materialized_batches(
-      chunked_circular_buffer<model::record_batch>* dest);
+    /*
+     * Return batches from the reader's current position until the next
+     * partition or the end of the object is reached. The set of batches
+     * returned may further be limited by restrictions (e.g. byte limit)
+     * imposed by the reader configuration.
+     */
+    ss::future<chunked_circular_buffer<model::record_batch>>
+    read_batches(l1::object_reader& reader);
+
+    /*
+     * Prepare the result set to return to the record batch reader and configure
+     * the reader for the next request to load slice which will be the next
+     * offset that should be fetched.
+     */
+    chunked_circular_buffer<model::record_batch> consume_materialized_batches();
 
     ss::future<l1::footer>
     read_footer(l1::object_id oid, size_t footer_pos, size_t object_size);
-
-    ss::future<> read_batches(l1::object_reader& reader);
 
     bool is_over_limit(size_t size) const;
 
