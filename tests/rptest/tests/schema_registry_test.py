@@ -4740,7 +4740,6 @@ class SchemaRegistryModeMutableTest(SchemaRegistryEndpoints):
         self.assert_equal(result_raw.json()["id"], 2)
 
     @cluster(num_nodes=1)
-    @ignore(iterations=4097)
     @parametrize(
         iterations=4097
     )  # oversized alloc for store::get_subject_mode_written_at.
