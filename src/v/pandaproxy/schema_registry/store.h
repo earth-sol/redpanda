@@ -261,7 +261,7 @@ public:
     /// config_keys
     ///
     /// \return A vector (possibly empty)
-    result<std::vector<seq_marker>>
+    result<chunked_vector<seq_marker>>
     get_subject_config_written_at(const subject& sub) const {
         auto sub_it = BOOST_OUTCOME_TRYX(
           get_subject_iter(sub, include_deleted::yes));
@@ -273,7 +273,7 @@ public:
             return not_found(sub);
         }
 
-        std::vector<seq_marker> result;
+        chunked_vector<seq_marker> result;
         std::copy_if(
           sub_it->second.written_at.begin(),
           sub_it->second.written_at.end(),
