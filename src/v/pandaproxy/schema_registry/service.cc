@@ -13,6 +13,7 @@
 #include "cluster/ephemeral_credential_frontend.h"
 #include "cluster/members_table.h"
 #include "cluster/security_frontend.h"
+#include "config/broker_authn_endpoint.h"
 #include "config/configuration.h"
 #include "kafka/client/client_fetch_batch_reader.h"
 #include "kafka/client/config_utils.h"
@@ -33,6 +34,8 @@
 #include "pandaproxy/util.h"
 #include "security/acl.h"
 #include "security/audit/audit_log_manager.h"
+#include "security/authorizer.h"
+#include "security/credential_store.h"
 #include "security/ephemeral_credential_store.h"
 #include "security/request_auth.h"
 #include "ssx/semaphore.h"
@@ -565,6 +568,64 @@ ss::future<> service::fetch_internal_topic() {
     // reprocess them once now that the whole topic has been read,  in case they
     // have a reference to a schema declared later in the topic.
     co_await _store.process_marked_schemas();
+}
+
+ss::future<> service::validate_topic_creation_authorization() {
+    kafka::metadata_request req;
+    req.data.topics = {kafka::metadata_request_topic{
+      .name = model::schema_registry_internal_tp.topic}};
+    req.data.include_topic_authorized_operations = true;
+    auto resp = co_await _client.local().fetch_metadata(std::move(req));
+    vlog(srlog.trace, "Validating topic creation authorization");
+    // If authz is not enabled on the cluster, then no need to validate
+    // authn/authz
+    if (!config::kafka_authz_enabled()) {
+        co_return;
+    }
+
+    // If the client is not configured with a SCRAM user, it will be using
+    // ephemeral credentials which are assumed to work
+    if (!kafka::client::is_scram_configured(_client_config)) {
+        co_return;
+    }
+
+    int16_t replication_factor
+      = _config.schema_registry_replication_factor().value_or(
+        _controller->internal_topic_replication());
+
+    kafka::creatable_topic ct{
+      .name{model::schema_registry_internal_tp.topic},
+      .num_partitions = 1,
+      .replication_factor = replication_factor,
+    };
+
+    auto res = co_await _client.local().create_topic(
+      std::move(ct), kafka::client::client::validate_only_t::yes);
+
+    if (res.data.topics.size() != 1) {
+        throw kafka::exception(
+          kafka::error_code::unknown_server_error,
+          "Malformed CreateTopics Kafka response for internal topic");
+    }
+
+    const auto& topic_res = res.data.topics[0];
+    if (
+      topic_res.error_code == kafka::error_code::none
+      || topic_res.error_code == kafka::error_code::topic_already_exists
+      || (topic_res.error_code == kafka::error_code::topic_authorization_failed && shadow_linking_active())) {
+        // if shadow linking is active, then the user must be a superuser to
+        // create the topic via the Kafka API.  To continue with normal
+        // operations, we will assume the user is authorized to create the
+        // topic.
+        vlog(srlog.trace, "User is properly authorized");
+        co_return;
+    }
+    throw kafka::exception(
+      topic_res.error_code,
+      fmt::format(
+        "User is not authorized to create internal schema registry topic "
+        "'{}'",
+        model::schema_registry_internal_tp.topic));
 }
 
 service::service(
