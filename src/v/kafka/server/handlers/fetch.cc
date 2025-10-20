@@ -1752,7 +1752,11 @@ void op_context::response_placeholder::set(
                 session_partitions.move_to_end(it);
                 move_to_end();
             }
-            _it->partition_response->has_to_be_included = has_to_be_included;
+            // The partition fetch may have been retried, in which case preserve
+            // the original inclusion decision
+            _it->partition_response->has_to_be_included
+              = _it->partition_response->has_to_be_included
+                || has_to_be_included;
         }
     }
 }
