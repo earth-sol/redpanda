@@ -21,6 +21,8 @@
 
 #include <seastar/core/coroutine.hh>
 
+#include <ranges>
+
 namespace proto {
 using namespace proto::admin;
 } // namespace proto
@@ -28,10 +30,11 @@ using namespace proto::admin;
 namespace admin {
 
 namespace {
-
 struct connection_collector {
     virtual ~connection_collector() = default;
     virtual void add(proto::admin::kafka_connection conn) = 0;
+    virtual ss::future<>
+    add_all(chunked_vector<proto::admin::kafka_connection> conns) = 0;
     virtual chunked_vector<proto::admin::kafka_connection>
     extract_unordered() && = 0;
     virtual ss::future<chunked_vector<proto::admin::kafka_connection>>
@@ -51,6 +54,18 @@ public:
         if (_connections.size() < _limit) {
             _connections.emplace_back(std::move(conn));
         }
+    }
+
+    ss::future<>
+    add_all(chunked_vector<proto::admin::kafka_connection> conns) final {
+        auto to_add_count = std::min(
+          conns.size(), _limit - _connections.size());
+        auto insert_range = std::ranges::subrange(
+          conns.begin(), conns.begin() + to_add_count);
+        _connections.reserve(_connections.size() + insert_range.size());
+        co_await ssx::async_for_each(insert_range, [this](auto& conn) {
+            _connections.emplace_back(std::move(conn));
+        });
     }
 
     chunked_vector<proto::admin::kafka_connection> extract_unordered()
@@ -80,6 +95,11 @@ public:
 
     void add(proto::admin::kafka_connection conn) final {
         _pq.push(std::move(conn));
+    }
+
+    ss::future<>
+    add_all(chunked_vector<proto::admin::kafka_connection> conns) final {
+        co_await _pq.async_push_range(std::move(conns));
     }
 
     chunked_vector<proto::admin::kafka_connection> extract_unordered()
@@ -156,10 +176,7 @@ ss::future<size_t> gather_all_shards(
           });
 
         total_matching_connections += shard_result.total_matching_count;
-
-        for (auto& conn : shard_result.connections) {
-            global_collector.add(std::move(conn));
-        }
+        co_await global_collector.add_all(std::move(shard_result.connections));
 
         co_await ss::coroutine::maybe_yield();
     }
