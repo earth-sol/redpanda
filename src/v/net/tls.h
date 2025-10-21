@@ -33,6 +33,8 @@ struct key_cert_path {
     std::filesystem::path key;
     std::filesystem::path cert;
     fmt::iterator format_to(fmt::iterator it) const;
+    friend bool operator==(const key_cert_path&, const key_cert_path&)
+      = default;
 };
 /**
  * Key/cert pair content in PEM format
@@ -41,6 +43,7 @@ struct key_cert {
     ss::sstring key;
     ss::sstring cert;
     fmt::iterator format_to(fmt::iterator it) const;
+    friend bool operator==(const key_cert&, const key_cert&) = default;
 };
 
 /**
@@ -50,6 +53,7 @@ struct pkcs12 {
     certificate cert;
     ss::sstring password;
     fmt::iterator format_to(fmt::iterator it) const;
+    friend bool operator==(const pkcs12&, const pkcs12&) = default;
 };
 
 /**

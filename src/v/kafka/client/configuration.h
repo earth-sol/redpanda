@@ -73,12 +73,18 @@ struct tls_configuration {
     build_credentials() const;
 
     bool provide_sni_hostname{false};
+
+    friend bool operator==(const tls_configuration&, const tls_configuration&)
+      = default;
 };
 
 struct sasl_configuration {
     ss::sstring mechanism;
     ss::sstring username;
     ss::sstring password;
+
+    friend bool operator==(const sasl_configuration&, const sasl_configuration&)
+      = default;
 };
 
 /**
@@ -97,6 +103,10 @@ struct connection_configuration {
         return client_id.value_or("kafka-client");
     }
     static connection_configuration from_config_store(const configuration& cfg);
+
+    friend bool
+    operator==(const connection_configuration&, const connection_configuration&)
+      = default;
 };
 
 /**
