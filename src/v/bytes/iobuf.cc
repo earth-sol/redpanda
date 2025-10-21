@@ -184,20 +184,22 @@ std::strong_ordering iobuf::operator<=>(const iobuf& o) const {
         return s;
     };
     std::string_view rhs = other_next_view();
-    for (const auto& frag : *this) {
-        std::string_view lhs{frag};
-        while (!lhs.empty()) {
-            auto n = std::min(lhs.size(), rhs.size());
-            auto cmp = std::memcmp(lhs.data(), rhs.data(), n) <=> 0;
-            if (cmp != std::strong_ordering::equal) {
-                return cmp;
-            }
-            lhs.remove_prefix(n);
-            rhs.remove_prefix(n);
-            if (rhs.empty()) {
-                rhs = other_next_view();
-                if (o_it == o.cend()) {
-                    break;
+    if (!rhs.empty()) { // This prevents UB by using memcmp with nullptr
+        for (const auto& frag : *this) {
+            std::string_view lhs{frag};
+            while (!lhs.empty()) {
+                auto n = std::min(lhs.size(), rhs.size());
+                auto cmp = std::memcmp(lhs.data(), rhs.data(), n) <=> 0;
+                if (cmp != std::strong_ordering::equal) {
+                    return cmp;
+                }
+                lhs.remove_prefix(n);
+                rhs.remove_prefix(n);
+                if (rhs.empty()) {
+                    rhs = other_next_view();
+                    if (o_it == o.cend()) {
+                        break;
+                    }
                 }
             }
         }
