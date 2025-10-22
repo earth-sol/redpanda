@@ -31,6 +31,7 @@ from rptest.services.redpanda import (
     RESTART_LOG_ALLOW_LIST,
     RedpandaService,
     SISettings,
+    CLOUD_TOPICS_CONFIG_STR,
 )
 from rptest.services.redpanda_installer import RedpandaInstaller
 from rptest.tests.prealloc_nodes import PreallocNodesTest
@@ -376,7 +377,7 @@ class NodesDecommissioningTest(PreallocNodesTest):
         self.redpanda.enable_development_feature_support()
         self.redpanda.set_cluster_config(
             values={
-                "cloud_topics_enabled": True,
+                CLOUD_TOPICS_CONFIG_STR: True,
                 "cloud_topics_disable_reconciliation_loop": True,
             }
         )

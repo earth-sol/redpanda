@@ -62,7 +62,7 @@ class RedpandaConfig:
     rack: Optional[str] = None
     cloud_storage_enabled: bool = False
     iceberg_enabled: bool = False
-    cloud_topics_enabled: bool = False
+    unstable_beta_feature_cloud_topics_enabled: bool = False
     enable_developmental_unrecoverable_data_corrupting_features: int = int(time.time())
 
 
