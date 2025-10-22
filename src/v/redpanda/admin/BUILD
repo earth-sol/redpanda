@@ -217,6 +217,7 @@ redpanda_cc_library(
         "//src/v/base",
         "//src/v/container:priority_queue",
         "//src/v/kafka/server",
+        "//src/v/redpanda/admin/proxy:client",
         "//src/v/serde/protobuf:rpc",
         "//src/v/ssx:async_algorithm",
         "@seastar",

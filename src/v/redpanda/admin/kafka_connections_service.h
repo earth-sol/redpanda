@@ -14,6 +14,7 @@
 #include "base/seastarx.h"
 #include "kafka/server/fwd.h"
 #include "proto/redpanda/core/admin/v2/cluster.proto.h"
+#include "redpanda/admin/proxy/client.h"
 
 #include <seastar/core/future.hh>
 #include <seastar/core/sharded.hh>
@@ -30,6 +31,13 @@ public:
     // List connections from all shards on this node
     ss::future<proto::admin::list_kafka_connections_response>
     list_kafka_connections_local(
+      proto::admin::list_kafka_connections_request req);
+
+    // List connections from all nodes and shard in the cluster
+    ss::future<proto::admin::list_kafka_connections_response>
+    list_kafka_connections_cluster_wide(
+      admin::proxy::client& proxy_client,
+      const serde::pb::rpc::context& ctx,
       proto::admin::list_kafka_connections_request req);
 
     static size_t get_effective_limit(size_t page_size);

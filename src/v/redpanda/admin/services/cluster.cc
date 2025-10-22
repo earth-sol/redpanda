@@ -41,13 +41,17 @@ cluster_service_impl::cluster_service_impl(
 
 ss::future<proto::admin::list_kafka_connections_response>
 cluster_service_impl::list_kafka_connections(
-  serde::pb::rpc::context, proto::admin::list_kafka_connections_request req) {
+  serde::pb::rpc::context ctx,
+  proto::admin::list_kafka_connections_request req) {
     vlog(brlog.trace, "list_kafka_connections: {}", req);
 
     utils::check_license(_feature_table.local());
 
-    auto resp = co_await _kafka_connections_service.local()
-                  .list_kafka_connections_local(std::move(req));
+    auto& kcs = _kafka_connections_service.local();
+    auto resp = ctx.is_proxied()
+                  ? co_await kcs.list_kafka_connections_local(std::move(req))
+                  : co_await kcs.list_kafka_connections_cluster_wide(
+                      _proxy_client, ctx, std::move(req));
 
     vlog(
       brlog.trace,
