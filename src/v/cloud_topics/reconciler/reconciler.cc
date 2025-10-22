@@ -504,8 +504,6 @@ reconciler::add_source_to_object(
       src->ntp(),
       src->last_reconciled_offset());
 
-    reconciliation_consumer consumer(
-      ctx.builder.get(), src->topic_id_partition());
     std::optional<consumer_metadata> metadata;
     try {
         auto reader = co_await src->make_reader(
@@ -513,8 +511,8 @@ reconciler::add_source_to_object(
             .max_bytes = ctx.size_budget,
             .as = &_as,
           });
-        metadata = co_await std::move(reader).consume(
-          std::move(consumer), model::no_timeout);
+        metadata = co_await build_from_reader(
+          src->topic_id_partition(), std::move(reader), ctx.builder.get());
     } catch (...) {
         co_return std::unexpected(reconcile_error(
           "unable to consume from L0 partition: {}", std::current_exception()));
