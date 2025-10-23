@@ -194,3 +194,31 @@ TEST(AggregatorTest, SingleRequestWithLostRequestPrepared) {
     ASSERT_TRUE(fut.available());
     ASSERT_LT(dest.size_bytes(), aggregator.size_bytes());
 }
+
+TEST(AggregatorTest, MinEpoch) {
+    auto timeout = ss::manual_clock::now() + 10s;
+
+    std::vector<
+      std::unique_ptr<cloud_topics::l0::write_request<ss::manual_clock>>>
+      requests;
+    auto make_request = [&](int min_epoch) {
+        auto chunk = get_random_serialized_chunk(10, 10);
+        requests.push_back(
+          std::make_unique<cloud_topics::l0::write_request<ss::manual_clock>>(
+            model::controller_ntp,
+            cloud_topics::cluster_epoch(min_epoch),
+            std::move(chunk),
+            timeout));
+    };
+
+    make_request(5);
+    make_request(10);
+    make_request(7);
+
+    cloud_topics::l0::aggregator<ss::manual_clock> aggregator;
+    for (auto& req : requests) {
+        aggregator.add(*req);
+    }
+
+    ASSERT_EQ(aggregator.min_epoch()(), 10);
+}
