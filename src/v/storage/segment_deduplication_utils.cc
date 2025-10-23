@@ -14,6 +14,7 @@
 #include "model/fundamental.h"
 #include "model/timeout_clock.h"
 #include "model/timestamp.h"
+#include "storage/compacted_index.h"
 #include "storage/compacted_index_writer.h"
 #include "storage/compaction_key.h"
 #include "storage/compaction_reducers.h"

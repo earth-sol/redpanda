@@ -488,7 +488,7 @@ ss::future<ss::stop_iteration>
 map_building_reducer::operator()(model::record_batch batch) {
     bool fully_indexed_batch = true;
     auto& header = batch.header();
-    if (!compaction::is_compactible(_ntp, header)) {
+    if (!compaction::is_compactible(header)) {
         // There is no point to indexing records in uncompactible batches, since
         // their inclusion in the segment post compaction is irrespective of the
         // map state (see copy_data_segment_reducer::filter()).
@@ -497,12 +497,13 @@ map_building_reducer::operator()(model::record_batch batch) {
     if (batch.compressed()) {
         batch = co_await model::decompress_batch(batch);
     }
+    // is_control must be false below due to above `is_compactible()` check.
     co_await batch.for_each_record_async(
       [this,
        &fully_indexed_batch,
        base_offset = batch.base_offset(),
        type = header.type,
-       is_control = header.attrs.is_control()](
+       is_control = false](
         const model::record& r) -> ss::future<ss::stop_iteration> {
           return maybe_index_record_in_map(
             r, base_offset, type, is_control, fully_indexed_batch);
