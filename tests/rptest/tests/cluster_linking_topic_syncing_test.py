@@ -37,7 +37,9 @@ import re
 import socket
 
 import base64
+import google.protobuf.timestamp_pb2
 import hashlib
+import time
 
 
 class ClusterLinkingTopicSyncingTestBase(ShadowLinkTestBase):
@@ -365,6 +367,7 @@ class ClusterLinkingTopicSyncingWithScram(ClusterLinkingTopicSyncingTestBase):
         )
 
     def validate_created_link(self, shadow_link: shadow_link_pb2.ShadowLink) -> None:
+        now = time.time()
         assert (
             shadow_link.configurations.client_options.authentication_configuration.WhichOneof(
                 "authentication"
@@ -376,6 +379,20 @@ class ClusterLinkingTopicSyncingWithScram(ClusterLinkingTopicSyncingTestBase):
 
         scram_config = shadow_link.configurations.client_options.authentication_configuration.scram_configuration
         assert scram_config.password_set, "Password not set in scram configuration"
+        assert scram_config.password == "", "Password should not be set"
+        assert scram_config.username == self.cluster_link_user, (
+            f"Username does not match: {scram_config.username} != {self.cluster_link_user}"
+        )
+        assert scram_config.scram_mechanism == self.cluster_link_mechanism, (
+            f"Mechanism does not match: {scram_config.scram_mechanism} != {self.cluster_link_mechanism}"
+        )
+        assert (
+            scram_config.password_set_at != google.protobuf.timestamp_pb2.Timestamp()
+        ), "Password set time not set"
+
+        assert now - 5 <= scram_config.password_set_at.seconds <= now + 5, (
+            f"Password set time not recent: {scram_config.password_set_at.seconds} vs {now}"
+        )
 
     def add_credentials_to_link(
         self, shadow_link: shadow_link_pb2.ShadowLink
