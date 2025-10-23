@@ -335,6 +335,7 @@ ss::future<ss::stop_iteration> copy_data_segment_reducer::filter_and_append(
     _acc += header_size;
     // do not set broker_timestamp in this index, leave the operation to the
     // caller who has more context
+    bool filterable_batch = compaction::is_filterable(batch.header().type);
     if (_idx.maybe_index(
           _acc,
           segment_index::default_data_buffer_step,
@@ -346,7 +347,7 @@ ss::future<ss::stop_iteration> copy_data_segment_reducer::filter_and_append(
           std::nullopt,
           _internal_topic
             || batch.header().type == model::record_batch_type::raft_data,
-          compactible_batch ? batch.header().record_count : 0)) {
+          filterable_batch ? batch.header().record_count : 0)) {
         _acc = 0;
     }
     co_await _appender->append(batch);
