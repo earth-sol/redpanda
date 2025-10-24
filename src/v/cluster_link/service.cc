@@ -29,6 +29,7 @@
 #include "cluster_link/security_migrator.h"
 #include "cluster_link/shadow_linking_rpc_service.h"
 #include "cluster_link/source_topic_syncer.h"
+#include "config/node_config.h"
 #include "kafka/client/direct_consumer/direct_consumer.h"
 #include "kafka/data/partition_proxy.h"
 #include "kafka/server/group_router.h"
@@ -435,6 +436,11 @@ public:
             throw std::runtime_error{fmt::format(
               "Replication rejected on {}. no disk space; free bytes less than "
               "configurable threshold",
+              _partition->ntp())};
+        }
+        if (config::node().recovery_mode_enabled()) [[unlikely]] {
+            throw std::runtime_error{fmt::format(
+              "Replication rejected on {}. Redpanda is in recovery mode",
               _partition->ntp())};
         }
 
