@@ -310,7 +310,7 @@ shadow_topic_partition_leader_report::format_to(fmt::iterator it) const {
       std::chrono::duration_cast<std::chrono::system_clock::duration>(
         last_update_time)};
 
-    auto time = std::format("Time: {:%FT%H:%M:%S.3}", time_point);
+    auto time = std::format("Time: {:%FT%H:%M:%S}", time_point);
     return fmt::format_to(
       it,
       "{{ source_start_offset: {}, source_hwm: {}, source_lso: {}, "
