@@ -211,7 +211,7 @@ func (f *netCheckersFactory) NewNicRpsSetChecker(
 				if err != nil {
 					return false, err
 				}
-				rfsMask, err := network.GetRpsCPUMask(nic, mode, cpuMask, f.cpuMasks, f.rnc)
+				rfsMask, err := network.GetRpsCPUMask(currentNic, mode, cpuMask, f.cpuMasks, f.rnc)
 				if err != nil {
 					return false, err
 				}
@@ -253,7 +253,7 @@ func (f *netCheckersFactory) NewNicRfsChecker(nic network.Nic, mode irq.Mode, cp
 				if err != nil {
 					return false, err
 				}
-				queueLimit, err := network.OneRPSQueueLimit(limits, nic, mode, cpuMask, f.cpuMasks, f.rnc)
+				queueLimit, err := network.OneRPSQueueLimit(limits, currentNic, mode, cpuMask, f.cpuMasks, f.rnc)
 				if err != nil {
 					return false, err
 				}
