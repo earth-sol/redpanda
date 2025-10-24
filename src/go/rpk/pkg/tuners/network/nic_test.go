@@ -331,6 +331,36 @@ func Test_nic_GetIRQs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:       "mlx5_core",
+			driverName: "mlx5_core",
+			irqProcFile: &procFileMock{
+				getIRQProcFileLinesMap: func() (map[int]string, error) {
+					return map[int]string{
+						33: "33:       1465        806  Hyper-V PCIe MSI 2701534461952-edge      mlx5_async0@pci:4ea0:00:02.0",
+						34: "34:        154       9690  Hyper-V PCIe MSI 2701534461953-edge      mlx5_comp0@pci:4ea0:00:02.0",
+						35: "35:          0         43  Hyper-V PCIe MSI 2701534461954-edge      mlx5_comp1@pci:4ea0:00:02.0",
+					}, nil
+				},
+			},
+			irqDeviceInfo: &deviceInfoMock{
+				getIRQs: func(string, string) ([]int, error) {
+					return []int{33, 34, 35}, nil
+				},
+			},
+			want: []IrqInfoRes{
+				{
+					Num:        34,
+					ProcLine:   "34:        154       9690  Hyper-V PCIe MSI 2701534461953-edge      mlx5_comp0@pci:4ea0:00:02.0",
+					QueueIndex: 0,
+				},
+				{
+					Num:        35,
+					ProcLine:   "35:          0         43  Hyper-V PCIe MSI 2701534461954-edge      mlx5_comp1@pci:4ea0:00:02.0",
+					QueueIndex: 1,
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -622,6 +652,26 @@ func Test_gvnicIrqToQueueIdx(t *testing.T) {
 			Num:       26,
 			ProcLine:  "26:        134          0   ITS-MSI   0 Edge      eth%d-mgmnt",
 			indexFunc: func(irq IrqInfo) int { return gvnicIrqToQueueIdx(irq, 4) },
+		}
+		require.Equal(t, math.MaxInt64, irq.QueueIndex())
+	}
+}
+
+func Test_azureHyperVIrqToQueueIdx(t *testing.T) {
+	{
+		irq := IrqInfo{
+			Num:       34,
+			ProcLine:  "34:        154       9690  Hyper-V PCIe MSI 2701534461953-edge      mlx5_comp0@pci:4ea0:00:02.0",
+			indexFunc: azureHyperVIrqToQueueIdx,
+		}
+		require.Equal(t, 0, irq.QueueIndex())
+	}
+
+	{
+		irq := IrqInfo{
+			Num:       33,
+			ProcLine:  "33:       1465        806  Hyper-V PCIe MSI 2701534461952-edge      mlx5_async0@pci:4ea0:00:02.0",
+			indexFunc: azureHyperVIrqToQueueIdx,
 		}
 		require.Equal(t, math.MaxInt64, irq.QueueIndex())
 	}
