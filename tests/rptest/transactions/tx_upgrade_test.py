@@ -23,33 +23,33 @@ from rptest.clients.types import TopicSpec
 from rptest.services.admin import Admin
 from rptest.services.cluster import cluster
 from rptest.services.redpanda import RESTART_LOG_ALLOW_LIST, RedpandaService
-from rptest.services.redpanda_installer import RedpandaInstaller, wait_for_num_versions
+from rptest.services.redpanda_installer import (
+    RedpandaInstaller,
+    RedpandaVersionLine,
+    RedpandaVersionTriple,
+    wait_for_num_versions,
+    ver_string,
+)
 from rptest.tests.redpanda_test import RedpandaTest
 from rptest.utils.mode_checks import skip_debug_mode
 
 
-class TxUpgradeTest(RedpandaTest):
+class TxUpgradeTestBase(RedpandaTest):
     """
     Basic test verifying if mapping between transaction coordinator and transaction_id is preserved across the upgrades
     """
 
-    def __init__(self, test_context):
-        super(TxUpgradeTest, self).__init__(test_context=test_context, num_brokers=3)
-        self.installer = self.redpanda._installer
+    def __init__(self, test_context, extra_rp_conf={}):
+        super(TxUpgradeTestBase, self).__init__(
+            test_context=test_context, num_brokers=3, extra_rp_conf=extra_rp_conf
+        )
         self.partition_count = 10
         self.msg_sent = 0
         self.producers_count = 100
+        self.installer = self.redpanda._installer
 
     def setUp(self):
-        self.old_version = self.installer.highest_from_prior_feature_version(
-            RedpandaInstaller.HEAD
-        )
-
-        self.old_version_str = (
-            f"v{self.old_version[0]}.{self.old_version[1]}.{self.old_version[2]}"
-        )
-        self.installer.install(self.redpanda.nodes, self.old_version)
-        super(TxUpgradeTest, self).setUp()
+        super(TxUpgradeTestBase, self).setUp()
 
     def _tx_id(self, idx):
         return f"test-producer-{idx}"
@@ -87,6 +87,24 @@ class TxUpgradeTest(RedpandaTest):
             mapping[self._tx_id(idx)] = f"{c['ntp']['topic']}/{c['ntp']['partition']}"
 
         return mapping
+
+
+class TxUpgradeTest(TxUpgradeTestBase):
+    """
+    Basic test verifying if mapping between transaction coordinator and transaction_id is preserved across the upgrades
+    """
+
+    def __init__(self, test_context):
+        super(TxUpgradeTest, self).__init__(test_context=test_context)
+
+    def setUp(self):
+        self.old_version = self.installer.highest_from_prior_feature_version(
+            RedpandaInstaller.HEAD
+        )
+
+        self.old_version_str = ver_string(self.old_version)
+        self.installer.install(self.redpanda.nodes, self.old_version)
+        super(TxUpgradeTest, self).setUp()
 
     @skip_debug_mode
     @cluster(num_nodes=3, log_allow_list=RESTART_LOG_ALLOW_LIST)

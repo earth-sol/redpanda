@@ -232,6 +232,22 @@ class LogCompactionTestBase(PartitionMovementMixin):
             else float(dirty_segment_bytes) / float(closed_segment_bytes)
         )
 
+    def wait_for_sliding_window_compaction(self):
+        self.prev_sliding_window_rounds = None
+
+        def compaction_has_completed():
+            new_sliding_window_rounds = self.get_complete_sliding_window_rounds()
+            res = self.prev_sliding_window_rounds == new_sliding_window_rounds
+            self.prev_sliding_window_rounds = new_sliding_window_rounds
+            return res
+
+        wait_until(
+            compaction_has_completed,
+            timeout_sec=120,
+            backoff_sec=self.extra_rp_conf["log_compaction_interval_ms"] / 1000 * 4,
+            err_msg="Compaction did not stabilize.",
+        )
+
 
 class LogCompactionTest(LogCompactionTestBase, PreallocNodesTest):
     def __init__(self, test_context):
@@ -476,21 +492,7 @@ class LogCompactionSchedulingTest(LogCompactionTestBase, PreallocNodesTest):
         self.produce_and_consume()
 
         # At this point, the min.cleanable.dirty.ratio is 1.0
-        self.prev_sliding_window_rounds = -1
-
-        def compaction_has_completed():
-            new_sliding_window_rounds = self.get_complete_sliding_window_rounds()
-
-            res = self.prev_sliding_window_rounds == new_sliding_window_rounds
-            self.prev_sliding_window_rounds = new_sliding_window_rounds
-            return res
-
-        wait_until(
-            compaction_has_completed,
-            timeout_sec=120,
-            backoff_sec=self.extra_rp_conf["log_compaction_interval_ms"] / 1000 * 4,
-            err_msg="Compaction did not stabilize.",
-        )
+        self.wait_for_sliding_window_compaction()
 
         # We may race with a segment roll which won't be compacted (due to high min.cleanable.dirty.ratio),
         # so we cannot assert dirty_segment_bytes == 0 here.
@@ -525,12 +527,7 @@ class LogCompactionSchedulingTest(LogCompactionTestBase, PreallocNodesTest):
         # see the rolled segment compacted along with the rest of the log
         self.set_min_cleanable_dirty_ratio(0.0)
 
-        wait_until(
-            compaction_has_completed,
-            timeout_sec=120,
-            backoff_sec=self.extra_rp_conf["log_compaction_interval_ms"] / 1000 * 4,
-            err_msg="Compaction did not stabilize.",
-        )
+        self.wait_for_sliding_window_compaction()
 
         def no_dirty_bytes():
             return all(
@@ -741,21 +738,8 @@ class LogCompactionTxRemovalTestBase(LogCompactionTestBase, PreallocNodesTest):
         # Restart the redpanda broker to roll segments
         self.redpanda.restart_nodes(self.redpanda.nodes)
 
-        self.prev_sliding_window_rounds = -1
 
-        def compaction_has_completed():
-            new_sliding_window_rounds = self.get_complete_sliding_window_rounds()
-
-            res = self.prev_sliding_window_rounds == new_sliding_window_rounds
-            self.prev_sliding_window_rounds = new_sliding_window_rounds
-            return res
-
-        wait_until(
-            compaction_has_completed,
-            timeout_sec=120,
-            backoff_sec=self.extra_rp_conf["log_compaction_interval_ms"] / 1000 * 4,
-            err_msg="Compaction did not stabilize.",
-        )
+        self.wait_for_sliding_window_compaction()
 
         self.stop_partition_movement()
 
