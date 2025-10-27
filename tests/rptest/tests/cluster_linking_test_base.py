@@ -92,7 +92,7 @@ class ClusterLinkingTLSProvider(TLSProvider):
 
     def create_broker_cert(self, service: Service, node: ClusterNode) -> Certificate:
         assert node in service.nodes
-        return self.tls.create_cert(node.name)
+        return self.tls.create_cert(node.name, common_name=node.name)
 
     def create_service_client_cert(self, service: Service, name: str) -> Certificate:
         return self.tls.create_cert(socket.gethostname(), name=name, common_name=name)
