@@ -1671,6 +1671,84 @@ class ShadowLinkingReplicationTests(ShadowLinkPreAllocTestBase):
         with self._maybe_failure_injector(with_failures):
             self._perform_auto_prefix_trimming(topic.name, partition_count)
 
+    @cluster(num_nodes=8)
+    @matrix(
+        timestamp_type=[
+            "CreateTime",
+            "LogAppendTime",
+        ],
+        source_cluster_spec=[
+            SecondaryClusterSpec(ServiceType.REDPANDA),
+            SecondaryClusterSpec(
+                ServiceType.KAFKA, kafka_version="3.8.0", kafka_quorum="COMBINED_KRAFT"
+            ),
+        ],
+    )
+    def test_replication_timestamps_match(self, timestamp_type, source_cluster_spec):
+        partition_count = 1
+        topic = TopicSpec(
+            name="source-topic",
+            partition_count=partition_count,
+            replication_factor=3,
+            message_timestamp_type=timestamp_type,
+        )
+
+        self.source_default_client().create_topic(topic)
+        self.create_link("test-link")
+
+        self.target_cluster.service.wait_until(
+            lambda: self.topic_exists_in_target(topic.name),
+            timeout_sec=30,
+            backoff_sec=1,
+            err_msg=f"Topic {topic.name} not found in target cluster",
+        )
+        msg_cnt = 100
+        base_ts = 1664453149000
+        self.start_producer_consumer(
+            topic=topic.name,
+            msg_size=128,
+            msg_cnt=msg_cnt,
+            fake_timestamp_ms=base_ts,
+            producer_rate_limit_bps=1024,
+        )
+        self.verify()
+
+        def get_timestamps(rpk: RpkTool, n: int, offset: str):
+            return {
+                int(o): int(t)
+                for o, t in [
+                    tuple(s.split(","))
+                    for s in rpk.consume(
+                        topic=topic.name,
+                        n=n,
+                        offset=offset,
+                        format="%o,%d\n",
+                    ).splitlines()
+                ]
+            }
+
+        expected_timestamps = get_timestamps(
+            self.source_cluster_rpk, msg_cnt, offset="start"
+        )
+
+        consume_from = msg_cnt // 2
+        n_to_consume = msg_cnt - consume_from
+        consume_from_ts = expected_timestamps[msg_cnt // 2]
+
+        consumed = get_timestamps(
+            self.target_cluster_rpk, n=n_to_consume, offset=f"@{consume_from_ts}"
+        )
+
+        assert len(consumed) > 0, "No messages consumed"
+
+        assert min(consumed) == consume_from, (
+            f"Expected to {consume_from=}, but min consumed offset was {min(consumed)}"
+        )
+
+        assert all(ts == expected_timestamps[o] for o, ts in consumed.items()), (
+            f"Timestamps don't match {expected_timestamps=} vs {consumed=}"
+        )
+
 
 class ShadowLinkConsumeGroupsMirroringTest(ShadowLinkTestBase):
     def create_source_consumer(self, topic, group_name="test_group", consumer_count=1):
