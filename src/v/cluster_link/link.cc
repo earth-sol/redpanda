@@ -51,6 +51,18 @@ ss::future<cl_result<void>> stop_task(task* t) {
 
     co_return res;
 }
+ss::future<cl_result<void>> pause_task(task* t) {
+    cl_result<void> res = outcome::success();
+    try {
+        co_return co_await t->pause();
+    } catch (const std::exception& e) {
+        res = err_info(
+          errc::failed_to_pause_task,
+          ssx::sformat("Failed to pause task {}: {}", t->name(), e.what()));
+    }
+
+    co_return res;
+}
 
 bool mirror_active_state(model::mirror_topic_status status) {
     switch (status) {
@@ -407,6 +419,10 @@ bool link::should_start_task(task* t) const {
     return t->should_start(ss::this_shard_id(), _self);
 }
 
+bool link::should_pause_task(task* t) const {
+    return t->should_pause(ss::this_shard_id(), _self);
+}
+
 bool link::should_stop_task(task* t) const {
     return t->should_stop(ss::this_shard_id(), _self);
 }
@@ -442,6 +458,22 @@ ss::future<> link::run_task_reconciler() {
                 vlog(
                   cllog.error,
                   "Failed to start task {}: {}",
+                  name,
+                  res.assume_error().message());
+            }
+        }
+
+        if (!_as.abort_requested() && should_pause_task(t.get())) {
+            vlog(
+              cllog.info,
+              "Reconciler pausing task {} for cluster link {}",
+              name,
+              _config.name);
+            auto res = co_await pause_task(t.get());
+            if (!res) {
+                vlog(
+                  cllog.error,
+                  "Failed to pause task {}: {}",
                   name,
                   res.assume_error().message());
             }
@@ -506,6 +538,17 @@ ss::future<cl_result<void>> link::do_register_task(std::unique_ptr<task> t) {
             vlog(
               cllog.error,
               "Failed to start task {}: {}",
+              t->name(),
+              res.assume_error().message());
+        }
+    }
+    if (!_as.abort_requested() && should_pause_task(t.get())) {
+        vlog(cllog.info, "Pausing task {}", t->name());
+        res = co_await pause_task(t.get());
+        if (!res) {
+            vlog(
+              cllog.error,
+              "Failed to pause task {}: {}",
               t->name(),
               res.assume_error().message());
         }
