@@ -128,6 +128,9 @@ class TypeCheck:
         if self._args.color == "always":
             env["FORCE_COLOR"] = "1"
 
+        # disable complaints about not being on the bleeding edge pyright version
+        env["PYRIGHT_PYTHON_IGNORE_WARNINGS"] = "1"
+
         # Set up environment to use the .venv virtual environment
         if self._args.no_venv:
             self.vprint("Skipping virtual environment (--no-venv specified)")
