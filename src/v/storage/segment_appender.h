@@ -54,16 +54,12 @@ public:
 
     static constexpr const size_t fallocation_alignment
       = segment_appender_fallocation_alignment;
-    static constexpr const size_t write_behind_memory = 1_MiB;
 
     struct options {
-        options(
-          size_t chunks_no, std::optional<uint64_t> s, storage_resources& r)
-          : number_of_chunks(chunks_no)
-          , segment_size(s)
+        options(std::optional<uint64_t> s, storage_resources& r)
+          : segment_size(s)
           , resources(r) {}
 
-        size_t number_of_chunks;
         // Generally a segment appender doesn't need to know the target size
         // of the segment it's appending to, but this is used as an input
         // to the dynamic fallocation size algorithm, to avoid falloc'ing

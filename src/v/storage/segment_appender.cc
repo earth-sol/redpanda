@@ -710,10 +710,9 @@ bool segment_appender::inflight_write::try_merge(
 fmt::iterator segment_appender::format_to(fmt::iterator iterator) const {
     return fmt::format_to(
       iterator,
-      "{{no_of_chunks:{}, closed:{}, fallocation_offset:{}, stable_offset:{}, "
+      "{{closed:{}, fallocation_offset:{}, stable_offset:{}, "
       "flushed_offset:{}, committed_offset:{}, inflight:{}, dispatched:{}, "
       "merged:{}, bytes_flush_pending:{}}}",
-      _opts.number_of_chunks,
       _closed,
       _fallocation_offset,
       _stable_offset,
