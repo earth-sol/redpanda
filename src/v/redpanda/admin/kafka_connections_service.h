@@ -33,6 +33,8 @@ public:
 
     explicit kafka_connections_service(ss::sharded<kafka::server>&);
 
+    ss::future<> start(ssx::semaphore& admin_memory_semaphore);
+
     // List connections from all shards on this node
     ss::future<proto::admin::list_kafka_connections_response>
     list_kafka_connections_local(
@@ -45,15 +47,21 @@ public:
       const serde::pb::rpc::context& ctx,
       proto::admin::list_kafka_connections_request req);
 
-    static size_t get_effective_limit(size_t page_size);
+    size_t get_effective_limit(size_t page_size);
 
     ss::future<remote_units> rate_limit();
+
+    ss::future<std::vector<remote_units>> memory_limit(size_t connection_count);
 
 private:
     ss::future<remote_units> do_rate_limit();
 
+    ss::future<remote_units> do_memory_limit(size_t connection_count);
+
     ss::sharded<kafka::server>& _kafka_server;
     std::unique_ptr<ssx::semaphore> _rate_limiter{};
+    ssx::semaphore* _admin_memory_semaphore{};
+    size_t _admin_memory_semaphore_max{};
 };
 
 } // namespace admin

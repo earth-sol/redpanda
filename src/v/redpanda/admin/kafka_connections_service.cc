@@ -36,6 +36,9 @@ namespace {
 
 using namespace admin::detail;
 
+// Estimated memory needed per kafka connection based on testing
+constexpr auto memory_per_connection = 3_KiB;
+
 ss::future<connection_gather_result> gather_connections(
   const kafka::server& server,
   const filter_predicate& filter,
@@ -109,8 +112,17 @@ kafka_connections_service::kafka_connections_service(
     }
 }
 
+ss::future<>
+kafka_connections_service::start(ssx::semaphore& admin_memory_semaphore) {
+    _admin_memory_semaphore = &admin_memory_semaphore;
+    _admin_memory_semaphore_max = admin_memory_semaphore.current();
+    co_return;
+}
+
 ss::future<kafka_connections_service::remote_units>
 kafka_connections_service::rate_limit() {
+    // TODO: this could be optimized later by reserving memory on-demand, while
+    // iterating through shards.
     co_return co_await container().invoke_on(
       rate_limiter_shard,
       [](kafka_connections_service& self) { return self.do_rate_limit(); });
@@ -131,6 +143,41 @@ kafka_connections_service::do_rate_limit() {
     } catch (const ss::semaphore_timed_out&) {
         throw serde::pb::rpc::resource_exhausted_exception(
           "Timeout acquiring rate limiter for list_kafka_connections");
+    }
+}
+
+ss::future<std::vector<kafka_connections_service::remote_units>>
+kafka_connections_service::memory_limit(size_t connection_count) {
+    co_return co_await container().map_reduce0(
+      [connection_count](kafka_connections_service& self) {
+          return self.do_memory_limit(connection_count);
+      },
+      std::vector<remote_units>{},
+      [](std::vector<remote_units> acc, remote_units&& units) {
+          acc.emplace_back(std::move(units));
+          return acc;
+      });
+}
+
+ss::future<kafka_connections_service::remote_units>
+kafka_connections_service::do_memory_limit(size_t connection_count) {
+    try {
+        vassert(
+          _admin_memory_semaphore != nullptr,
+          "Admin memory semaphore not initialized");
+        const auto timeout = std::chrono::milliseconds(
+          random_generators::get_int(3000, 5000));
+        auto units = co_await ss::get_units(
+          *_admin_memory_semaphore,
+          connection_count * memory_per_connection,
+          timeout);
+        co_return ss::make_foreign(
+          std::make_unique<ssx::semaphore_units>(std::move(units)));
+    } catch (const ss::semaphore_timed_out&) {
+        throw serde::pb::rpc::resource_exhausted_exception(
+          fmt::format(
+            "Timeout waiting for memory for list_kafka_connections. Consider "
+            "filtering for a single broker or reducing page_size."));
     }
 }
 
@@ -253,7 +300,16 @@ kafka_connections_service::list_kafka_connections_cluster_wide(
 
 size_t kafka_connections_service::get_effective_limit(size_t page_size) {
     constexpr size_t default_limit = 1000;
-    return page_size == 0 ? default_limit : page_size;
+    auto requested_page_size = page_size == 0 ? default_limit : page_size;
+
+    // Calculate maximum connections we can handle per request based on
+    // available memory
+    const auto max_connections_by_memory = _admin_memory_semaphore_max
+                                           / memory_per_connection;
+    const auto capped_page_size = std::min(
+      requested_page_size, max_connections_by_memory);
+
+    return capped_page_size;
 }
 
 } // namespace admin
