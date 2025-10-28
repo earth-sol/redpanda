@@ -15,18 +15,23 @@
 #include "kafka/server/fwd.h"
 #include "proto/redpanda/core/admin/v2/cluster.proto.h"
 #include "redpanda/admin/proxy/client.h"
+#include "ssx/semaphore.h"
 
 #include <seastar/core/future.hh>
 #include <seastar/core/sharded.hh>
 
 #include <cstddef>
+#include <memory>
 
 namespace admin {
 
-class kafka_connections_service {
+class kafka_connections_service
+  : public ss::peering_sharded_service<kafka_connections_service> {
 public:
-    explicit kafka_connections_service(ss::sharded<kafka::server>& kafka_server)
-      : _kafka_server(kafka_server) {}
+    using remote_units = ss::foreign_ptr<std::unique_ptr<ssx::semaphore_units>>;
+    constexpr static auto rate_limiter_shard = ss::shard_id{0};
+
+    explicit kafka_connections_service(ss::sharded<kafka::server>&);
 
     // List connections from all shards on this node
     ss::future<proto::admin::list_kafka_connections_response>
@@ -42,8 +47,13 @@ public:
 
     static size_t get_effective_limit(size_t page_size);
 
+    ss::future<remote_units> rate_limit();
+
 private:
+    ss::future<remote_units> do_rate_limit();
+
     ss::sharded<kafka::server>& _kafka_server;
+    std::unique_ptr<ssx::semaphore> _rate_limiter{};
 };
 
 } // namespace admin

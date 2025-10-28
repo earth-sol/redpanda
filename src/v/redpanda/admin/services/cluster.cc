@@ -48,6 +48,15 @@ cluster_service_impl::list_kafka_connections(
     utils::check_license(_feature_table.local());
 
     auto& kcs = _kafka_connections_service.local();
+
+    auto rate_units = std::optional<kafka_connections_service::remote_units>{};
+    if (!ctx.is_proxied()) {
+        // Only apply rate limiting on external requests to avoid deadlock on
+        // concurrent requests arriving at the same time through two different
+        // nodes.
+        rate_units = co_await kcs.rate_limit();
+    }
+
     auto resp = ctx.is_proxied()
                   ? co_await kcs.list_kafka_connections_local(std::move(req))
                   : co_await kcs.list_kafka_connections_cluster_wide(

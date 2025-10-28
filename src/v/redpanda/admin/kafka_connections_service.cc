@@ -14,13 +14,16 @@
 #include "kafka/server/server.h"
 #include "proto/redpanda/core/admin/v2/cluster.proto.h"
 #include "proto/redpanda/core/admin/v2/kafka_connections.proto.h"
+#include "random/generators.h"
 #include "redpanda/admin/aip_filter.h"
 #include "redpanda/admin/aip_ordering.h"
 #include "redpanda/admin/kafka_connections_service_impl.h"
 #include "ssx/async_algorithm.h"
+#include "ssx/semaphore.h"
 
 #include <seastar/core/coroutine.hh>
 
+#include <chrono>
 #include <ranges>
 
 namespace proto {
@@ -95,6 +98,41 @@ ss::future<size_t> gather_all_shards(
 }
 
 } // namespace
+
+kafka_connections_service::kafka_connections_service(
+  ss::sharded<kafka::server>& kafka_server)
+  : _kafka_server(kafka_server) {
+    if (ss::this_shard_id() == rate_limiter_shard) {
+        constexpr static auto max_requests_in_flight = size_t{1};
+        _rate_limiter = std::make_unique<ssx::semaphore>(
+          max_requests_in_flight, "kafka_connections_service/rate_limiter");
+    }
+}
+
+ss::future<kafka_connections_service::remote_units>
+kafka_connections_service::rate_limit() {
+    co_return co_await container().invoke_on(
+      rate_limiter_shard,
+      [](kafka_connections_service& self) { return self.do_rate_limit(); });
+}
+
+ss::future<kafka_connections_service::remote_units>
+kafka_connections_service::do_rate_limit() {
+    vassert(
+      ss::this_shard_id() == rate_limiter_shard,
+      "do_rate_limit() must be called on shard {}",
+      rate_limiter_shard);
+    const auto timeout = std::chrono::milliseconds(
+      random_generators::get_int(3000, 5000));
+    try {
+        auto units = co_await ss::get_units(*_rate_limiter, 1, timeout);
+        co_return ss::make_foreign(
+          std::make_unique<ssx::semaphore_units>(std::move(units)));
+    } catch (const ss::semaphore_timed_out&) {
+        throw serde::pb::rpc::resource_exhausted_exception(
+          "Timeout acquiring rate limiter for list_kafka_connections");
+    }
+}
 
 ss::future<proto::admin::list_kafka_connections_response>
 kafka_connections_service::list_kafka_connections_local(
