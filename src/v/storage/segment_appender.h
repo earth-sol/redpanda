@@ -207,7 +207,7 @@ private:
         ss::promise<> p;
 
         friend std::ostream& operator<<(std::ostream& s, const flush_op& op) {
-            fmt::print(s, "{{offest: {}}}", op.offset);
+            fmt::print(s, "{{offset: {}}}", op.offset);
             return s;
         }
     };
