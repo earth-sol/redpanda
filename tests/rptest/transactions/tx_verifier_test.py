@@ -45,20 +45,27 @@ class TxVerifierTest(RedpandaTest):
 
         self.redpanda.logger.info("creating topics")
 
+        topic1 = "topic1-standard"
+        topic2 = "topic2-standard"
+        groupId = "groupId-standard"
+
         rpk = RpkTool(self.redpanda)
-        rpk.create_topic("topic1")
-        rpk.create_topic("topic2")
+        rpk.create_topic(topic1)
+        rpk.create_topic(topic2)
 
         errors = ""
 
         for test in tests:
             self.redpanda.logger.info('testing txn test "{test}"'.format(test=test))
             try:
-                cmd = "{java} -cp {verifier_jar} io.vectorized.tx_verifier.Verifier {test} {brokers}".format(
+                cmd = "{java} -cp {verifier_jar} io.vectorized.tx_verifier.Verifier {test} {brokers} {topic1} {topic2} {groupId}".format(
                     java="java",
                     verifier_jar=verifier_jar,
                     test=test,
                     brokers=self.redpanda.brokers(),
+                    topic1=topic1,
+                    topic2=topic2,
+                    groupId=groupId,
                 )
                 subprocess.check_output(
                     ["/bin/sh", "-c", cmd], stderr=subprocess.STDOUT, timeout=240
