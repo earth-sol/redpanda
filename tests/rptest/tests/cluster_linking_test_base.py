@@ -13,7 +13,7 @@ from contextlib import contextmanager, nullcontext
 import time
 import socket
 import random
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import google.protobuf.duration_pb2
 import google.protobuf.field_mask_pb2
@@ -53,6 +53,7 @@ from rptest.util import (
     contextmanager,
 )
 from rptest.utils.node_operations import FailureInjectorBackgroundThread
+from urllib3.exceptions import ProtocolError
 
 
 SOURCE_CLUSTER_SPEC = "source_cluster_spec"
@@ -389,6 +390,23 @@ class ClusterLinkingProgressVerifier:
         return (True, None)
 
 
+# Will retry to send the request if there was a connection aborted
+# error, after a short backoff period
+def retry_request(func: Callable[..., Any]) -> Any:
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except ProtocolError as e:
+            if "Connection aborted" not in str(e):
+                raise
+            self = args[0]
+            self.logger.debug(f"Received {e} while executing {str(func)}. Retrying...")
+            time.sleep(0.1)
+            return func(*args, **kwargs)
+
+    return wrapper
+
+
 class ShadowLinkTestBase(PreallocNodesTest):
     """
     Base class for Shadow Link tests. This base is responsible
@@ -614,6 +632,7 @@ class ShadowLinkTestBase(PreallocNodesTest):
         req = self.create_default_link_request(link_name=link_name, *args, **kwargs)
         return self.create_link_with_request(req=req)
 
+    @retry_request
     def create_link_with_request(
         self, req: shadow_link_pb2.CreateShadowLinkRequest
     ) -> shadow_link_pb2.ShadowLink:
@@ -627,27 +646,32 @@ class ShadowLinkTestBase(PreallocNodesTest):
         )
         return self.delete_link_with_request(req=req)
 
+    @retry_request
     def failover_link(self, name: str) -> shadow_link_pb2.ShadowLink:
         req = shadow_link_pb2.FailOverRequest(name=name)
         return self.service_client.fail_over(req=req).shadow_link
 
+    @retry_request
     def failover_link_topic(
         self, link_name: str, topic: str
     ) -> shadow_link_pb2.ShadowLink:
         req = shadow_link_pb2.FailOverRequest(name=link_name, shadow_topic_name=topic)
         return self.service_client.fail_over(req=req).shadow_link
 
+    @retry_request
     def delete_link_with_request(
         self, req: shadow_link_pb2.DeleteShadowLinkRequest
     ) -> shadow_link_pb2.DeleteShadowLinkResponse:
         return self.service_client.delete_shadow_link(req=req)
 
+    @retry_request
     def list_links(self) -> list[shadow_link_pb2.ShadowLink]:
         resp = self.service_client.list_shadow_links(
             req=shadow_link_pb2.ListShadowLinksRequest()
         )
         return resp.shadow_links
 
+    @retry_request
     def update_link(
         self,
         shadow_link: shadow_link_pb2.ShadowLink,
@@ -661,12 +685,14 @@ class ShadowLinkTestBase(PreallocNodesTest):
 
         return resp.shadow_link
 
+    @retry_request
     def get_link(self, name: str) -> shadow_link_pb2.ShadowLink:
         resp = self.service_client.get_shadow_link(
             req=shadow_link_pb2.GetShadowLinkRequest(name=name)
         )
         return resp.shadow_link
 
+    @retry_request
     def get_shadow_topic(
         self, shadow_link_name: str, shadow_topic_name: str
     ) -> shadow_link_pb2.ShadowTopic:
@@ -677,6 +703,7 @@ class ShadowLinkTestBase(PreallocNodesTest):
         )
         return resp.shadow_topic
 
+    @retry_request
     def list_shadow_topics(
         self, shadow_link_name: str
     ) -> list[shadow_link_pb2.ShadowTopic]:
