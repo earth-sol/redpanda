@@ -450,6 +450,9 @@ public:
         chunked_vector<kafka::offset> expected_offsets;
         expected_offsets.reserve(batches.size());
         for (const auto& batch : batches) {
+            _highest_seen_pid = std::max(
+              _highest_seen_pid,
+              ::model::producer_id{batch.header().producer_id});
             expected_offsets.push_back(
               ::model::offset_cast(batch.base_offset()));
         }
@@ -536,6 +539,7 @@ private:
     ss::shared_ptr<kafka::write_at_offset_stm> _stm;
     // set in start();
     std::optional<kafka::offset> _last_replicated_offset;
+    ::model::producer_id _highest_seen_pid{::model::no_producer_id};
 };
 
 class local_partition_data_sink_factory
