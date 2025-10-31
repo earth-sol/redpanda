@@ -233,6 +233,7 @@ func printTopicSync(opts *adminv2.TopicMetadataSyncOptions) {
 	}
 
 	tw.Print("INTERVAL", opts.GetEffectiveInterval().AsDuration().String())
+	tw.Print("PAUSED", opts.GetPaused())
 	if opts.HasStartOffset() {
 		var startOffset string
 		if opts.GetStartAtEarliest() != nil {
@@ -269,7 +270,7 @@ func printConsumerOffsetSync(opts *adminv2.ConsumerOffsetSyncOptions) {
 		return
 	}
 
-	tw.Print("ENABLED", opts.GetEnabled())
+	tw.Print("PAUSED", opts.GetPaused())
 	tw.Print("INTERVAL", opts.GetEffectiveInterval().AsDuration().String())
 
 	if len(opts.GetGroupFilters()) > 0 {
@@ -288,7 +289,7 @@ func printSecuritySync(opts *adminv2.SecuritySettingsSyncOptions) {
 		return
 	}
 
-	tw.Print("ENABLED", opts.GetEnabled())
+	tw.Print("PAUSED", opts.GetPaused())
 	tw.Print("INTERVAL", opts.GetEffectiveInterval().AsDuration().String())
 
 	if len(opts.GetAclFilters()) > 0 {
