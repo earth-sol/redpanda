@@ -14,6 +14,7 @@
 #include "cluster/metadata_cache.h"
 #include "cluster_link/service.h"
 #include "redpanda/admin/services/shadow_link/converter.h"
+#include "redpanda/admin/services/utils.h"
 #include "serde/protobuf/rpc.h"
 
 namespace admin {
@@ -379,16 +380,8 @@ shadow_link_service_impl::list_shadow_topics(
 
 std::optional<model::node_id>
 shadow_link_service_impl::redirect_to(const model::ntp& ntp) {
-    auto leader_node = _md_cache->local().get_leader_id(ntp);
-    if (!leader_node) {
-        throw serde::pb::rpc::unavailable_exception{
-          ssx::sformat("Partition {} does not have a leader", ntp)};
-    }
-
-    if (*leader_node == _proxy_client.self_node_id()) {
-        return std::nullopt;
-    }
-    return *leader_node;
+    return utils::redirect_to_leader(
+      _md_cache->local(), ntp, _proxy_client.self_node_id());
 }
 
 ss::future<proto::admin::shadow_link>

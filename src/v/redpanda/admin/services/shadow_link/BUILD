@@ -22,6 +22,7 @@ redpanda_cc_library(
     implementation_deps = [
         ":converter",
         "//src/v/cluster_link",
+        "//src/v/redpanda/admin/services:utils",
     ],
     visibility = ["//src/v/redpanda:__subpackages__"],
     deps = [
