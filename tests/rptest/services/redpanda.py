@@ -562,6 +562,7 @@ class SISettings:
         test_context: TestContext,
         *,
         log_segment_size: int = 16 * 1000000,
+        log_segment_size_min: int | None = None,
         cloud_storage_cache_chunk_size: int | None = None,
         cloud_storage_credentials_source: str = "config_file",
         cloud_storage_access_key: str = "panda-user",
@@ -671,6 +672,7 @@ class SISettings:
             )
 
         self.log_segment_size = log_segment_size
+        self.log_segment_size_min = log_segment_size_min
         self.cloud_storage_cache_chunk_size = cloud_storage_cache_chunk_size
         self.cloud_storage_cache_size = cloud_storage_cache_size
         self.cloud_storage_cache_max_objects = cloud_storage_cache_max_objects
@@ -884,6 +886,9 @@ class SISettings:
             conf["cloud_storage_azure_shared_key"] = self.cloud_storage_azure_shared_key
 
         conf["log_segment_size"] = self.log_segment_size
+        if self.log_segment_size_min is not None:
+            conf["log_segment_size_min"] = self.log_segment_size_min
+
         if self.cloud_storage_cache_chunk_size:
             conf["cloud_storage_cache_chunk_size"] = self.cloud_storage_cache_chunk_size
 
