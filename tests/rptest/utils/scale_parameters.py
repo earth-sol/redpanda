@@ -8,7 +8,7 @@
 # by the Apache License, Version 2.0
 
 from math import floor
-from typing import Optional
+from typing import Any, Optional
 from rptest.services.redpanda import RedpandaService, ResourceSettings, SISettings
 
 
@@ -50,10 +50,10 @@ class ScaleParameters:
         self,
         redpanda: RedpandaService,
         replication_factor: int,
-        mib_per_partition=DEFAULT_MIB_PER_PARTITION,
-        topic_replicas_per_shard=DEFAULT_PARTITIONS_PER_SHARD,
-        tiered_storage_enabled=False,
-        partition_memory_reserve_percentage=DEFAULT_PARTITIONS_MEMORY_ALLOCATION_PERCENT,
+        mib_per_partition: float = DEFAULT_MIB_PER_PARTITION,
+        topic_replicas_per_shard: int = DEFAULT_PARTITIONS_PER_SHARD,
+        tiered_storage_enabled: bool = False,
+        partition_memory_reserve_percentage: int = DEFAULT_PARTITIONS_MEMORY_ALLOCATION_PERCENT,
     ):
         self.partition_limit: int
         self.redpanda = redpanda
@@ -264,7 +264,7 @@ class ScaleParameters:
 
         self.logger.info(rnm_message)
 
-        resource_settings_args = {}
+        resource_settings_args: dict[str, Any] = {}
         if not self.redpanda.dedicated_nodes:
             # In docker, assume we're on a laptop drive and not doing
             # real testing, so disable fsync to make test run faster.

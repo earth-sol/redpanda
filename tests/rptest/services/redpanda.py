@@ -2809,7 +2809,7 @@ class RedpandaService(Service, RedpandaServiceABC):
             auto_assign_node_id=auto_assign_node_id,
         )
 
-    def set_resource_settings(self, rs):
+    def set_resource_settings(self, rs: ResourceSettings):
         self._resource_settings = rs
 
     @property
@@ -3001,7 +3001,7 @@ class RedpandaService(Service, RedpandaServiceABC):
     def require_client_auth(self):
         return self._security.require_client_auth
 
-    def get_node_memory_mb(self):
+    def get_node_memory_mb(self) -> int:
         if self._resource_settings.memory_mb is not None:
             self.logger.info("get_node_memory_mb: got from ResourceSettings")
             return self._resource_settings.memory_mb
@@ -3018,7 +3018,7 @@ class RedpandaService(Service, RedpandaServiceABC):
             )
             # Output line is like "MemTotal:       32552236 kB"
             memory_kb = int(line.strip().split()[1])
-            return memory_kb / 1024
+            return memory_kb // 1024
 
     def get_node_cpu_count(self) -> int:
         if self._resource_settings.num_cpus is not None:
