@@ -22,6 +22,12 @@ using namespace raft;
 
 class test_protocol : public consensus_client_protocol::impl {
 public:
+    ss::future<bool> ensure_disconnect(model::node_id) final {
+        return ss::make_ready_future<bool>(true);
+    }
+    ss::future<> reset_backoff(model::node_id) final {
+        return ss::make_ready_future<>();
+    }
     ss::future<result<raft::vote_reply>>
     vote(model::node_id, raft::vote_request, rpc::client_opts) final {
         return ss::make_ready_future<result<raft::vote_reply>>(
@@ -46,12 +52,6 @@ public:
       model::node_id, raft::timeout_now_request, rpc::client_opts) final {
         return ss::make_ready_future<result<raft::timeout_now_reply>>(
           raft::timeout_now_reply{});
-    }
-    ss::future<bool> ensure_disconnect(model::node_id) final {
-        return ss::make_ready_future<bool>(true);
-    }
-    ss::future<> reset_backoff(model::node_id) final {
-        return ss::make_ready_future<>();
     }
     ss::future<result<get_compaction_mcco_reply>> get_compaction_mcco(
       model::node_id, get_compaction_mcco_request, rpc::client_opts) final {

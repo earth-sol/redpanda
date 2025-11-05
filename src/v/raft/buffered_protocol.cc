@@ -84,6 +84,14 @@ buffered_protocol::buffered_protocol(
     _gc_timer.arm_periodic(gc_interval);
 }
 
+ss::future<bool> buffered_protocol::ensure_disconnect(model::node_id node_id) {
+    return _base_protocol.ensure_disconnect(node_id);
+}
+
+ss::future<> buffered_protocol::reset_backoff(model::node_id node_id) {
+    return _base_protocol.reset_backoff(node_id);
+}
+
 ss::future<result<vote_reply>> buffered_protocol::vote(
   model::node_id target_node, vote_request req, rpc::client_opts opts) {
     return apply_with_gate(
@@ -186,14 +194,6 @@ buffered_protocol::distribute_compaction_mtro(
       std::move(req),
       std::move(opts),
       &consensus_client_protocol::distribute_compaction_mtro);
-}
-
-ss::future<bool> buffered_protocol::ensure_disconnect(model::node_id node_id) {
-    return _base_protocol.ensure_disconnect(node_id);
-}
-
-ss::future<> buffered_protocol::reset_backoff(model::node_id node_id) {
-    return _base_protocol.reset_backoff(node_id);
 }
 
 ss::future<> buffered_protocol::stop() {

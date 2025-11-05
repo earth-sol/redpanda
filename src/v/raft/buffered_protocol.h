@@ -128,6 +128,12 @@ public:
       config::binding<size_t> max_buffered_bytes,
       std::chrono::milliseconds gc_interval = 10s);
 
+    ss::future<result<timeout_now_reply>>
+      timeout_now(model::node_id, timeout_now_request, rpc::client_opts) final;
+    ss::future<bool> ensure_disconnect(model::node_id) final;
+
+    ss::future<> reset_backoff(model::node_id n) final;
+
     ss::future<result<vote_reply>>
       vote(model::node_id, vote_request, rpc::client_opts) final;
 
@@ -139,12 +145,6 @@ public:
 
     ss::future<result<install_snapshot_reply>> install_snapshot(
       model::node_id, install_snapshot_request, rpc::client_opts) final;
-
-    ss::future<result<timeout_now_reply>>
-      timeout_now(model::node_id, timeout_now_request, rpc::client_opts) final;
-    ss::future<bool> ensure_disconnect(model::node_id) final;
-
-    ss::future<> reset_backoff(model::node_id n) final;
 
     ss::future<result<get_compaction_mcco_reply>> get_compaction_mcco(
       model::node_id, get_compaction_mcco_request, rpc::client_opts) final;

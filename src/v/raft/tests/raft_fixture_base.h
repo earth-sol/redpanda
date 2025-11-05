@@ -123,6 +123,12 @@ class in_memory_test_protocol : public consensus_client_protocol::impl {
 public:
     explicit in_memory_test_protocol(raft_node_map&, prefix_logger&);
 
+    ss::future<bool> ensure_disconnect(model::node_id) final {
+        co_return true;
+    };
+
+    ss::future<> reset_backoff(model::node_id) final { co_return; }
+
     ss::future<result<vote_reply>>
       vote(model::node_id, vote_request, rpc::client_opts) final;
 
@@ -138,9 +144,6 @@ public:
     ss::future<result<timeout_now_reply>>
       timeout_now(model::node_id, timeout_now_request, rpc::client_opts) final;
 
-    // TODO: move those methods out of Raft protocol.
-    ss::future<> reset_backoff(model::node_id) final { co_return; }
-
     ss::future<result<get_compaction_mcco_reply>> get_compaction_mcco(
       model::node_id, get_compaction_mcco_request, rpc::client_opts) final;
 
@@ -149,10 +152,6 @@ public:
         model::node_id,
         distribute_compaction_mtro_request,
         rpc::client_opts) final;
-
-    ss::future<bool> ensure_disconnect(model::node_id) final {
-        co_return true;
-    };
 
     channel& get_channel(model::node_id id);
 
