@@ -44,6 +44,7 @@ go_library(
 go_test(
     name = "shadow_test",
     srcs = [
+        "config_test.go",
         "create_test.go",
         "mapper_test.go",
         "types_test.go",

@@ -256,6 +256,54 @@ func getCommentForField(field protoreflect.FieldDescriptor) string {
 	return adminv2comments.GetCommentForField(field)
 }
 
+// stripEnumPrefix removes common proto enum prefixes to match our config
+// enum expectations.
+//
+// The prefix is derived by converting the enum type name (last component of the
+// fully qualified name) from PascalCase to SCREAMING_SNAKE_CASE with a trailing
+// underscore.
+// For example:
+//   - "redpanda.core.common.v1.ACLResource" → "ACL_RESOURCE_"
+//   - "redpanda.core.admin.v2.PatternType" → "PATTERN_TYPE_"
+func stripEnumPrefix(enumValue protoreflect.EnumValueDescriptor) string {
+	enumName := string(enumValue.Name())
+	enumType := string(enumValue.Parent().FullName())
+
+	// Extract the type name (last component after the last dot)
+	lastDot := strings.LastIndex(enumType, ".")
+	if lastDot == -1 {
+		return enumName // No package prefix, return as-is
+	}
+	typeName := enumType[lastDot+1:]
+
+	prefix := toScreamingSnakeCase(typeName) + "_"
+
+	return strings.TrimPrefix(enumName, prefix)
+}
+
+// toScreamingSnakeCase converts a PascalCase string to SCREAMING_SNAKE_CASE.
+func toScreamingSnakeCase(s string) string {
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			// Add underscore before uppercase letter if:
+			// - Previous character was lowercase, OR
+			// - Previous character was uppercase AND next character is lowercase (to handle "ACLResource" correctly)
+			prev := rune(s[i-1])
+			if prev >= 'a' && prev <= 'z' {
+				result.WriteRune('_')
+			} else if i+1 < len(s) {
+				next := rune(s[i+1])
+				if next >= 'a' && next <= 'z' {
+					result.WriteRune('_')
+				}
+			}
+		}
+		result.WriteRune(r)
+	}
+	return strings.ToUpper(result.String())
+}
+
 func writeFieldTemplate(sb *strings.Builder, field protoreflect.FieldDescriptor, indent int) {
 	indentStr := strings.Repeat("  ", indent)
 
@@ -376,10 +424,12 @@ func writeFieldTemplate(sb *strings.Builder, field protoreflect.FieldDescriptor,
 				} else {
 					enumComment = adminv2comments.GetCommentForEnumValue(enumValue)
 				}
+				// Strip enum prefix to match rpk command expectations
+				strippedName := stripEnumPrefix(enumValue)
 				if enumComment != "" {
-					sb.WriteString(fmt.Sprintf(" %s  # %s\n", enumValue.Name(), enumComment))
+					sb.WriteString(fmt.Sprintf(" %s  # %s\n", strippedName, enumComment))
 				} else {
-					sb.WriteString(fmt.Sprintf(" %s\n", enumValue.Name()))
+					sb.WriteString(fmt.Sprintf(" %s\n", strippedName))
 				}
 			} else {
 				sb.WriteString(" 0\n")
