@@ -269,8 +269,8 @@ class DataMigrationsApiTest(DataMigrationTestMixin):
         self.assure_not_migratable(
             topic,
             {
-                "message": "Unexpected cluster error: Requested operation can not be executed as the resource is undergoing data migration",
-                "code": 500,
+                "message": "Requested operation can not be executed as the resource is undergoing data migration",
+                "code": 400,
             },
         )
 
