@@ -659,6 +659,8 @@ void test_all_types_edition2023::set_map_string_nested_enum(chunked_hash_map<ss:
 chunked_hash_map<ss::sstring, foreign_enum_edition2023>& test_all_types_edition2023::get_map_string_foreign_enum() { return map_string_foreign_enum_; }
 const chunked_hash_map<ss::sstring, foreign_enum_edition2023>& test_all_types_edition2023::get_map_string_foreign_enum() const { return map_string_foreign_enum_; }
 void test_all_types_edition2023::set_map_string_foreign_enum(chunked_hash_map<ss::sstring, foreign_enum_edition2023>&& v) { map_string_foreign_enum_ = std::move(v); }
+bool test_all_types_edition2023::has_oneof_field() const { return oneof_field_.index() != 0; }
+void test_all_types_edition2023::clear_oneof_field() { oneof_field_ = std::monostate{}; }
 bool test_all_types_edition2023::has_oneof_uint32() const { return oneof_field_.index() == 1; }
 uint32_t test_all_types_edition2023::get_oneof_uint32() const { return std::get<1>(oneof_field_); }
 void test_all_types_edition2023::set_oneof_uint32(uint32_t v) { oneof_field_.emplace<1>(v); }
