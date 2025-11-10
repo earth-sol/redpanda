@@ -400,10 +400,15 @@ class LargeMessagesTest(RedpandaTest):
         )
 
         self.logger.info(
-            f"Total data: {total_bytes / 1e6:.2f} MB, "
-            f"message count: {self.message_count}, "
-            f"Expected throughput >= {self.expected_throughput / 1e6:5.2f} MB/s, "
-            f"running_time_sec: {target_runtime_sec}"
+            "LargeMessagesTest parameters: "
+            f"mode={mode.value}, apply_throughput_limits={apply_throughput_limits}, "
+            f"message_size={self.message_size} bytes ({self.message_size / 2**20:.2f} MiB), "
+            f"n_topics={self.n_topics}, n_partitions={self.n_partitions}, replication_factor={self.replication_factor}, "
+            f"n_clients={self.n_clients}, swarm_nodes={self.swarm_nodes}, unique={self.unique}, "
+            f"total_data={total_bytes / 1e6:.2f} MB, message_count={self.message_count}, "
+            f"expected_throughput>={self.expected_throughput / 1e6:5.2f} MB/s, "
+            f"per_broker_throttle={per_broker_throttle if per_broker_throttle is not None else 'disabled'}, "
+            f"target_runtime_sec={target_runtime_sec}"
         )
 
         assert self.message_count > 2, f"message count too low: {self.message_count}"
