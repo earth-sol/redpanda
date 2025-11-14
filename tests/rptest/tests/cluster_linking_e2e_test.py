@@ -321,7 +321,7 @@ class ShadowLinkBasicTests(ShadowLinkTestBase):
         )
 
         link_uid = test_link.uid
-        assert link_uid, f"Expected some uid for shadow link"
+        assert link_uid, "Expected some uid for shadow link"
 
         got_link = self.get_link(name="test-link")
         assert got_link.name == "test-link", (
@@ -1801,9 +1801,7 @@ class ShadowLinkingReplicationTests(ShadowLinkPreAllocTestBase):
                 "configurations.topic_metadata_sync_options.auto_create_shadow_topic_filters"
             ]
         )
-        updated_link = self.update_link(
-            shadow_link=shadow_link, update_mask=update_mask
-        )
+        self.update_link(shadow_link=shadow_link, update_mask=update_mask)
 
         # Now the topic should be deletable, as it is not in the autocreate filters
         target_client.delete_topic(topic.name)
@@ -2533,7 +2531,7 @@ class ShadowLinkConsumeGroupsMirroringTest(ShadowLinkTestBase):
         partition_count = 120
 
         topic = TopicSpec(
-            name=f"source-topic",
+            name="source-topic",
             partition_count=int(partition_count),
             replication_factor=3,
         )
@@ -2964,7 +2962,7 @@ class ShadowLinkTopicFailoverTests(ShadowLinkPreAllocTestBase):
                     format="%o,",
                 )
                 return [int(o) for o in raw.split(",")[0:-1]]
-            except Exception as e:
+            except Exception:
                 return []
 
         produce(n=num_messages, redpanda=self.source_cluster.service)
