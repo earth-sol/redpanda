@@ -1396,9 +1396,11 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
         self,
         node: ClusterNode | CloudBroker,
         metrics_endpoint: MetricsEndpoint = MetricsEndpoint.METRICS,
-        query_string: str = "",
+        name: str | None = None,
     ) -> list[Metric]:
-        """Query and return all metrics from the given node's metrics endpoint."""
+        """Query and return all metrics from the given node's metrics endpoint.
+
+        :name: If not None, only return metrics matching this exact name."""
         pass
 
     def metrics_sample(
@@ -1482,6 +1484,7 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
         sample_patterns: Iterable[str] = (),
         nodes: list[ClusterNode] | list[CloudBroker] | None = None,
         metrics_endpoint: MetricsEndpoint = MetricsEndpoint.METRICS,
+        *,
         names: Iterable[str] = (),
     ) -> dict[str, MetricSamples]:
         """Implement this method to iterate over nodes to query multiple sample patterns.
@@ -1516,9 +1519,10 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
             # metrics are involved
             if names:
                 for name in names:
-                    query_string = self._prepare_query_string(name, metrics_endpoint)
                     metrics = self.metrics(
-                        n, metrics_endpoint=metrics_endpoint, query_string=query_string
+                        n,
+                        metrics_endpoint=metrics_endpoint,
+                        name=name,
                     )
                     sample_values_per_pattern[name] += self._extract_samples(
                         metrics, name, n
@@ -1536,8 +1540,9 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
             if values
         }
 
-    def _prepare_query_string(self, name: str, endpoint: MetricsEndpoint) -> str:
-        """Prepare query string for exact metric name filtering."""
+    @staticmethod
+    def _adjust_metric_name(name: str, endpoint: MetricsEndpoint) -> str:
+        """Adjust the metric name to be used in the __name__ filter."""
 
         # do a pre-check of the expected prefix to catch user errors early
         prefix = {
@@ -1550,9 +1555,39 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
         )
         # we need to strip the prefix, because seastar __name__ filtering
         # works on the metric name without the prefix
-        name = name.removeprefix(prefix)
+        return name.removeprefix(prefix)
 
-        return f"?__name__={name}"
+    @staticmethod
+    def _metric_basename(name: str) -> str:
+        """The prom text client has an annoying behavior for counter metrics:
+        changes either the family or sample name by appending or removing _total,
+        depending on if it is present.
+
+        That is, ONLY for TYPE: counter metrics if the scaped metric name is foo, then
+        in the Metric object m, m.family = foo, m.samples[].name = foo_total. If
+        the metric name was instead foo_total, the result is actually the same! So
+        you cannot tell what the _true_ metric name was from the Metric object.
+
+        This interferes with matching metrics by name, since the __name__= filter
+        on seastar needs the true metric name. So our policy: always strip _total
+        when preparing the the name for querying and then check equality on family.name,
+        which also doesn't include total. This means both metrics variations above can
+        be successfully queried with foo or foo_total.
+
+        This is *further* complicated by the fact that we have non-counters, like gauges
+        which also end in total, e.g., redpanda_application_uptime_seconds_total which
+        is a gauge but ends in total. These don't get the above treatment: the family
+        and sample name will be the true metric names. So when matching we also strip
+        _total from the returned family name to handle this case (essentially we always
+        compare the base (stripped) names on both sides, even when that isn't necessary
+        because the metric is not a counter - but we don't know it's a counter until
+        the query has been returned and the filter applied).
+
+        That's not necessarily desirable, but it's the best we can do without changing
+        the prometheus text parser (i.e., using our own).
+
+        See: prometheus_client/parser.py.text_fd_to_metric_families.build_metric"""
+        return name.removesuffix("_total")
 
     def metric_sum(
         self,
@@ -1570,14 +1605,21 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
         if nodes is None:
             nodes = self.all_nodes_abc()
 
-        count = 0
+        value = 0.0
         metric_seen = False
+        basename = self._metric_basename(metric_name)
+
+        matched_families: set[str] = set()
+
         for n in nodes:
-            metrics = self.metrics(n, metrics_endpoint=metrics_endpoint)
+            metrics = self.metrics(
+                n, metrics_endpoint=metrics_endpoint, name=basename + "*"
+            )
             for family in metrics:
+                if self._metric_basename(family.name) != basename:
+                    continue
+                matched_families.add(family.name)
                 for sample in family.samples:
-                    if sample.name != metric_name:
-                        continue
                     labels = sample.labels
                     if namespace:
                         assert (
@@ -1595,10 +1637,18 @@ class RedpandaServiceABC(ABC, RedpandaServiceConstants):
                         if labels.get("redpanda_topic", labels.get("topic")) != topic:
                             continue
                     metric_seen = True
-                    count += int(sample.value)
-        if expect_metric:
+                    value += sample.value
+
+        # catch any weirdness, like if two metrics foo_total and foo both exist, which would
+        # be ambiguous
+        assert len(matched_families) <= 1, (
+            f"More than one family matched: {matched_families}"
+        )
+
+        if expect_metric and not matched_families:
             assert metric_seen, f"Metric {metric_name} was not observed"
-        return count
+
+        return value
 
 
 class KubeServiceMixin(ABC):
@@ -2108,7 +2158,7 @@ class RedpandaServiceCloud(KubeServiceMixin, RedpandaServiceABC):
         self,
         node: Any,
         metrics_endpoint: MetricsEndpoint = MetricsEndpoint.PUBLIC_METRICS,
-        query_string: str = "",
+        name: str | None = None,
     ):
         """Parse the prometheus text format metric from a given pod."""
         if metrics_endpoint == MetricsEndpoint.PUBLIC_METRICS:
@@ -2116,6 +2166,11 @@ class RedpandaServiceCloud(KubeServiceMixin, RedpandaServiceABC):
         else:
             # operator V2 clusters use HTTPS for all the things
             p = "-k https" if self.is_operator_v2_cluster() else "http"
+            if name:
+                name = self._adjust_metric_name(name, metrics_endpoint)
+                query_string = f"?__name__={name}"
+            else:
+                query_string = ""
             text = self.kubectl.exec(
                 f"curl -f -s -S {p}://localhost:9644/metrics{query_string}", node.name
             )
@@ -4201,15 +4256,21 @@ class RedpandaService(Service, RedpandaServiceABC):
         self,
         node: ClusterNode,
         metrics_endpoint: MetricsEndpoint = MetricsEndpoint.METRICS,
-        query_string: str = "",
+        name: str | None = None,
     ):
         assert node in self._started, f"Node {node.account.hostname} is not started"
 
-        url = f"http://{node.account.hostname}:9644/{metrics_endpoint.value}{query_string}"
+        url = f"http://{node.account.hostname}:9644/{metrics_endpoint.value}"
+
+        params = (
+            {"__name__": self._adjust_metric_name(name, metrics_endpoint)}
+            if name
+            else None
+        )
         start_t = time.time()
         resp = None
         try:
-            resp = requests.get(url, timeout=10)
+            resp = requests.get(url, timeout=10, params=params)
         finally:
             elapsed = time.time() - start_t
             if resp:
@@ -4229,11 +4290,11 @@ class RedpandaService(Service, RedpandaServiceABC):
         self,
         node: ClusterNode | CloudBroker,
         metrics_endpoint: MetricsEndpoint = MetricsEndpoint.METRICS,
-        query_string: str = "",
+        name: str | None = None,
     ):
         """Parse the prometheus text format metric from a given node."""
         assert isinstance(node, ClusterNode)
-        text = self.raw_metrics(node, metrics_endpoint, query_string)
+        text = self.raw_metrics(node, metrics_endpoint, name)
         return list(text_string_to_metric_families(text))
 
     def cloud_storage_diagnostics(self):
