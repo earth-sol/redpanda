@@ -1,6 +1,6 @@
 module github.com/redpanda-data/redpanda/src/go/rpk
 
-go 1.23.1
+go 1.24.0
 
 // add the git commit hash as the target version and `go mod tidy` will transform it into pseudo-version
 replace github.com/hamba/avro/v2 => github.com/redpanda-data/go-avro/v2 v2.0.0-20240405204525-77b1144dc525
@@ -63,9 +63,9 @@ require (
 	github.com/twmb/types v1.1.6
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250207012021-f9890c6ad9f3
-	golang.org/x/sync v0.12.0
-	golang.org/x/sys v0.31.0
-	golang.org/x/term v0.30.0
+	golang.org/x/sync v0.18.0
+	golang.org/x/sys v0.38.0
+	golang.org/x/term v0.37.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250409194420-de1ac958c67a
 	google.golang.org/protobuf v1.36.6
 	gopkg.in/yaml.v3 v3.0.1
@@ -142,15 +142,16 @@ require (
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250207012021-f9890c6ad9f3 // indirect
 	golang.org/x/lint v0.0.0-20241112194109-818c5a804067 // indirect
-	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
-	golang.org/x/tools v0.29.0 // indirect
+	golang.org/x/tools v0.38.0 // indirect
+	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	google.golang.org/genproto v0.0.0-20250409194420-de1ac958c67a // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250409194420-de1ac958c67a // indirect
 	google.golang.org/grpc v1.71.1 // indirect
