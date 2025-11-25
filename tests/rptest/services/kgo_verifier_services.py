@@ -16,7 +16,6 @@ import time
 from typing import (
     Any,
     Dict,
-    Optional,
     Sequence,
     TypeAlias,
     cast,
@@ -48,9 +47,6 @@ class KgoVerifierService(Service):
     To validate produced record user should run consumer and producer in one node.
     Use ctx.cluster.alloc(ClusterSpec.simple_linux(1)) to allocate node and pass it to constructor
     """
-
-    _status_thread: Optional["StatusThread"]
-    _stopped: bool
 
     def __init__(
         self,
@@ -93,6 +89,8 @@ class KgoVerifierService(Service):
         self._password = password
         self._enable_tls = enable_tls
         self._status: "ProduceStatus | ConsumerStatus"
+        self._status_thread: StatusThread | None = None
+        self._stopped: bool = False
         self.logs = {
             "kgo_verifier_output": {"path": self.log_path, "collect_default": True}
         }
@@ -597,7 +595,7 @@ class ValidatorStatus:
 class ConsumerStatus:
     def __init__(
         self,
-        topic: Optional[str] = None,
+        topic: Topic,
         validator: dict[str, Any] | None = None,
         errors: int = 0,
         active: bool = True,
@@ -619,6 +617,7 @@ class ConsumerStatus:
                 "tombstones_consumed": 0,
             }
 
+        self.topic = topic
         self.validator = ValidatorStatus(**validator)
         self.errors = errors
         self.active = active
@@ -629,7 +628,7 @@ class ConsumerStatus:
         self.validator.merge(rhs.validator)
 
     def __str__(self):
-        return f"ConsumerStatus<{self.active}, {self.errors}, {self.validator}>"
+        return f"ConsumerStatus<{self.topic}: {self.active}, {self.errors}, {self.validator}>"
 
 
 class KgoVerifierProducer(KgoVerifierService):
@@ -677,7 +676,7 @@ class KgoVerifierProducer(KgoVerifierService):
             enable_tls,
         )
         self._msg_count = msg_count
-        self._status = ProduceStatus()
+        self._status = ProduceStatus(self._topic)
         self._batch_max_bytes = batch_max_bytes
         self._fake_timestamp_ms = fake_timestamp_ms
         self._fake_timestamp_step_ms = fake_timestamp_step_ms
@@ -875,10 +874,11 @@ class AbstractConsumer(KgoVerifierService):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self._status = ConsumerStatus()
+        self._status = ConsumerStatus(self._topic)
 
     @property
     def consumer_status(self) -> ConsumerStatus:
+        assert self._status is not None and isinstance(self._status, ConsumerStatus)
         return cast(ConsumerStatus, self._status)
 
     def wait_total_reads(
@@ -1163,7 +1163,7 @@ class KgoVerifierConsumerGroupConsumer(AbstractConsumer):
 class ProduceStatus:
     def __init__(
         self,
-        topic=None,
+        topic: Topic,
         sent=0,
         acked=0,
         bad_offsets=0,
