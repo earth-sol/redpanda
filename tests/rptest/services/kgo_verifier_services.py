@@ -139,6 +139,9 @@ class KgoVerifierService(Service):
         inst.free()
         return inst
 
+    def process_name(self) -> str:
+        return f"{super().who_am_i()}.{self._topic}"
+
     def _release_port(self) -> None:
         for node in self.nodes:
             port_map = getattr(node, "kgo_verifier_ports", dict())
@@ -151,12 +154,12 @@ class KgoVerifierService(Service):
         while i in ports_in_use:
             i = i + 1
 
-        getattr(node, "kgo_verifier_ports", {})[self.who_am_i()] = i
+        getattr(node, "kgo_verifier_ports", {})[self.process_name()] = i
         return i
 
     @property
     def log_path(self) -> str:
-        return f"/tmp/{self.who_am_i()}.log"
+        return f"/tmp/{self.process_name()}.log"
 
     def _log_node_network_state(self, node: ClusterNode) -> None:
         """
