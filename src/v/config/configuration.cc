@@ -3274,9 +3274,18 @@ configuration::configuration()
       "When a node is unavailable for at least this timeout duration, it "
       "triggers Redpanda to move partitions off of the node. This property "
       "applies only when `partition_autobalancing_mode` is set to "
-      "`continuous`.      ",
+      "`continuous`.",
       {.needs_restart = needs_restart::no, .visibility = visibility::user},
       15min)
+  , partition_autobalancing_node_autodecommission_timeout_sec(
+      *this,
+      "partition_autobalancing_node_autodecommission_time",
+      "When a node is unavailable for at least this timeout duration, it "
+      "triggers Redpanda to decommission the node. This property "
+      "applies only when `partition_autobalancing_mode` is set to "
+      "`continuous`.",
+      {.needs_restart = needs_restart::no, .visibility = visibility::user},
+      std::nullopt)
   , partition_autobalancing_max_disk_usage_percent(
       *this,
       "partition_autobalancing_max_disk_usage_percent",
