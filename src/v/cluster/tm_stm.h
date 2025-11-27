@@ -244,8 +244,6 @@ public:
 
     ss::gate& gate() { return _gate; }
 
-    ss::future<> start() override;
-
     ss::future<checked<tx_metadata, tm_stm::op_status>>
       get_tx(kafka::transactional_id);
     ss::future<checked<tx_metadata, tm_stm::op_status>> finish_transaction(
@@ -326,9 +324,6 @@ public:
       kafka::transactional_id tid,
       tx_metadata::tx_partition ntp);
 
-    ss::future<checked<tx_metadata, tm_stm::op_status>>
-      update_tx(tx_metadata, model::term_id);
-
     model::partition_id get_partition() const {
         return _raft->ntp().tp.partition;
     }
@@ -372,6 +367,8 @@ private:
     ss::future<checked<model::term_id, tm_stm::op_status>> do_barrier();
     ss::future<checked<model::term_id, tm_stm::op_status>>
       do_sync(model::timeout_clock::duration);
+    ss::future<checked<tx_metadata, tm_stm::op_status>>
+      update_tx(tx_metadata, model::term_id);
     ss::future<checked<tx_metadata, tm_stm::op_status>>
       do_update_tx(tx_metadata, model::term_id);
     ss::future<tm_stm::op_status>

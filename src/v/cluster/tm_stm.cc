@@ -74,8 +74,6 @@ tm_stm::tm_stm(ss::logger& logger, raft::consensus* c)
       config::shard_local_cfg().transactional_id_expiration_ms.bind())
   , _ctx_log(logger, ssx::sformat("[{}]", _raft->ntp())) {}
 
-ss::future<> tm_stm::start() { co_await raft::persisted_stm<>::start(); }
-
 uint8_t tm_stm::active_snapshot_version() { return tm_snapshot::version; }
 
 std::optional<tx_metadata>
