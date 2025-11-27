@@ -3374,16 +3374,12 @@ class RedpandaService(Service, RedpandaServiceABC):
         self.wait_for_membership(first_start=first_start)
 
         self.logger.info("Verifying storage is in expected state")
-        storage = self.storage()
+        storage = self.storage(nodes=to_start)
         for node in storage.nodes:
-            # https://redpandadata.slack.com/archives/C07HD9U0EHL/p1762830593745199
-            if node not in to_start:  # pyright: ignore[reportUnnecessaryContains]
-                continue
-            raise RuntimeError("unreachable")
-            unexpected_ns = set(node.ns) - {"redpanda"}  # pyright: ignore[reportUnreachable]
+            unexpected_ns = set(node.ns) - {"redpanda"}
             if unexpected_ns:
-                for ns in unexpected_ns:  # pyright: ignore[reportUnreachable]
-                    self.logger.error(  # pyright: ignore[reportUnreachable]
+                for ns in unexpected_ns:
+                    self.logger.error(
                         f"node {node.name}: unexpected namespace: {ns}, "
                         f"topics: {set(node.ns[ns].topics)}"
                     )
@@ -3394,7 +3390,7 @@ class RedpandaService(Service, RedpandaServiceABC):
                 "kvstore",
             }
             if unexpected_rp_topics:
-                self.logger.error(  # pyright: ignore[reportUnreachable]
+                self.logger.error(
                     f"node {node.name}: unexpected topics in redpanda namespace: "
                     f"{unexpected_rp_topics}"
                 )
@@ -5484,7 +5480,7 @@ class RedpandaService(Service, RedpandaServiceABC):
         nodes: Collection[ClusterNode] | None = None,
         sizes: bool = False,
         scan_cache: bool = True,
-    ):
+    ) -> ClusterStorage:
         """
         :param nodes: if None, only report on started nodes. Otherwise, report
                       on the nodes in the `nodes` list parameter.
