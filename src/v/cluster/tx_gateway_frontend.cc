@@ -2872,6 +2872,8 @@ ss::future<tx::errc> tx_gateway_frontend::delete_partition_from_tx(
         co_return tx::errc::coordinator_not_available;
     }
 
+    auto holder = _gate.hold();
+
     auto leader = co_await wait_for_leader(tm_ntp.value());
     if (leader != _self) {
         vlog(
