@@ -199,6 +199,7 @@ public:
       model::record_batch batch,
       raft::replicate_options);
 
+    // Caller must keep the STM alive until it destructs the returned holder.
     ss::future<ss::basic_rwlock<>::holder> prepare_transfer_leadership();
 
     void testing_only_disable_auto_abort() { _is_autoabort_enabled = false; }
