@@ -118,7 +118,8 @@ class CompactionGapsTest(RedpandaTest):
             # # Disable iceberg
             dl.set_iceberg_mode_on_topic(self.topic_name, "disabled")
             # Append more data
-            self.produce_until_segment_count(8)
+            curr_count = self.partition_segments()
+            self.produce_until_segment_count(max(curr_count + 3, 8))
             # # Compact the data
             # # One closed segment and one open (current) segment
             self.wait_until_segment_count(2)
