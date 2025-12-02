@@ -80,12 +80,14 @@ compaction_sink::compaction_sink(
   model::topic_id_partition tp,
   const chunked_vector<offset_interval_set::interval>& dirty_range_intervals,
   const offset_interval_set& removable_tombstone_ranges,
+  metastore::compaction_epoch expected_compaction_epoch,
   io* io,
   compaction_committer* committer,
   object_builder::options opts)
   : _tp(tp)
   , _dirty_range_intervals(dirty_range_intervals)
   , _removable_tombstone_ranges(removable_tombstone_ranges)
+  , _expected_compaction_epoch(expected_compaction_epoch)
   , _io(io)
   , _committer(committer)
   , _opts(opts) {}
@@ -105,15 +107,18 @@ compaction_sink::initialize(compaction::sliding_window_reducer::source& src) {
 
     _start_offset = ct_src._extents.front().base_offset;
 
+    _job = co_await _committer->begin_compaction_job(_tp);
+
     auto& new_cleaned_ranges = ct_src._new_cleaned_ranges;
     new_cleaned_ranges.shrink_to_fit();
     _new_cleaned_ranges = std::move(new_cleaned_ranges);
 
     vlog(
       compaction_log.debug,
-      "Built compaction map for tidp {}, with {} keys (max allowed "
+      "Built compaction map for tidp {}, job id {} with {} keys (max allowed "
       "{})",
       _tp,
+      _job->id(),
       ct_src._map->size(),
       ct_src._map->capacity());
 
@@ -196,8 +201,7 @@ ss::future<> compaction_sink::flush(kafka::offset object_last_offset) {
       .info = std::move(object_info),
       .ntp_md = std::move(ntp_md)};
 
-    // TODO: Push to committer
-    //_committer->add_l1_object(_id, std::move(file_and_info));
+    _job->add_l1_object(std::move(file_and_info));
 }
 
 ss::future<ss::stop_iteration>
@@ -249,6 +253,10 @@ ss::future<> compaction_sink::finish_iteration(
 }
 
 ss::future<> compaction_sink::finalize() {
+    if (!_job) {
+        co_return;
+    }
+
     if (!_processed_extents.empty()) {
         auto last_offset
           = _processed_extents.make_reverse_stream().next().last_offset;
@@ -266,9 +274,10 @@ ss::future<> compaction_sink::finalize() {
     auto new_cleaned_ranges = get_new_cleaned_ranges(
       _new_cleaned_ranges, _processed_extents, _start_offset);
 
-    // TODO: finalize job with committer
-    std::ignore = std::move(removed_tombstone_ranges);
-    std::ignore = std::move(new_cleaned_ranges);
+    co_await _job->finalize(
+      std::move(new_cleaned_ranges),
+      std::move(removed_tombstone_ranges),
+      _expected_compaction_epoch);
 }
 
 } // namespace cloud_topics::l1

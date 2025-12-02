@@ -27,6 +27,7 @@ public:
       model::topic_id_partition,
       const chunked_vector<offset_interval_set::interval>&,
       const offset_interval_set&,
+      metastore::compaction_epoch,
       l1::io*,
       compaction_committer*,
       object_builder::options = {});
@@ -75,9 +76,13 @@ private:
     using interval_vec = chunked_vector<offset_interval_set::interval>;
     const interval_vec& _dirty_range_intervals;
     const offset_interval_set& _removable_tombstone_ranges;
+    const metastore::compaction_epoch _expected_compaction_epoch;
+
+    // The compaction job, if initialized, as returned by the `_committer`.
+    compaction_committer::compaction_job* _job{nullptr};
 
     io* _io;
-    [[maybe_unused]] compaction_committer* _committer;
+    compaction_committer* _committer;
 
     const object_builder::options _opts;
 
