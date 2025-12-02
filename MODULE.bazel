@@ -463,3 +463,12 @@ http_archive(
     strip_prefix = "grafana-12.2.1",
     urls = ["https://dl.grafana.com/grafana/release/12.2.1/grafana_12.2.1_18655849634_linux_arm64.tar.gz"],
 )
+
+http_archive(
+    name = "omb",
+    add_prefix = "omb",
+    build_file = "//bazel/thirdparty:omb.BUILD",
+    sha256 = "8b4cb43d5092cb76d43d6a3e3d58a9ad513d08cb5a87ff56ec609fff28b8e2ba",
+    strip_prefix = "openmessaging-benchmark-0.0.1-SNAPSHOT",
+    urls = ["https://perf-team-public.s3.us-west-2.amazonaws.com/tmp/omb_minimal_test.tar.gz"],
+)
