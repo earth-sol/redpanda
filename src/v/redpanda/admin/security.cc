@@ -164,7 +164,7 @@ security::scram_credential parse_scram_credential(const json::Document& doc) {
 
     if (!doc.HasMember("password") || !doc["password"].IsString()) {
         throw ss::httpd::bad_request_exception(
-          fmt::format("String password smissing"));
+          fmt::format("String password is missing"));
     }
     const auto password = doc["password"].GetString();
     validate_no_control(
