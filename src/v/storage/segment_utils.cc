@@ -397,7 +397,8 @@ ss::future<storage::index_state> do_copy_segment_data(
     bool may_have_tombstone_records = false;
     const bool past_tx_delete_horizon
       = internal::is_past_transaction_batch_delete_horizon(seg, cfg);
-    bool may_have_transaction_batches = false;
+    bool may_have_transaction_control_batches = false;
+    bool may_have_transaction_data_batches = false;
 
     auto offset_in_compacted_list =
       [compacted_offsets = std::move(compacted_offsets)](
@@ -417,7 +418,8 @@ ss::future<storage::index_state> do_copy_segment_data(
                           &may_have_tombstone_records,
                           &pb,
                           past_tx_delete_horizon,
-                          &may_have_transaction_batches](
+                          &may_have_transaction_control_batches,
+                          &may_have_transaction_data_batches](
                            const model::record_batch& b,
                            const model::record& r,
                            bool is_last_record_in_batch) {
@@ -433,7 +435,8 @@ ss::future<storage::index_state> do_copy_segment_data(
           past_tombstone_delete_horizon,
           may_have_tombstone_records,
           past_tx_delete_horizon,
-          may_have_transaction_batches);
+          may_have_transaction_control_batches,
+          may_have_transaction_data_batches);
     };
 
     auto copy_reducer = copy_data_segment_reducer(
@@ -487,8 +490,13 @@ ss::future<storage::index_state> do_copy_segment_data(
     // Set may_have_tombstone_records
     new_index.may_have_tombstone_records = may_have_tombstone_records;
 
-    // Set may_have_transaction_batches
-    new_index.may_have_transaction_batches = may_have_transaction_batches;
+    // Set may_have_transaction_control_batches
+    new_index.may_have_transaction_control_batches
+      = may_have_transaction_control_batches;
+
+    // Set may_have_transaction_data_batches
+    new_index.may_have_transaction_data_batches
+      = may_have_transaction_data_batches;
 
     if (
       seg->index().may_have_tombstone_records()
@@ -967,11 +975,19 @@ make_concatenated_segment(
           .self_compact_timestamp()
           .value();
 
-    // If any of the segments contain a transactional batch, then the new index
-    // should reflect that.
-    auto new_may_have_transaction_batches = std::ranges::any_of(
-      segments,
-      [](const auto& s) { return s->index().may_have_transaction_batches(); });
+    // If any of the segments contain a transactional control batch, then the
+    // new index should reflect that.
+    auto new_may_have_transaction_control_batches = std::ranges::any_of(
+      segments, [](const auto& s) {
+          return s->index().may_have_transaction_control_batches();
+      });
+
+    // If any of the segments contain a transactional data batch, then the new
+    // index should reflect that.
+    auto new_may_have_transaction_data_batches = std::ranges::any_of(
+      segments, [](const auto& s) {
+          return s->index().may_have_transaction_data_batches();
+      });
 
     segment_index index(
       index_path,
@@ -983,7 +999,8 @@ make_concatenated_segment(
       new_clean_compact_timestamp,
       new_may_have_tombstone_records,
       new_self_compact_timestamp,
-      new_may_have_transaction_batches);
+      new_may_have_transaction_control_batches,
+      new_may_have_transaction_data_batches);
 
     co_return std::make_tuple(
       ss::make_lw_shared<segment>(
@@ -1394,8 +1411,15 @@ bool is_past_transaction_batch_delete_horizon(
 
 bool has_removable_transaction_batches(
   ss::lw_shared_ptr<segment> seg, const compaction::compaction_config& cfg) {
-    return seg->index().may_have_transaction_batches()
-           && is_past_transaction_batch_delete_horizon(seg, cfg);
+    // If there are transactional data batches, we will unset the transactional
+    // bit during compaction.
+    auto has_data_batches = seg->index().may_have_transaction_data_batches();
+    // If there are removable control batches, they will be removed during
+    // compaction.
+    auto has_removable_control_batches
+      = seg->index().may_have_transaction_control_batches()
+        && is_past_transaction_batch_delete_horizon(seg, cfg);
+    return has_data_batches || has_removable_control_batches;
 }
 
 } // namespace storage::internal
