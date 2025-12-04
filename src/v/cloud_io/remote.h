@@ -73,7 +73,6 @@ public:
     /// can perform.
     size_t concurrency() const;
 
-    model::cloud_storage_backend backend() const;
     const provider& provider() const;
 
     bool is_batch_delete_supported() const;

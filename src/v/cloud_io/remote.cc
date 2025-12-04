@@ -209,10 +209,6 @@ ss::future<> remote::stop() {
 
 size_t remote::concurrency() const { return _pool.local().max_size(); }
 
-model::cloud_storage_backend remote::backend() const {
-    return _cloud_storage_backend;
-}
-
 const provider& remote::provider() const { return _provider; }
 
 bool remote::is_batch_delete_supported() const {
