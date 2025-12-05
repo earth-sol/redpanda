@@ -27,6 +27,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from requests.exceptions import HTTPError
 
+from rptest.util import expect_exception
 from rptest.utils.mode_checks import in_fips_environment
 from rptest.clients.kafka_cli_tools import KafkaCliTools, KafkaCliToolsError
 from rptest.clients.kcl import RawKCL
@@ -650,6 +651,52 @@ class SaslPlainTest(BaseScramTest):
             self.SaslPlainConfig.OVERRIDE_ON,
         ]
         self._make_topic(client, sasl_plain_enabled)
+
+    @cluster(num_nodes=3)
+    def test_plain_authn_short_password(self):
+        """
+        This test validates that SASL/PLAIN in fips mode fails gracefully when the user
+        provides a short password.
+        """
+        username = "test-user"
+        good_password = "sufficiently_long_password"
+        bad_password = "short-pwd"
+        RpkTool(
+            self.redpanda,
+            username=self.redpanda.SUPERUSER_CREDENTIALS.username,
+            password=self.redpanda.SUPERUSER_CREDENTIALS.password,
+            sasl_mechanism=self.redpanda.SUPERUSER_CREDENTIALS.algorithm,
+        ).sasl_allow_principal(
+            principal=username, operations=["all"], resource="topic", resource_name="*"
+        )
+        self.create_user(
+            username=username,
+            algorithm=str(self.ScramType.SCRAM_SHA_256),
+            password=good_password,
+        )
+
+        self._config_plain_authn(self.SaslPlainConfig.ON)
+
+        # We create the user with a good password to not have to worry about short password error
+        # there. This test simulates a user created before an update to a fips 140-3 version, that
+        # might have a short password. The length of the password check is done early, before checking
+        # the validity of the password. Since the password is wrong, this create_topic request will
+        # fail. We are interested to see how it will fail
+        client = RpkTool(
+            self.redpanda,
+            username=username,
+            password=bad_password,
+            sasl_mechanism="PLAIN",
+        )
+        with expect_exception(RpkException, lambda e: True):
+            client.create_topic("test-topic")
+        warn_in_logs = self.redpanda.search_log_any("password less than 14 characters")
+        if in_fips_environment():
+            assert warn_in_logs, "request should have failed because of password length"
+        else:
+            assert not warn_in_logs, (
+                "warning about password length should not be present"
+            )
 
 
 class SaslPlainTLSProvider(TLSProvider):
