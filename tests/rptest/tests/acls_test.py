@@ -68,7 +68,7 @@ class AccessControlListTestBase(RedpandaTest):
         # an indirect way to check that ACLs (and users) have propagated
         # to all nodes before we proceed.
         checkpoint_user = "_test_checkpoint"
-        self.admin.create_user(checkpoint_user, "_password", self.algorithm)
+        self.admin.create_user(checkpoint_user, "_checkpoint_password", self.algorithm)
 
         # wait for users to propagate to nodes
         def auth_metadata_propagated():
@@ -84,7 +84,7 @@ class AccessControlListTestBase(RedpandaTest):
 
 
 class AccessControlListTest(AccessControlListTestBase):
-    password = "password"
+    password = "password012345"
     algorithm = "SCRAM-SHA-256"
 
     def __init__(self, *args, **kwargs):
@@ -671,7 +671,7 @@ class AccessControlListTestUpgrade(AccessControlListTest):
 
 
 class AccessControlListAuthzTest(AccessControlListTestBase):
-    password = "password"
+    password = "password012345"
     algorithm = "SCRAM-SHA-256"
 
     def __init__(self, *args, **kwargs):

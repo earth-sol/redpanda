@@ -627,7 +627,7 @@ class PartitionReassignmentsTest(RedpandaTest):
 
 class PartitionReassignmentsACLsTest(RedpandaTest):
     topics = [TopicSpec()]
-    password = "password"
+    password = "password012345"
     algorithm = "SCRAM-SHA-256"
 
     def __init__(self, test_context):

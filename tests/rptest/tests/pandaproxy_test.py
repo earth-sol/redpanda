@@ -1462,7 +1462,7 @@ class PandaProxyTest(PandaProxyTestMethods):
 
 class PandaProxyBasicAuthTest(PandaProxyEndpoints):
     username = "red"
-    password = "panda"
+    password = "panda012345678"
 
     def __init__(self, context):
         security = SecurityConfig()
@@ -1760,14 +1760,14 @@ class PandaProxyBasicAuthTest(PandaProxyEndpoints):
 
         # Change admin password
         admin = Admin(self.redpanda)
-        admin.update_user(super_username, "new-secret", super_algorithm)
+        admin.update_user(super_username, "new-secret-password", super_algorithm)
 
         # Old password should fail
         result_raw = self._get_topics(auth=(super_username, super_password))
         assert result_raw.json()["error_code"] == 40101
 
         # New password should succeed.
-        result_raw = self._get_topics(auth=(super_username, "new-secret"))
+        result_raw = self._get_topics(auth=(super_username, "new-secret-password"))
         assert result_raw.status_code == requests.codes.ok
         assert result_raw.json()[0] == self.topic
 
@@ -1792,7 +1792,7 @@ class PandaProxyBasicAuthTest(PandaProxyEndpoints):
 
 class PandaProxyClientStopTest(PandaProxyEndpoints):
     username = "red"
-    password = "panda"
+    password = "panda012345678"
     algorithm = "SCRAM-SHA-256"
 
     topics = [TopicSpec()]
@@ -1886,7 +1886,7 @@ class PandaProxyClientStopTest(PandaProxyEndpoints):
 class User:
     def __init__(self, idx: int):
         self.username = f"user_{idx}"
-        self.password = f"secret_{self.username}"
+        self.password = f"secret_password_{self.username}"
         self.algorithm = "SCRAM-SHA-256"
         self.certificate = None
 

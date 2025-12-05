@@ -197,7 +197,7 @@ class ScramTest(BaseScramTest):
                 f"http://{hostname}:{port}/v1/security/users",
                 json={
                     "username": f"user_a_{i}",
-                    "password": "password",
+                    "password": "password012345",
                     "algorithm": "SCRAM-SHA-256",
                 },
                 allow_redirects=False,
@@ -223,7 +223,7 @@ class ScramTest(BaseScramTest):
                     f"http://{hostname}:{port}/v1/security/users",
                     json={
                         "username": f"user_a_{i}",
-                        "password": "password",
+                        "password": "password012345",
                         "algorithm": "SCRAM-SHA-256",
                     },
                     allow_redirects=True,
@@ -323,7 +323,7 @@ class ScramTest(BaseScramTest):
         This test validates the KIP-554 implementation of Redpanda
         """
         test_username = "test-user"
-        test_password = "test-password"
+        test_password = "test-password0"
         test_algorithm = scram_algo
 
         self.create_user(
@@ -339,7 +339,7 @@ class ScramTest(BaseScramTest):
     @cluster(num_nodes=3)
     def test_scram_kafka_api_create_user(self):
         test_username = "test-user"
-        test_password = "test-password"
+        test_password = "test-password0"
         test_algorithm = "SCRAM-SHA-256"
         iteration_count = 8192
 
@@ -376,7 +376,7 @@ class ScramTest(BaseScramTest):
     @cluster(num_nodes=3)
     def test_scram_kafka_api_modify_user(self):
         test_username = "test-user"
-        orig_password = "test-password"
+        orig_password = "test-password0"
         new_password = "new-password"
         orig_algorithm = "SCRAM-SHA-256"
         new_algorithm = "SCRAM-SHA-512"
@@ -401,7 +401,7 @@ class ScramTest(BaseScramTest):
     @cluster(num_nodes=3)
     def test_scram_kafka_api_delete_user(self):
         test_username = "test-user"
-        test_password = "test-password"
+        test_password = "test-password0"
         test_algorithm = "SCRAM-SHA-256"
 
         self.create_user(
@@ -607,7 +607,7 @@ class SaslPlainTest(BaseScramTest):
         and SCRAM-SHA-512 users.
         """
         username = "test-user"
-        password = "test-password"
+        password = "test-password0"
         RpkTool(
             self.redpanda,
             username=self.redpanda.SUPERUSER_CREDENTIALS.username,
@@ -1005,7 +1005,7 @@ class EscapedNewUserStrings(BaseScramTest):
             self.create_user(
                 username=username,
                 algorithm="SCRAM-SHA-256",
-                password="passwd",
+                password="passwd01234567",
                 expected_status_code=200,
             )
             users.append(username)
