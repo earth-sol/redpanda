@@ -287,7 +287,7 @@ ss::future<result<iobuf>> materialize_from_cloud_storage(
     // by increasing the load. And we do have data from the cloud
     // storage at this point anyway.
 
-    if (!!sr_guard.has_value()) {
+    if (sr_guard.has_value()) {
         // TODO: use proper priority class
         probe->num_cache_writes++;
         auto put_future = co_await ss::coroutine::as_future(
