@@ -346,6 +346,8 @@ ss::future<> impl::run_background_compaction() {
       // TODO: If we support snapshot reads we need to track the last seqno.
       .smallest_snapshot = _versions->last_seqno(),
     };
+    auto output_level = compaction.level() + 1_level;
+    auto max_file_size = _opts->levels[output_level].max_file_size;
     try {
         auto input = co_await _versions->make_input_iterator(&compaction);
         std::optional<internal::key> current_key;
@@ -408,7 +410,7 @@ ss::future<> impl::run_background_compaction() {
                 current.newest = std::max(key_seqno, current.newest);
                 co_await state.builder->add(internal::key(key), input->value());
                 // Close output file if it is big enough
-                if (state.builder->file_size() >= _opts->target_file_size()) {
+                if (state.builder->file_size() >= max_file_size) {
                     co_await state.finish_current_builder();
                 }
             }
