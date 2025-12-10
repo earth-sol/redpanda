@@ -445,18 +445,20 @@ ss::future<> impl::flush_memtable() {
     vassert(_imm, "immutable memtable required in order to flush a memtable");
     auto v = _versions->current();
     auto id = _versions->new_file_id();
+    auto& imm = *_imm;
+    auto level = imm->empty() ? 0_level
+                              : v->pick_level_for_memtable_output(
+                                  imm->min_key(), imm->max_key());
     auto result = co_await build_table(
       _persistence.data.get(),
       {.id = id, .epoch = _opts->database_epoch},
-      (*_imm)->create_iterator(),
+      imm->create_iterator(),
       _opts,
       &_as);
     if (!result) {
         _versions->reuse_file_id(id);
         co_return;
     }
-    auto level = v->pick_level_for_memtable_output(
-      result->smallest, result->largest);
     version_edit edit(*_opts);
     edit.set_last_seqno(result->newest_seqno);
     edit.add_file({
