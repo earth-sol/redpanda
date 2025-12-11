@@ -493,7 +493,7 @@ class ShadowLinkBasicTests(ShadowLinkTestBase):
         Test validates that when cluster linking is active, that topics can only be created by superusers
         """
         username = "test-user"
-        password = "test-password"
+        password = "test-password0"
         topic_name_prefix = "test-topic"
 
         superuser_rpk = RpkTool(

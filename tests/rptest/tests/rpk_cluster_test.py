@@ -99,7 +99,7 @@ class RpkClusterTest(RedpandaTest):
             self.logger.info(f"Trying write request with node {node.name} down")
             self._rpk.sasl_create_user(
                 f"testuser_{i}",
-                "password",
+                "password012345",
                 self.redpanda.SUPERUSER_CREDENTIALS.algorithm,
             )
 
