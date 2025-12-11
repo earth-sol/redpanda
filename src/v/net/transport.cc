@@ -131,6 +131,11 @@ ss::future<> base_transport::stop() {
     // it isn't dropping an un-stopped output stream when it
     // assigns to _out
     _out = {};
+
+    if (_in.has_value()) {
+        co_await _in->close();
+        _in = std::nullopt;
+    }
 }
 
 void base_transport::shutdown() noexcept {
