@@ -11,7 +11,6 @@
 #include "base/seastarx.h"
 #include "cloud_io/tests/s3_imposter.h"
 #include "cloud_storage_clients/client_pool.h"
-#include "cloud_storage_clients/tests/client_pool_builder.h"
 
 #include <seastar/core/abort_source.hh>
 #include <seastar/core/future.hh>
@@ -27,14 +26,16 @@
 
 #include <boost/test/tools/interface.hpp>
 
+#include <chrono>
+#include <exception>
+
 using namespace std::chrono_literals;
-using namespace cloud_storage_clients::tests;
 
 ss::logger test_log("test-log");
 static const uint16_t httpd_port_number = 4434;
 static constexpr const char* httpd_host_name = "localhost";
 
-static cloud_storage_clients::s3_configuration client_configuration() {
+static cloud_storage_clients::s3_configuration transport_configuration() {
     net::unresolved_address server_addr(httpd_host_name, httpd_port_number);
     cloud_storage_clients::s3_configuration conf;
     conf.uri = cloud_storage_clients::access_point_uri(httpd_host_name);
@@ -44,22 +45,43 @@ static cloud_storage_clients::s3_configuration client_configuration() {
     conf.service = cloud_roles::aws_service_name("s3");
     conf.url_style = cloud_storage_clients::s3_url_style::virtual_host;
     conf.server_addr = server_addr;
+    conf._probe = ss::make_shared<cloud_storage_clients::client_probe>(
+      net::metrics_disabled::yes,
+      net::public_metrics_disabled::yes,
+      cloud_roles::aws_region_name{"region"},
+      cloud_storage_clients::endpoint_url{"endpoint"});
     return conf;
 }
 
-static const client_pool_builder test_pool_builder{client_configuration()};
-
 SEASTAR_THREAD_TEST_CASE(test_client_pool_acquire_abortable) {
-    constexpr size_t num_connections_per_shard = 0;
+    auto sconf = ss::sharded_parameter([] {
+        auto conf = transport_configuration();
+        return conf;
+    });
+    auto conf = transport_configuration();
 
     ss::sharded<cloud_storage_clients::client_pool> pool;
-    auto stop_guard = test_pool_builder
-                        .connections_per_shard(num_connections_per_shard)
-                        .overdraft_policy(
-                          cloud_storage_clients::client_pool_overdraft_policy::
-                            borrow_if_empty)
-                        .build(pool)
-                        .get();
+    size_t num_connections_per_shard = 0;
+    pool
+      .start(
+        num_connections_per_shard,
+        sconf,
+        cloud_storage_clients::client_pool_overdraft_policy::borrow_if_empty)
+      .get();
+
+    pool
+      .invoke_on_all([&conf](cloud_storage_clients::client_pool& p) {
+          auto cred = cloud_roles::aws_credentials{
+            conf.access_key.value(),
+            conf.secret_key.value(),
+            std::nullopt,
+            conf.region,
+            cloud_roles::aws_service_name{"s3"}};
+          p.load_credentials(cred);
+      })
+      .get();
+    auto pool_stop = ss::defer([&pool] { pool.stop().get(); });
+
     ss::abort_source as;
 
     auto f = pool.local().acquire(as);
@@ -76,16 +98,31 @@ SEASTAR_THREAD_TEST_CASE(test_client_pool_acquire_abortable) {
 }
 
 SEASTAR_THREAD_TEST_CASE(test_client_pool_acquire_with_timeout) {
-    constexpr size_t num_connections_per_shard = 1;
+    auto sconf = ss::sharded_parameter([] {
+        auto conf = transport_configuration();
+        return conf;
+    });
+    auto conf = transport_configuration();
 
     ss::sharded<cloud_storage_clients::client_pool> pool;
-    auto stop_guard
-      = test_pool_builder.connections_per_shard(num_connections_per_shard)
-          .overdraft_policy(
-            cloud_storage_clients::client_pool_overdraft_policy::wait_if_empty)
-          .build(pool)
-          .get();
+    size_t num_connections_per_shard = 1;
+    pool
+      .start(
+        num_connections_per_shard,
+        sconf,
+        cloud_storage_clients::client_pool_overdraft_policy::wait_if_empty)
+      .get();
 
+    pool
+      .invoke_on_all([&conf](cloud_storage_clients::client_pool& p) {
+          auto cred = cloud_roles::aws_credentials{
+            conf.access_key.value(),
+            conf.secret_key.value(),
+            std::nullopt,
+            conf.region};
+          p.load_credentials(cred);
+      })
+      .get();
     auto pool_stop = ss::defer([&pool] { pool.stop().get(); });
 
     ss::abort_source as;
@@ -134,15 +171,32 @@ SEASTAR_THREAD_TEST_CASE(test_client_pool_acquire_with_timeout) {
 }
 
 SEASTAR_THREAD_TEST_CASE(test_client_pool_acquire_timeout) {
-    constexpr size_t num_connections_per_shard = 0;
+    auto sconf = ss::sharded_parameter([] {
+        auto conf = transport_configuration();
+        return conf;
+    });
+    auto conf = transport_configuration();
+
     ss::sharded<cloud_storage_clients::client_pool> pool;
-    auto stop_guard = test_pool_builder
-                        .connections_per_shard(num_connections_per_shard)
-                        .overdraft_policy(
-                          cloud_storage_clients::client_pool_overdraft_policy::
-                            borrow_if_empty)
-                        .build(pool)
-                        .get();
+    size_t num_connections_per_shard = 0;
+    pool
+      .start(
+        num_connections_per_shard,
+        sconf,
+        cloud_storage_clients::client_pool_overdraft_policy::borrow_if_empty)
+      .get();
+
+    pool
+      .invoke_on_all([&conf](cloud_storage_clients::client_pool& p) {
+          auto cred = cloud_roles::aws_credentials{
+            conf.access_key.value(),
+            conf.secret_key.value(),
+            std::nullopt,
+            conf.region};
+          p.load_credentials(cred);
+      })
+      .get();
+    auto pool_stop = ss::defer([&pool] { pool.stop().get(); });
 
     {
         // acquire should time out. no abort required.
