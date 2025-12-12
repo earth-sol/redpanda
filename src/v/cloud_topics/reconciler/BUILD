@@ -3,6 +3,21 @@ load("//bazel:build.bzl", "redpanda_cc_library")
 package(default_visibility = [":__subpackages__"])
 
 redpanda_cc_library(
+    name = "adaptive_interval",
+    srcs = [
+        "adaptive_interval.cc",
+    ],
+    hdrs = [
+        "adaptive_interval.h",
+    ],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/v/config",
+        "@seastar",
+    ],
+)
+
+redpanda_cc_library(
     name = "reconciliation_consumer",
     srcs = [
         "reconciliation_consumer.cc",
