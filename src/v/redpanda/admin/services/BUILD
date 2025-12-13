@@ -46,3 +46,14 @@ redpanda_cc_library(
         "@seastar",
     ],
 )
+
+redpanda_cc_library(
+    name = "security",
+    srcs = ["security.cc"],
+    hdrs = ["security.h"],
+    implementation_deps = [],
+    deps = [
+        "//proto/redpanda/core/admin/v2:security_redpanda_proto",
+        "//src/v/serde/protobuf:rpc",
+    ],
+)
