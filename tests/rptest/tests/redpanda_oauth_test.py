@@ -190,6 +190,19 @@ class RedpandaOIDCTestBase(Test):
         )
         return openid.token(grant_type="client_credentials")
 
+    def get_idp_request_count(self, nodes: list[ClusterNode]):
+        metrics = [
+            "security_idp_latency_seconds_count",
+        ]
+        samples = self.redpanda.metrics_samples(metrics, nodes, MetricsEndpoint.METRICS)
+
+        result = {}
+        for k in samples.keys():
+            result[k] = result.get(k, 0) + sum(
+                [int(s.value) for s in samples[k].samples]
+            )
+        return result["security_idp_latency_seconds_count"]
+
 
 class RedpandaOIDCTestMethods(RedpandaOIDCTestBase):
     def __init__(self, test_context, **kwargs):
@@ -398,21 +411,6 @@ class RedpandaOIDCTestMethods(RedpandaOIDCTestBase):
         kc_node = self.keycloak.nodes[0]
         rp_node = self.redpanda.nodes[0]
 
-        def get_idp_request_count():
-            metrics = [
-                "security_idp_latency_seconds_count",
-            ]
-            samples = self.redpanda.metrics_samples(
-                metrics, [rp_node], MetricsEndpoint.METRICS
-            )
-
-            result = {}
-            for k in samples.keys():
-                result[k] = result.get(k, 0) + sum(
-                    [int(s.value) for s in samples[k].samples]
-                )
-            return result["security_idp_latency_seconds_count"]
-
         client_id = CLIENT_ID
         service_user_id = self.create_service_user(client_id)
         cfg = self.keycloak.generate_oauth_config(kc_node, client_id)
@@ -451,11 +449,86 @@ class RedpandaOIDCTestMethods(RedpandaOIDCTestBase):
             }
         )
 
-        id_requests = get_idp_request_count()
+        id_requests = self.get_idp_request_count([rp_node])
 
         assert request_cache_invalidate(with_auth=True) == requests.codes.ok
 
-        assert id_requests < get_idp_request_count()
+        assert id_requests < self.get_idp_request_count([rp_node])
+
+    @cluster(num_nodes=4)
+    def test_admin_v2_refresh_oidc_keys(self):
+        """
+        Test the v2 admin API for refreshing OIDC keys.
+        This is the v2 equivalent of test_admin_invalidate_keys.
+        """
+
+        kc_node = self.keycloak.nodes[0]
+
+        client_id = CLIENT_ID
+        service_user_id = self.create_service_user(client_id)
+        cfg = self.keycloak.generate_oauth_config(kc_node, client_id)
+        token = self.get_client_credentials_token(cfg)
+
+        def refresh_oidc_keys(
+            with_auth: bool,
+        ) -> security_pb2.RefreshOidcKeysResponse:
+            admin_v2 = AdminV2(self.redpanda)
+            req = security_pb2.RefreshOidcKeysRequest()
+            return admin_v2.security().refresh_oidc_keys(
+                req,
+                extra_headers={"Authorization": f"Bearer {token['access_token']}"}
+                if with_auth
+                else None,
+            )
+
+        # At this point, admin API does not require auth and service_user_id is not a superuser
+        # Both calls should succeed
+        refresh_oidc_keys(with_auth=False)
+        refresh_oidc_keys(with_auth=True)
+
+        # Require Auth for Admin
+        self.redpanda.set_cluster_config({"admin_api_require_auth": True})
+
+        with expect_exception(
+            ConnectError,
+            lambda e: e.code == ConnectErrorCode.PERMISSION_DENIED,
+        ):
+            refresh_oidc_keys(with_auth=False)
+
+        with expect_exception(
+            ConnectError,
+            lambda e: e.code == ConnectErrorCode.PERMISSION_DENIED,
+        ):
+            refresh_oidc_keys(with_auth=True)
+
+        # Add service_user_id as a superuser
+        self.redpanda.set_cluster_config(
+            {
+                "superusers": [
+                    self.redpanda.SUPERUSER_CREDENTIALS.username,
+                    service_user_id,
+                ]
+            }
+        )
+
+        idp_request_counts_before = {
+            node: self.get_idp_request_count(nodes=[node])
+            for node in self.redpanda.nodes
+        }
+
+        refresh_oidc_keys(with_auth=True)
+
+        idp_request_counts_after = {
+            node: self.get_idp_request_count(nodes=[node])
+            for node in self.redpanda.nodes
+        }
+
+        for node in self.redpanda.nodes:
+            before = idp_request_counts_before[node]
+            after = idp_request_counts_after[node]
+            assert before < after, (
+                f"Expected more IdP requests on node {node.account.hostname}: before refresh: {before}, after refresh: {after}"
+            )
 
     @cluster(num_nodes=4)
     # https://redpandadata.atlassian.net/browse/ENG-307

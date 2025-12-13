@@ -13,12 +13,14 @@
 
 #include "cluster/controller.h"
 #include "proto/redpanda/core/admin/v2/security.proto.h"
+#include "redpanda/admin/proxy/client.h"
 
 namespace admin {
 
 class security_service_impl : public proto::admin::security_service {
 public:
-    explicit security_service_impl(cluster::controller* controller);
+    security_service_impl(
+      admin::proxy::client proxy_client, cluster::controller* controller);
 
     seastar::future<proto::admin::resolve_oidc_identity_response>
       resolve_oidc_identity(
@@ -33,6 +35,7 @@ public:
         proto::admin::revoke_oidc_sessions_request) override;
 
 private:
+    admin::proxy::client _proxy_client;
     cluster::controller* _controller;
 };
 

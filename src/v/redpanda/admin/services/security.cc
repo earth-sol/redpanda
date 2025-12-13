@@ -11,7 +11,9 @@
 
 #include "redpanda/admin/services/security.h"
 
+#include "redpanda/admin/proxy/context.h"
 #include "security/oidc_authenticator.h"
+#include "security/oidc_service.h"
 #include "security/request_auth.h"
 
 #include <seastar/core/coroutine.hh>
@@ -23,8 +25,10 @@ namespace {
 ss::logger securitylog{"admin_api_server/security_service"};
 } // namespace
 
-security_service_impl::security_service_impl(cluster::controller* controller)
-  : _controller(controller) {}
+security_service_impl::security_service_impl(
+  admin::proxy::client proxy_client, cluster::controller* controller)
+  : _proxy_client(std::move(proxy_client))
+  , _controller(controller) {}
 
 seastar::future<proto::admin::resolve_oidc_identity_response>
 security_service_impl::resolve_oidc_identity(
@@ -79,9 +83,27 @@ security_service_impl::resolve_oidc_identity(
 
 seastar::future<proto::admin::refresh_oidc_keys_response>
 security_service_impl::refresh_oidc_keys(
-  serde::pb::rpc::context, proto::admin::refresh_oidc_keys_request) {
-    throw serde::pb::rpc::unimplemented_exception(
-      "refresh_oidc_keys is not implemented");
+  serde::pb::rpc::context ctx, proto::admin::refresh_oidc_keys_request) {
+    vlog(securitylog.debug, "Refreshing OIDC keys.");
+
+    co_await _controller->get_oidc_service().invoke_on_all(
+      [](security::oidc::service& s) { return s.refresh_keys(); });
+
+    if (!proxy::is_proxied(ctx)) {
+        vlog(securitylog.debug, "Broadcasting request to other nodes");
+
+        auto clients = _proxy_client.make_clients_for_other_nodes<
+          proto::admin::security_service_client>();
+
+        for (auto& client_pair : clients) {
+            auto& [node_id, client] = client_pair;
+            vlog(
+              securitylog.trace, "Proxying refresh_oidc_keys to {}", node_id);
+            co_await client.refresh_oidc_keys(ctx, {});
+        }
+    }
+
+    co_return proto::admin::refresh_oidc_keys_response{};
 }
 
 seastar::future<proto::admin::revoke_oidc_sessions_response>
