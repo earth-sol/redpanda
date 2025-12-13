@@ -120,7 +120,13 @@ ss::future<client::request_response_t> client::make_request(
     auto verb = header.method();
     auto target = header.target();
     ss::sstring target_str(target.data(), target.size());
-    prefix_logger ctxlog(http_log, ssx::sformat("[{}]", target_str));
+    prefix_logger ctxlog(
+      http_log,
+      ssx::sformat(
+        "[{}:{}{}]",
+        server_address().host(),
+        server_address().port(),
+        target_str));
     vlog(ctxlog.trace, "client.make_request {}", header);
 
     auto req = ss::make_shared<request_stream>(this, std::move(header));
