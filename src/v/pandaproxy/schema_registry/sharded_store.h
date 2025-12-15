@@ -229,15 +229,12 @@ private:
       schema_id id,
       is_deleted deleted);
 
-    ss::future<> maybe_update_max_schema_id(schema_id id);
-
     ss::future<schema_id> project_schema_id();
 
     ss::smp_submit_to_options _smp_opts;
     ss::sharded<store> _store;
 
     ///\brief Access must occur only on shard 0.
-    schema_id _next_schema_id{1};
 };
 
 } // namespace pandaproxy::schema_registry

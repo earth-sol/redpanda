@@ -775,6 +775,23 @@ public:
         }
     };
 
+    /// \brief Get the schema ID to be used for next insert
+    schema_id project_schema_id() {
+        // This is very simple because we only allow one write in
+        // flight at a time.  Could be extended to track N in flight
+        // operations if needed.  _next_schema_id gets updated
+        // if the operation was successful, as a side effect
+        // of applying the write to the store.
+        return _next_schema_id;
+    }
+
+    void maybe_update_max_schema_id(schema_id id) {
+        auto& nsi = _next_schema_id;
+        auto old = nsi;
+        nsi = std::max(nsi, id + schema_id{1});
+        vlog(srlog.debug, "next_schema_id: {} -> {}", old, nsi);
+    }
+
 private:
     struct schema_entry {
         explicit schema_entry(schema_definition definition)
@@ -906,12 +923,16 @@ private:
     // Replicated fields (kept on all shards):
     //   _compatibility
     //   _mode
+    //
+    // Only on shard 0:
+    //   _next_schema_id
 
     schema_map _schemas;
     subject_map _subjects;
     chunked_vector<schema_id> _marked_schemas;
     compatibility_level _compatibility{compatibility_level::backward};
     mode _mode{mode::read_write};
+    schema_id _next_schema_id{1};
 
     is_mutable _mutable;
     metrics::internal_metric_groups _metrics;
