@@ -271,7 +271,12 @@ security::auth_result connection_context::authorized(
     }
 
     return authorized_user(
-      get_principal(), operation, name, quiet, superuser_required);
+      get_principal(),
+      operation,
+      name,
+      quiet,
+      superuser_required,
+      get_groups());
 }
 
 template security::auth_result connection_context::authorized<model::topic>(
@@ -306,7 +311,8 @@ security::auth_result connection_context::authorized_user(
   security::acl_operation operation,
   const T& name,
   authz_quiet quiet,
-  superuser_required superuser_required) {
+  superuser_required superuser_required,
+  const chunked_vector<security::acl_principal>&) {
     auto authorized = _server.authorizer().authorized(
       name,
       operation,
@@ -369,7 +375,8 @@ connection_context::authorized_user<model::topic>(
   security::acl_operation operation,
   const model::topic& name,
   authz_quiet quiet,
-  superuser_required);
+  superuser_required,
+  const chunked_vector<security::acl_principal>& groups);
 
 template security::auth_result
 connection_context::authorized_user<kafka::group_id>(
@@ -377,7 +384,8 @@ connection_context::authorized_user<kafka::group_id>(
   security::acl_operation operation,
   const kafka::group_id& name,
   authz_quiet quiet,
-  superuser_required);
+  superuser_required,
+  const chunked_vector<security::acl_principal>& groups);
 
 template security::auth_result
 connection_context::authorized_user<kafka::transactional_id>(
@@ -385,7 +393,8 @@ connection_context::authorized_user<kafka::transactional_id>(
   security::acl_operation operation,
   const kafka::transactional_id& name,
   authz_quiet quiet,
-  superuser_required);
+  superuser_required,
+  const chunked_vector<security::acl_principal>& groups);
 
 template security::auth_result
 connection_context::authorized_user<security::acl_cluster_name>(
@@ -393,7 +402,8 @@ connection_context::authorized_user<security::acl_cluster_name>(
   security::acl_operation operation,
   const security::acl_cluster_name& name,
   authz_quiet quiet,
-  superuser_required);
+  superuser_required,
+  const chunked_vector<security::acl_principal>& groups);
 
 ss::future<> connection_context::revoke_credentials(std::string_view name) {
     if (

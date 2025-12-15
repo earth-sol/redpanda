@@ -305,7 +305,8 @@ private:
       security::acl_operation operation,
       const T& name,
       authz_quiet quiet,
-      superuser_required superuser_required);
+      superuser_required superuser_required,
+      const chunked_vector<security::acl_principal>& groups);
 
     security::acl_principal get_principal() const {
         if (_mtls_state) {
