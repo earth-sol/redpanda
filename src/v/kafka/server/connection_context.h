@@ -317,6 +317,8 @@ private:
         return security::acl_principal{security::principal_type::user, {}};
     }
 
+    const chunked_vector<security::acl_principal>& get_groups() const;
+
     bool is_finished_parsing() const;
 
     // Reserve units from memory from the memory semaphore in proportion

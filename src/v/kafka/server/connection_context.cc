@@ -606,6 +606,15 @@ ss::future<> connection_context::handle_auth_v0(const size_t size) {
     co_await conn->write(std::move(msg));
 }
 
+const chunked_vector<security::acl_principal>&
+connection_context::get_groups() const {
+    if (_sasl && _sasl->has_mechanism()) {
+        return _sasl->mechanism().groups();
+    }
+    static const chunked_vector<security::acl_principal> empty;
+    return empty;
+}
+
 bool connection_context::is_finished_parsing() const {
     return conn->input().eof() || abort_requested();
 }
