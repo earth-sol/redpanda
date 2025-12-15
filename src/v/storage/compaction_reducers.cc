@@ -140,6 +140,10 @@ model::record_batch copy_data_segment_reducer::make_placeholder_batch(
     new_hdr.last_offset_delta = hdr.last_offset_delta;
     new_hdr.first_timestamp = hdr.first_timestamp;
     new_hdr.max_timestamp = hdr.max_timestamp;
+    // Maintain idempotency related state
+    new_hdr.base_sequence = hdr.base_sequence;
+    new_hdr.producer_id = hdr.producer_id;
+    new_hdr.producer_epoch = hdr.producer_epoch;
     auto no_records = iobuf{};
     new_hdr.reset_size_checksum_metadata(no_records);
     return model::record_batch(
