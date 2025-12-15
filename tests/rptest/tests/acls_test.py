@@ -633,9 +633,9 @@ class AccessControlListTest(AccessControlListTestBase):
         self.check_permissions(pass_w_cluster_user=True)
 
     @cluster(num_nodes=3)
-    def test_smoke_test_group_acl(self):
+    def test_group_acl_smoke_test(self):
         """
-        Simple test that validates that ACL principals with Group: prefix is
+        Simple test that validates that ACL principals with Group: prefix are
         permitted
         """
         self.prepare_cluster(use_tls=False, use_sasl=True)
