@@ -95,12 +95,11 @@ write_pipeline<Clock>::write_and_debounce(
           _mem_budget, sz, this->get_root_rtc().root_abort_source());
     }
     _bytes_total += sz;
-    auto stage = this->first_stage();
     l0::write_request<Clock> request(
-      std::move(ntp), min_epoch, std::move(data_chunk), timeout, stage);
-    transfer_stage_bytes(unassigned_pipeline_stage, stage, sz);
-    auto stage_cleanup = ss::defer([this, &request, sz] {
-        transfer_stage_bytes(request.stage, unassigned_pipeline_stage, sz);
+      std::move(ntp), min_epoch, std::move(data_chunk), timeout);
+    auto stage_cleanup = ss::defer([this, &request] {
+        transfer_stage_bytes(
+          request.stage, unassigned_pipeline_stage, request.size_bytes());
     });
     vlog(
       cd_log.trace,
@@ -111,10 +110,7 @@ write_pipeline<Clock>::write_and_debounce(
         timeout - Clock::now())
         .count());
     auto fut = request.response.get_future();
-    this->get_pending().push_back(request);
-
-    // Notify all active event_filter instances
-    this->signal(stage);
+    reenqueue(request, /*signal=*/true);
 
     auto res = co_await std::move(fut);
     if (!res.has_value()) {
