@@ -129,8 +129,8 @@ struct options {
 
     // The approximate max number of SST files that should be opened at one
     // time.
-    constexpr static uint32_t default_max_open_files = 1000;
-    uint32_t max_open_files = default_max_open_files;
+    constexpr static size_t default_max_open_files = 1000;
+    size_t max_open_files = default_max_open_files;
 
     // If non-zero, the number of fibers to use to pre-open all the files in the
     // database, which populates the table cache.
