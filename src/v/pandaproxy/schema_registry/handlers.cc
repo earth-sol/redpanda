@@ -20,6 +20,7 @@
 #include "pandaproxy/schema_registry/authorization.h"
 #include "pandaproxy/schema_registry/error.h"
 #include "pandaproxy/schema_registry/errors.h"
+#include "pandaproxy/schema_registry/exceptions.h"
 #include "pandaproxy/schema_registry/requests/acls.h"
 #include "pandaproxy/schema_registry/requests/compatibility.h"
 #include "pandaproxy/schema_registry/requests/config.h"
@@ -110,6 +111,35 @@ void log_response(const ss::http::request& req, const iobuf& resp) {
           parser.read_string(
             std::min(parser.bytes_left(), max_log_line_bytes)));
     }
+}
+
+// If the provided schema lacks metadata, inherit from latest version
+ss::future<subject_schema> make_canonical_schema_with_metadata(
+  sharded_store& st, subject_schema unparsed, normalize norm, mode mode) {
+    auto schema = co_await st.make_canonical_schema(std::move(unparsed), norm);
+    if (mode != mode::import && !schema.def().meta().has_value()) {
+        try {
+            auto latest = co_await st.get_subject_schema(
+              schema.sub(), std::nullopt, include_deleted::no);
+            if (auto meta = latest.schema.def().meta(); meta.has_value()) {
+                auto [r_sub, r_schema] = std::move(schema).destructure();
+                auto [r_def, r_type, r_refs, r_meta]
+                  = std::move(r_schema).destructure();
+                schema = subject_schema{
+                  std::move(r_sub),
+                  {std::move(r_def),
+                   r_type,
+                   std::move(r_refs),
+                   std::move(meta)}};
+            }
+        } catch (exception& e) {
+            if (!failed_subject_schema_lookup(e.code())) {
+                throw;
+            }
+            // No prior version, nothing to inherit
+        }
+    }
+    co_return schema;
 }
 
 ss::future<server::reply_t>
@@ -481,18 +511,22 @@ post_subject(server::request_t rq, server::reply_t rp) {
       norm,
       inc_del,
       format);
+
+    auto& st = rq.service().schema_store();
+
     // We must sync
     co_await rq.service().writer().read_sync();
 
     // Force 40401 if no subject
-    co_await rq.service().schema_store().get_versions(sub, inc_del);
+    co_await st.get_versions(sub, inc_del);
 
     subject_schema schema;
     try {
         auto unparsed = co_await rjson_parse(
           *rq.req, post_subject_versions_request_handler<>{sub});
-        schema = co_await rq.service().schema_store().make_canonical_schema(
-          std::move(unparsed.def), norm);
+        const auto mode = co_await st.get_mode(sub, default_to_global::yes);
+        schema = co_await make_canonical_schema_with_metadata(
+          st, std::move(unparsed.def), norm, mode);
     } catch (const exception& e) {
         if (e.code() == error_code::schema_empty) {
             throw as_exception(invalid_subject_schema(sub));
@@ -552,11 +586,14 @@ post_subject_versions(server::request_t rq, server::reply_t rp) {
         unparsed.id = invalid_schema_id;
     }
 
+    const auto mode = co_await st.get_mode(sub, default_to_global::yes);
+
     stored_schema schema{
-      co_await st.make_canonical_schema(std::move(unparsed.def), norm),
-      unparsed.version.value_or(invalid_schema_version),
-      unparsed.id.value_or(invalid_schema_id),
-      is_deleted::no};
+      .schema = co_await make_canonical_schema_with_metadata(
+        st, std::move(unparsed.def), norm, mode),
+      .version = unparsed.version.value_or(invalid_schema_version),
+      .id = unparsed.id.value_or(invalid_schema_id),
+      .deleted = is_deleted::no};
 
     // Validate the schema (may throw)
     co_await st.validate_schema(schema.schema.share());
@@ -600,7 +637,6 @@ post_subject_versions(server::request_t rq, server::reply_t rp) {
 
     if (!matched) {
         // Check if the request is appropriate for the mode
-        const auto mode = co_await st.get_mode(sub, default_to_global::yes);
         if (mode == mode::read_only) {
             throw as_exception(mode_is_readonly(sub));
         }
