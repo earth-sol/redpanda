@@ -20,6 +20,7 @@ redpanda_cc_library(
 redpanda_cc_library(
     name = "exceptions",
     hdrs = ["exceptions.h"],
+    visibility = ["//visibility:public"],
     deps = ["@fmt"],
 )
 
