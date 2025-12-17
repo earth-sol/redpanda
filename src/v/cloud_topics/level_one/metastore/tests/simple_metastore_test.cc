@@ -1550,17 +1550,23 @@ TEST(SimpleMetastoreTest, TestSetStartWithCompactionState) {
     ASSERT_EQ(21_o, offsets_res->next_offset);
 
     // Only the [16, 20] should remain dirty.
-    auto cmp_after = m.get_compaction_offsets(tp, 3000_t).get();
+    auto to_collect = metastore::compaction_info_spec{
+      .tidp = tp, .tombstone_removal_upper_bound_ts = 3000_t};
+    auto cmp_after = m.get_compaction_info(to_collect).get();
     ASSERT_TRUE(cmp_after.has_value());
     EXPECT_THAT(
-      cmp_after->dirty_ranges.to_vec(),
+      cmp_after->offsets_response.dirty_ranges.to_vec(),
       testing::ElementsAre(MatchesRange(16_o, 20_o)));
 
     // Removable tombstone ranges should also be adjusted to reflect the new
     // start.
     EXPECT_THAT(
-      cmp_after->removable_tombstone_ranges.to_vec(),
+      cmp_after->offsets_response.removable_tombstone_ranges.to_vec(),
       testing::ElementsAre(MatchesRange(10_o, 15_o)));
+
+    // Assert that the new start offset is reported correctly in the compaction
+    // info as well.
+    ASSERT_EQ(cmp_after->start_offset, 10_o);
 }
 
 TEST(SimpleMetastoreTest, TestDirtyRatio) {
@@ -1594,6 +1600,7 @@ TEST(SimpleMetastoreTest, TestDirtyRatio) {
     auto compaction_info = m.get_compaction_info(to_collect).get();
     ASSERT_TRUE(compaction_info.has_value());
     ASSERT_FLOAT_EQ(compaction_info->dirty_ratio, 1.0);
+    ASSERT_EQ(compaction_info->start_offset, 0_o);
 
     // Clean range is now [0, 9]. Only one extent still has dirty offsets.
     {
@@ -1612,6 +1619,7 @@ TEST(SimpleMetastoreTest, TestDirtyRatio) {
     compaction_info = m.get_compaction_info(to_collect).get();
     ASSERT_TRUE(compaction_info.has_value());
     ASSERT_FLOAT_EQ(compaction_info->dirty_ratio, 0.5);
+    ASSERT_EQ(compaction_info->start_offset, 0_o);
 
     // Clean range is now [0, 19], the entire log is clean.
     {
@@ -1630,6 +1638,7 @@ TEST(SimpleMetastoreTest, TestDirtyRatio) {
     compaction_info = m.get_compaction_info(to_collect).get();
     ASSERT_TRUE(compaction_info.has_value());
     ASSERT_FLOAT_EQ(compaction_info->dirty_ratio, 0.0);
+    ASSERT_EQ(compaction_info->start_offset, 0_o);
 }
 
 TEST(SimpleMetastoreTest, TestAddGetOffsetAfterBytes) {
