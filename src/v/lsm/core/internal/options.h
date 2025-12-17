@@ -32,6 +32,11 @@ struct options {
     // write operations to fail. However, read operations can be performed.
     bool readonly = false;
 
+    // The scheduling group for background operations in the LSM tree, such as
+    // memtable flushing and compaction. Note that this is unused if the
+    // database is in readonly mode.
+    ss::scheduling_group compaction_scheduling_group;
+
     struct level_config {
         // The level number in the database.
         internal::level number;
@@ -121,11 +126,16 @@ struct options {
     constexpr static size_t default_level_one_compaction_trigger = 4;
     size_t level_one_compaction_trigger = default_level_one_compaction_trigger;
 
+    // Maximum bytes of overlaps in grandparent (i.e., level+2) before we
+    // stop building a single file in a level->level+1 compaction.
     size_t max_grandparent_overlap_bytes(internal::level lvl) const {
         static constexpr size_t multiplier = 10;
         return multiplier * levels[lvl].max_file_size;
     }
 
+    // Maximum number of bytes in all compacted files. We avoid expanding
+    // the lower level file set of a compaction if it would make the
+    // total compaction cover more than this many bytes.
     size_t expanded_compaction_byte_size_limit(internal::level lvl) const {
         static constexpr size_t multiplier = 25;
         return multiplier * levels[lvl].max_file_size;
