@@ -128,6 +128,16 @@ public:
       ());
 
     MOCK_METHOD(
+      ss::future<std::optional<cloud_io::cache_item_stream>>,
+      get_stream_range,
+      (std::filesystem::path key,
+       uint64_t offset,
+       uint64_t length,
+       size_t read_buffer_size,
+       unsigned int read_ahead),
+      ());
+
+    MOCK_METHOD(
       ss::future<>,
       put,
       (std::filesystem::path key,

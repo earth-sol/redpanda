@@ -56,9 +56,15 @@ ss::future<result<chunked_vector<materialized_extent>>> materialize_sorted_run(
             if (!res.has_value()) {
                 co_return res.error();
             }
-            hydrated.insert(
-              std::make_pair(
-                back.meta.id, back.object.share(0, back.object.size_bytes())));
+            // Only cache the full object for sharing if it wasn't a range read.
+            // Range reads (res.value() == true) only contain the extent's data,
+            // not the full L0 object.
+            if (!res.value()) {
+                hydrated.insert(
+                  std::make_pair(
+                    back.meta.id,
+                    back.object.share(0, back.object.size_bytes())));
+            }
         }
     }
     co_return std::move(extents);
