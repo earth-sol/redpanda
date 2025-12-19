@@ -71,6 +71,66 @@ build --@seastar//:stack_guards=True
 # Debug mode by default. Disabled in release builds.
 build --@seastar//:debug=True
 
+# -base configs generally aren't meant to be used directly but are
+# helpers to DRY later user-facing configs
+
+# base for all sanitizer configs
+# seastar has to be run with system allocator when using ASAN
+build:san-base --@seastar//:system_allocator=True
+build:san-base --linkopt=-fsanitize-link-c++-runtime
+
+# base for dev configs
+build:dev-base --config=san-asan-only
+# Og is similar to O1 but gives slightly better debugging experience
+build:dev-base --copt=-Og
+
+####################################################
+# MIXIN CONFIGS
+#
+# These configurations are ones you can plausibly add to your build
+# command in addition to a single primary build mode in order to
+# opt-in to specific features.
+#
+# That's the idea anyway: in practice not all mixins will work
+# together, nor do all mixins work in all build modes. In those cases
+# we try to note the restrictions below.
+####################################################
+
+#########################
+## debug symbols mixins #
+#########################
+
+# line numbers only: backtrace decoding will work, not good for debugger
+build:dbgsym-lines --copt=-gline-tables-only --strip=never
+# full symbols, great for debugging
+build:dbgsym-all --copt=-g --strip=never
+
+#####################
+## sanitizer mixins #
+#####################
+
+# san-asan-only mixin: only enables address sanitizer
+build:san-asan-only --config=san-base
+build:san-asan-only --//bazel:sanitizer_mode=asan
+build:san-asan-only    --copt=-fsanitize=address
+build:san-asan-only --linkopt=-fsanitize=address
+
+# san-all mixin: enables all sanitizers
+build:san-all  --config=san-base
+build:san-all  --//bazel:sanitizer_mode=all
+build:san-all     --copt=-fsanitize=address,undefined,vptr,function,alignment
+build:san-all  --linkopt=-fsanitize=address,undefined,vptr,function,alignment
+
+################################################
+# PRIMARY BUILD MODES
+#
+# Primary build modes define the overall build configuration. It only makes sense
+# to select one of these in a given bazel invocation (or zero, which is the same
+# as selecting fastbuild).
+#
+# These map directly to BUILD_TYPE in task/cmake #
+##################################################
+
 # =================================
 # Fastbuild
 # =================================
@@ -79,16 +139,21 @@ build --@seastar//:debug=True
 build:fastbuild --build
 
 # =================================
+# Dev
+# =================================
+# Development build mode, intended to be best for non-debugger development.
+# Good build speed, good runtime speed.
+build:dev --config=dev-base --config=dbgsym-lines
+
+# =================================
 # Debug
 # =================================
+# Debug mode used in the "debug" CI builds and includes all sanitizers,
+# and full symbols.
 build:debug --compilation_mode=dbg
-build:debug --copt -fsanitize=address,undefined,vptr,function,alignment
-build:debug --linkopt -fsanitize=address,undefined,vptr,function,alignment
-build:debug --linkopt -fsanitize-link-c++-runtime
-build:debug --copt -O1
-build:debug --//bazel:sanitizer_mode=all
-# seastar has to be run with system allocator when using sanitizers
-build:debug --@seastar//:system_allocator=True
+build:debug --config=san-all
+build:debug --config=dbgsym-all
+build:debug --copt=-O1
 
 
 # =================================
@@ -136,6 +201,9 @@ build:secure --config=relro
 # =================================
 # Release
 # =================================
+# Enables full optimization, and other release features. Simply using
+# --config=release doesn't create a _true_ release binary, that needs at
+# least --stamp=full and PGO-specific compile steps (outside of bazel).
 build:release --compilation_mode opt
 build:release --config=secure
 build:release --copt -mllvm --copt -inline-threshold=2500
