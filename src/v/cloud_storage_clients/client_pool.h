@@ -18,10 +18,11 @@
 #include "ssx/watchdog.h"
 #include "utils/stop_signal.h"
 
-#include <seastar/core/circular_buffer.hh>
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/sharded.hh>
 #include <seastar/core/shared_ptr.hh>
+
+#include <unordered_map>
 
 namespace cloud_storage_clients {
 
@@ -39,7 +40,7 @@ inline constexpr ss::shard_id self_config_shard = ss::shard_id{0};
 
 /// Connection pool implementation
 /// All connections share the same configuration
-class client_pool
+class client_pool final
   : public ss::weakly_referencable<client_pool>
   , public ss::peering_sharded_service<client_pool> {
 public:
@@ -180,6 +181,24 @@ public:
     }
 
 private:
+    /// An entry in the idle clients collection, combining ownership with
+    /// intrusive list membership for LRU ordering.
+    struct idle_entry {
+        explicit idle_entry(client_ptr p)
+          : ptr(std::move(p)) {}
+        idle_entry(const idle_entry&) = delete;
+        idle_entry& operator=(const idle_entry&) = delete;
+        idle_entry(idle_entry&& other) noexcept
+          : ptr(std::move(other.ptr)) {
+            _hook.swap_nodes(other._hook);
+        }
+        idle_entry& operator=(idle_entry&&) = delete;
+        ~idle_entry() = default;
+
+        client_ptr ptr;
+        intrusive_list_hook _hook;
+    };
+
     ss::future<> client_self_configure(
       std::optional<std::reference_wrapper<stop_signal>>
         application_stop_signal);
@@ -191,12 +210,30 @@ private:
 
     void populate_client_pool();
     client_ptr make_client() noexcept;
-    void release(client_ptr leased);
 
-    /// Return number of clients which wasn't utilized
+    /// Return [0, 100] normalized number of clients currently in use by this
+    /// pool (leased locally or lent to other shards) .
     size_t normalized_num_clients_in_use() const;
-    bool borrow_one(unsigned other);
-    void return_one(unsigned other);
+    bool borrow_one(unsigned other) noexcept;
+    void return_one(unsigned other) noexcept;
+
+    /// Add a new idle client to the pool.
+    void emplace_idle() noexcept;
+
+    /// Pop the most recently used idle client from the pool.
+    [[nodiscard]]
+    client_ptr pop_most_recently_used() noexcept;
+
+    /// Pop the least recently used idle client from the pool.
+    [[nodiscard]]
+    client_ptr pop_least_recently_used() noexcept;
+
+    /// Release a leased client back to the pool as most recently used.
+    void release_most_recently_used(client_ptr leased) noexcept;
+
+    /// Replace the least recently used idle client with the provided one.
+    [[nodiscard]] client_ptr
+    replace_least_recently_used(client_ptr leased) noexcept;
 
     void update_usage_stats();
 
@@ -213,9 +250,17 @@ private:
     ss::shared_ptr<client_probe> _probe;
     client_pool_overdraft_policy _policy;
 
-    ss::circular_buffer<client_ptr> _pool;
-    // List of all connections currently used by clients
+    // Authoritative ownership of all idle clients.
+    std::unordered_map<const client*, idle_entry> _idle_clients;
+
+    // Approximately LRU list of idle clients for reuse.
+    // Cold clients are at the front. Hot clients are at the back.
+    intrusive_list<idle_entry, &idle_entry::_hook> _idle_clients_lru;
+
+    // List of all connections currently used by clients, includes borrowed
+    // connections.
     intrusive_list<client_lease, &client_lease::_hook> _leased;
+
     ss::condition_variable _cvar;
     ss::abort_source _as;
     ss::gate _gate;
