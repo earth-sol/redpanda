@@ -702,9 +702,9 @@ simple_metastore::get_compaction_info(
         return std::unexpected(earliest_dirty_ts.error());
     }
 
-    auto offsets = get_compaction_offsets(state, tidp, ts);
-    if (!offsets.has_value()) {
-        return std::unexpected(offsets.error());
+    auto compact_offsets = get_compaction_offsets(state, tidp, ts);
+    if (!compact_offsets.has_value()) {
+        return std::unexpected(compact_offsets.error());
     }
 
     auto compaction_epoch = get_compaction_epoch(state, tidp);
@@ -712,11 +712,17 @@ simple_metastore::get_compaction_info(
         return std::unexpected(compaction_epoch.error());
     }
 
+    auto log_offsets = get_offsets(state, tidp);
+    if (!log_offsets.has_value()) {
+        return std::unexpected(log_offsets.error());
+    }
+
     return compaction_info_response{
       .dirty_ratio = dirty_ratio.value(),
       .earliest_dirty_ts = earliest_dirty_ts.value(),
-      .offsets_response = std::move(offsets).value(),
-      .compaction_epoch = compaction_epoch.value()};
+      .offsets_response = std::move(compact_offsets).value(),
+      .compaction_epoch = compaction_epoch.value(),
+      .start_offset = log_offsets.value().start_offset};
 }
 
 ss::future<std::expected<metastore::compaction_info_map, metastore::errc>>

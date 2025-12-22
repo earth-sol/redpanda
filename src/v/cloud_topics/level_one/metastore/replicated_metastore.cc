@@ -700,6 +700,7 @@ replicated_metastore::get_compaction_info(const compaction_info_spec& log) {
       .extents = rpc_to_meta_extent_metadata(std::move(reply.extents))};
     resp.compaction_epoch = metastore::compaction_epoch{
       reply.compaction_epoch()};
+    resp.start_offset = reply.start_offset;
 
     co_return resp;
 }
@@ -756,7 +757,8 @@ replicated_metastore::get_compaction_infos(
                           .dirty_ranges = std::move(log_reply.dirty_ranges),
                           .removable_tombstone_ranges = std::move(log_reply.removable_tombstone_ranges),
                           .extents = rpc_to_meta_extent_metadata(std::move(log_reply.extents))},
-                        .compaction_epoch = metastore::compaction_epoch{log_reply.compaction_epoch()}};
+                        .compaction_epoch = metastore::compaction_epoch{log_reply.compaction_epoch()},
+                        .start_offset = log_reply.start_offset};
                       resp.insert_or_assign(log, std::move(log_resp));
                   }
               });

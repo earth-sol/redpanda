@@ -371,16 +371,20 @@ public:
         compaction_offsets_response offsets_response;
         // The log's current compaction epoch.
         compaction_epoch compaction_epoch;
+        // The log's current start_offset. Can be expected to be == 0 for
+        // `compact` only topics, might be > 0 for `compact,delete` topics.
+        kafka::offset start_offset;
 
         fmt::iterator format_to(fmt::iterator it) const {
             return fmt::format_to(
               it,
               "{{dirty_ratio:{}, earliest_dirty_ts:{}, offsets_response:{}, "
-              "compaction_epoch:{}}}",
+              "compaction_epoch:{}, start_offset:{}}}",
               dirty_ratio,
               earliest_dirty_ts,
               offsets_response,
-              compaction_epoch);
+              compaction_epoch,
+              start_offset);
         }
     };
 
