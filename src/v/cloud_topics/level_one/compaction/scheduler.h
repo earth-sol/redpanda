@@ -47,7 +47,6 @@ class compaction_scheduler {
 public:
     compaction_scheduler(
       compaction_cluster_state,
-      std::unique_ptr<scheduling_policy>,
       ss::sharded<file_io>*,
       ss::sharded<l1::replicated_metastore>*);
 
@@ -144,13 +143,7 @@ private:
     friend class ::SchedulerTestFixture;
 
     // Testing c-tor
-    compaction_scheduler(
-      log_info_collector, std::unique_ptr<scheduling_policy>);
+    compaction_scheduler(log_info_collector);
 };
-
-std::unique_ptr<compaction_scheduler> make_default_compaction_scheduler(
-  compaction_cluster_state,
-  ss::sharded<file_io>*,
-  ss::sharded<replicated_metastore>*);
 
 } // namespace cloud_topics::l1

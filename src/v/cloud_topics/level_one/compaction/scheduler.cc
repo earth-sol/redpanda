@@ -25,7 +25,6 @@ namespace cloud_topics::l1 {
 
 compaction_scheduler::compaction_scheduler(
   compaction_cluster_state state,
-  std::unique_ptr<scheduling_policy> policy,
   ss::sharded<file_io>* io,
   ss::sharded<l1::replicated_metastore>* metastore)
   : _io(io)
@@ -42,7 +41,7 @@ compaction_scheduler::compaction_scheduler(
       state))
   , _log_info_collector(make_default_log_info_collector(
       &_metastore->local(), &state.metadata_cache->local()))
-  , _scheduling_policy(std::move(policy))
+  , _scheduling_policy(make_default_scheduling_policy())
   , _worker_manager(
       _compaction_queue, io, metastore, &_committer, state.metadata_cache)
   , _compaction_interval(
@@ -51,10 +50,9 @@ compaction_scheduler::compaction_scheduler(
     _compaction_interval.watch([this]() { _sem.signal(); });
 }
 
-compaction_scheduler::compaction_scheduler(
-  log_info_collector info_collector, std::unique_ptr<scheduling_policy> policy)
+compaction_scheduler::compaction_scheduler(log_info_collector info_collector)
   : _log_info_collector(std::move(info_collector))
-  , _scheduling_policy(std::move(policy))
+  , _scheduling_policy(make_default_scheduling_policy())
   , _worker_manager(_compaction_queue, nullptr, nullptr, &_committer, nullptr)
   , _compaction_interval(
       config::shard_local_cfg().log_compaction_interval_ms.bind())
@@ -203,14 +201,6 @@ ss::future<> compaction_scheduler::stop() {
     co_await _committer.stop();
 
     co_await std::move(close_fut);
-}
-
-std::unique_ptr<compaction_scheduler> make_default_compaction_scheduler(
-  compaction_cluster_state state,
-  ss::sharded<file_io>* io,
-  ss::sharded<replicated_metastore>* metastore) {
-    return std::make_unique<compaction_scheduler>(
-      state, make_default_scheduling_policy(), io, metastore);
 }
 
 } // namespace cloud_topics::l1
