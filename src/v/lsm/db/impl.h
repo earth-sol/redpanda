@@ -16,6 +16,7 @@
 #include "lsm/core/internal/iterator.h"
 #include "lsm/core/internal/keys.h"
 #include "lsm/core/internal/options.h"
+#include "lsm/db/gc_actor.h"
 #include "lsm/db/memtable.h"
 #include "lsm/db/snapshot.h"
 #include "lsm/db/table_cache.h"
@@ -109,8 +110,6 @@ private:
 
     ss::future<> flush_memtable();
 
-    ss::future<> remove_obsolete_files();
-
     io::persistence _persistence;
     ss::lw_shared_ptr<internal::options> _opts;
     // The active in-memory memtable.
@@ -126,8 +125,7 @@ private:
     std::optional<ss::future<>> _background_work;
     snapshot_list _snapshots;
 
-    chunked_hash_map<internal::file_handle, ss::lowres_clock::time_point>
-      _pending_file_deletes;
+    gc_actor _gc_actor;
 };
 
 } // namespace lsm::db

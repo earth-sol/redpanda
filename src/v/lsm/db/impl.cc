@@ -49,12 +49,14 @@ impl::impl(ctor, io::persistence p, ss::lw_shared_ptr<internal::options> o)
           _opts->block_cache_size / _opts->sst_block_size)))
   , _versions(
       std::make_unique<version_set>(
-        _persistence.metadata.get(), _table_cache.get(), _opts)) {}
+        _persistence.metadata.get(), _table_cache.get(), _opts))
+  , _gc_actor(_persistence.data.get(), _opts, _table_cache.get()) {}
 
 ss::future<std::unique_ptr<impl>> impl::open(
   ss::lw_shared_ptr<internal::options> opts, io::persistence persistence) {
     auto db = std::make_unique<impl>(
       ctor{}, std::move(persistence), std::move(opts));
+    co_await db->_gc_actor.start();
     auto fut = co_await ss::coroutine::as_future(db->recover());
     if (fut.failed()) {
         auto ex = fut.get_exception();
@@ -268,6 +270,7 @@ ss::future<> impl::close() {
     if (fut) {
         fut = co_await ss::coroutine::as_future(std::move(*fut));
     }
+    co_await _gc_actor.stop();
     co_await _table_cache->close();
     co_await _persistence.data->close();
     co_await _persistence.metadata->close();
@@ -491,7 +494,13 @@ ss::future<> impl::run_background_compaction() {
         });
     }
     co_await _versions->log_and_apply(std::move(*edit));
-    co_await remove_obsolete_files();
+    // Go and cleanup any obsolete files where both the epoch, and file ID is
+    // less than what we have committed, and is not in our working set.
+    co_await _gc_actor.tell(
+      gc_message{
+        .highest_used_file_id = _versions->highest_used_file_id(),
+        .live_files = _versions->get_live_files(),
+      });
 }
 
 ss::future<> impl::flush_memtable() {
@@ -537,36 +546,6 @@ ss::future<> impl::flush_memtable() {
     // reader to pick up both the memtable and the new version with the
     // file. This is OK because all iterators deduplicate already.
     _imm = std::nullopt;
-}
-
-ss::future<> impl::remove_obsolete_files() {
-    chunked_hash_set<internal::file_handle> files = _versions->get_live_files();
-    auto gen = _persistence.data->list_files();
-    while (auto file_handle_opt = co_await gen()) {
-        auto& file_handle = file_handle_opt->get();
-        if (files.contains(file_handle)) {
-            continue;
-        }
-        if (file_handle.epoch > _opts->database_epoch) {
-            continue;
-        }
-        auto now = ss::lowres_clock::now();
-        auto it = _pending_file_deletes.find(file_handle);
-        if (it == _pending_file_deletes.end()) {
-            it = _pending_file_deletes.insert_or_assign(
-              it,
-              file_handle,
-              now + absl::ToChronoNanoseconds(_opts->file_deletion_delay));
-        }
-        if (now < it->second) {
-            continue;
-        }
-        _pending_file_deletes.erase(it);
-        co_await _table_cache->evict(file_handle);
-        co_await _persistence.data->remove_file(file_handle);
-    }
-    // TODO(rockwood): Also remove files that we don't see anymore (ie. was
-    // deleted by some other process)
 }
 
 std::optional<internal::sequence_number> impl::max_persisted_seqno() const {

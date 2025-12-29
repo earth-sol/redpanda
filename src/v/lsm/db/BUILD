@@ -62,6 +62,7 @@ redpanda_cc_library(
         "//src/v/lsm/sst:builder",
     ],
     deps = [
+        ":gc_actor",
         ":memtable",
         ":snapshot",
         ":table_cache",
