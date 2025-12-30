@@ -17,8 +17,10 @@
 namespace lsm::db {
 
 ss::future<> gc_actor::process(gc_message msg) {
+    vlog(log.trace, "gc_actor_process_start");
     auto gen = _persistence->list_files();
     chunked_hash_set<internal::file_handle> seen_gc_files;
+    int deleted = 0;
     while (auto file_handle_opt = co_await gen()) {
         if (_as.abort_requested()) {
             co_return;
@@ -59,11 +61,13 @@ ss::future<> gc_actor::process(gc_message msg) {
         co_await _table_cache->evict(file_handle);
         co_await _persistence->remove_file(file_handle);
         _pending_deletes.erase(it);
+        ++deleted;
     }
+    vlog(log.trace, "gc_actor_process_end deleted={}", deleted);
 }
 
 void gc_actor::on_error(std::exception_ptr ex) noexcept {
-    vlog(log.warn, "error in LSM tree GC: {}", ex);
+    vlog(log.warn, "gc_actor_process_end error=\"{}\"", ex);
 }
 
 } // namespace lsm::db
