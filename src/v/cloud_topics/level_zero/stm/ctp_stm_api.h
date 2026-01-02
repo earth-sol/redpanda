@@ -91,7 +91,8 @@ public:
     sync_in_term(model::timeout_clock::time_point deadline, ss::abort_source&);
 
     /// Fence writes
-    ss::future<cluster_epoch_fence> fence_epoch(cluster_epoch e);
+    ss::future<std::expected<cluster_epoch_fence, stale_cluster_epoch>>
+    fence_epoch(cluster_epoch e);
 
     std::optional<cluster_epoch> get_max_epoch() const;
 

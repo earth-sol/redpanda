@@ -17,6 +17,8 @@
 
 #include <seastar/core/rwlock.hh>
 
+#include <expected>
+
 namespace cloud_topics {
 
 class ctp_stm_api;
@@ -54,7 +56,8 @@ public:
         _state.advance_max_seen_epoch(epoch);
     }
 
-    ss::future<cluster_epoch_fence> fence_epoch(cluster_epoch e);
+    ss::future<std::expected<cluster_epoch_fence, stale_cluster_epoch>>
+    fence_epoch(cluster_epoch e);
 
     /// Return inactive epoch of the CTP
     ///

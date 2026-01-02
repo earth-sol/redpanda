@@ -580,12 +580,13 @@ ss::future<result<raft::replicate_result>> do_upload_and_replicate(
         co_return default_errc;
     }
     auto fence = std::move(fence_fut.get());
-    if (!fence.unit.has_value()) {
+    if (!fence.has_value()) {
         vlog(
           cd_log.warn,
-          "Failed to fence epoch {} for ntp {}, fence unit is empty",
+          "Failed to fence epoch {} for ntp {}, ctp latest seen epoch is {}",
           upload_res.value().front().id.epoch,
-          ntp);
+          ntp,
+          fence.error().latest_seen);
         co_return default_errc;
     }
 
@@ -605,7 +606,7 @@ ss::future<result<raft::replicate_result>> do_upload_and_replicate(
         co_await ticket.redeem();
     }
     // Replicate now that our ticket is redeemed
-    opts = update_replicate_options(opts, fence.term);
+    opts = update_replicate_options(opts, fence->term);
     auto replicate_stages = partition->replicate_in_stages(
       batch_id, std::move(placeholders.batches.front()), opts);
     // Once the request is enqueued in raft and our order is guaranteed we can
@@ -722,14 +723,13 @@ ss::future<std::expected<kafka::offset, std::error_code>> frontend::replicate(
         std::rethrow_exception(e);
     }
     auto fence = std::move(fence_fut.get());
-    if (!fence.unit.has_value()) {
+    if (!fence.has_value()) {
         vlog(
           cd_log.warn,
-          "Failed to fence epoch {} for ntp {}, fence unit is empty",
+          "Failed to fence epoch {} for ntp {}, ctp latest seen epoch is {}",
           res.value().front().id.epoch,
-          ntp());
-
-        /// TODO: Maybe return different error code here?
+          ntp(),
+          fence.error().latest_seen);
         co_return std::unexpected(
           kafka::make_error_code(kafka::error_code::request_timed_out));
     }
@@ -741,7 +741,7 @@ ss::future<std::expected<kafka::offset, std::error_code>> frontend::replicate(
         placeholder_batches.push_back(std::move(batch));
     }
 
-    opts = update_replicate_options(opts, fence.term);
+    opts = update_replicate_options(opts, fence->term);
     auto result = co_await _partition->replicate(
       std::move(placeholder_batches), opts);
 

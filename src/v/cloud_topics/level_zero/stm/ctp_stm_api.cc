@@ -174,14 +174,15 @@ ss::future<bool> ctp_stm_api::sync_in_term(
     co_return co_await _stm->sync_in_term(deadline, as);
 }
 
-ss::future<cluster_epoch_fence> ctp_stm_api::fence_epoch(cluster_epoch e) {
+ss::future<std::expected<cluster_epoch_fence, stale_cluster_epoch>>
+ctp_stm_api::fence_epoch(cluster_epoch e) {
     vlog(_log.debug, "Fencing epoch {} in term {}", e, _stm->_raft->term());
     auto res = co_await _stm->fence_epoch(e);
     vlog(
       _log.debug,
       "Fence acquired = {} in term {}",
-      res.unit.has_value(),
-      res.term);
+      res.has_value(),
+      res.has_value() ? res->term : model::term_id{-1});
     co_return std::move(res);
 }
 

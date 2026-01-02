@@ -63,6 +63,7 @@ redpanda_cc_library(
     hdrs = ["types.h"],
     visibility = [":__subpackages__"],
     deps = [
+        "//src/v/cloud_topics:types",
         "//src/v/model",
         "@fmt",
         "@seastar",

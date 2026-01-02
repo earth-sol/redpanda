@@ -332,7 +332,8 @@ ss::future<iobuf> ctp_stm::take_raft_snapshot(model::offset snapshot_at) {
     co_return serde::to_iobuf(_state);
 }
 
-ss::future<cluster_epoch_fence> ctp_stm::fence_epoch(cluster_epoch e) {
+ss::future<std::expected<cluster_epoch_fence, stale_cluster_epoch>>
+ctp_stm::fence_epoch(cluster_epoch e) {
     auto holder = _gate.hold();
     if (!co_await sync(sync_timeout)) {
         vlog(_log.warn, "ctp_stm::fence_epoch sync timeout");
@@ -366,7 +367,10 @@ ss::future<cluster_epoch_fence> ctp_stm::fence_epoch(cluster_epoch e) {
         }
     }
     // If we reach here, it means that we need to discard the batch.
-    co_return cluster_epoch_fence{};
+    co_return std::unexpected(
+      stale_cluster_epoch(_state.get_max_seen_epoch()
+                            .or_else(get_applied_epoch)
+                            .value_or(cluster_epoch{-1})));
 }
 
 model::offset ctp_stm::max_removable_local_log_offset() {
