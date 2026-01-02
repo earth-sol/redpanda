@@ -100,6 +100,7 @@ TEST_F(GcActorTest, LiveFilesNotDeleted) {
     tests::drain_task_queue().get();
 
     EXPECT_EQ(list_files().size(), 3);
+    EXPECT_EQ(_gc->pending_delete_count(), 0);
 }
 
 TEST_F(GcActorTest, UnusedFilesDeletedImmediatelyWithZeroDelay) {
@@ -120,6 +121,7 @@ TEST_F(GcActorTest, UnusedFilesDeletedImmediatelyWithZeroDelay) {
 
     std::ignore = fh2; // deleted
     EXPECT_THAT(list_files(), testing::UnorderedElementsAre(fh1, fh3));
+    EXPECT_EQ(_gc->pending_delete_count(), 0);
 }
 
 TEST_F(GcActorTest, FutureEpochFilesNotDeleted) {
@@ -138,4 +140,51 @@ TEST_F(GcActorTest, FutureEpochFilesNotDeleted) {
 
     std::ignore = fh_current; // deleted
     EXPECT_THAT(list_files(), testing::ElementsAre(fh_future));
+    EXPECT_EQ(_gc->pending_delete_count(), 0);
+}
+
+TEST_F(GcActorTest, StopTrackingExternalDeletes) {
+    auto fh_1 = make_sst(1_file_id, 0_db_epoch);
+    auto fh_2 = make_sst(2_file_id, 0_db_epoch);
+    auto fh_3 = make_sst(3_file_id, 0_db_epoch);
+    ASSERT_EQ(list_files().size(), 3);
+
+    _opts->database_epoch = 0_db_epoch;
+    // Waiting one nanosecond basically means wait until the next iteration of
+    // the gc actor to delete.
+    _opts->file_deletion_delay = absl::Nanoseconds(1);
+    start_gc();
+
+    lsm::db::gc_message msg;
+    msg.highest_used_file_id = 3_file_id;
+    msg.live_files.insert(fh_2);
+    msg.live_files.insert(fh_3);
+    _gc->tell(std::move(msg)).get();
+    tests::drain_task_queue().get();
+
+    EXPECT_THAT(list_files(), testing::ElementsAre(fh_1, fh_2, fh_3));
+    EXPECT_EQ(_gc->pending_delete_count(), 1);
+
+    // Remove file one out of band
+    _persistence->remove_file(fh_1).get();
+
+    msg = {};
+    msg.highest_used_file_id = 3_file_id;
+    msg.live_files.insert(fh_3);
+    _gc->tell(std::move(msg)).get();
+    tests::drain_task_queue().get();
+
+    EXPECT_THAT(list_files(), testing::ElementsAre(fh_2, fh_3));
+    // We should only have file 2 in the pending delete list
+    EXPECT_EQ(_gc->pending_delete_count(), 1);
+
+    msg = {};
+    msg.highest_used_file_id = 3_file_id;
+    msg.live_files.insert(fh_3);
+    _gc->tell(std::move(msg)).get();
+    tests::drain_task_queue().get();
+
+    EXPECT_THAT(list_files(), testing::ElementsAre(fh_3));
+    // Everything should be deleted now
+    EXPECT_EQ(_gc->pending_delete_count(), 0);
 }

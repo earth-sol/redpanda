@@ -18,9 +18,11 @@ namespace lsm::db {
 
 ss::future<> gc_actor::process(gc_message msg) {
     vlog(log.trace, "gc_actor_process_start");
+
+    auto now = ss::lowres_clock::now();
+
+    // Lookup new files to remove
     auto gen = _persistence->list_files();
-    chunked_hash_set<internal::file_handle> seen_gc_files;
-    int deleted = 0;
     while (auto file_handle_opt = co_await gen()) {
         if (_as.abort_requested()) {
             co_return;
@@ -42,10 +44,6 @@ ss::future<> gc_actor::process(gc_message msg) {
             // Or it is for a future version of the database.
             continue;
         }
-        // Mark this file as seen, so that we can later remove files that
-        // were deleted by other means.
-        seen_gc_files.insert(file_handle);
-        auto now = ss::lowres_clock::now();
         auto it = _pending_deletes.find(file_handle);
         if (it == _pending_deletes.end()) {
             // This is our first time seeing a pending delete, store the
@@ -55,14 +53,22 @@ ss::future<> gc_actor::process(gc_message msg) {
               file_handle,
               now + absl::ToChronoNanoseconds(_opts->file_deletion_delay));
         }
+    }
+
+    // Remove any pending files
+    int deleted = 0;
+    auto it = _pending_deletes.begin();
+    while (it != _pending_deletes.end()) {
         if (now < it->second) {
+            ++it;
             continue;
         }
-        co_await _table_cache->evict(file_handle);
-        co_await _persistence->remove_file(file_handle);
-        _pending_deletes.erase(it);
+        co_await _table_cache->evict(it->first);
+        co_await _persistence->remove_file(it->first);
+        it = _pending_deletes.erase(it);
         ++deleted;
     }
+
     vlog(log.trace, "gc_actor_process_end deleted={}", deleted);
 }
 

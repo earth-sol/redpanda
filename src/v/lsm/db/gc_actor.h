@@ -44,6 +44,8 @@ public:
       , _opts(std::move(opts))
       , _table_cache(table_cache) {}
 
+    size_t pending_delete_count() const { return _pending_deletes.size(); }
+
 protected:
     ss::future<> process(gc_message msg) override;
 
