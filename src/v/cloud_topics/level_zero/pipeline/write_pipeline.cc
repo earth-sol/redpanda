@@ -179,17 +179,11 @@ write_pipeline<Clock>::get_write_requests(
         auto sz = it->data_chunk.payload.size_bytes();
         acc_size += sz;
         acc_req++;
-        if (acc_size >= max_bytes || acc_req >= max_requests) {
-            // Include last element
-            auto& el = *it;
-            it++;
-            el._hook.unlink();
-            if (el.stage != unassigned_pipeline_stage) {
-                auto idx = static_cast<size_t>(el.stage()->get_numeric_id());
-                _stage_bytes[idx] -= el.size_bytes();
-                el.stage = unassigned_pipeline_stage;
-            }
-            result.requests.push_back(el);
+        // Always include the first request even if it exceeds limits
+        // to avoid stalling the pipeline with oversized requests
+        if (
+          (acc_size >= max_bytes || acc_req >= max_requests)
+          && !result.requests.empty()) {
             break;
         }
         auto& el = *it;

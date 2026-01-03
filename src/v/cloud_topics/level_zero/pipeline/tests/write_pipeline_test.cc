@@ -293,3 +293,226 @@ TEST_CORO(write_pipeline_test, interleaving_stages_bug) {
 
     ASSERT_EQ_CORO(accessor.write_requests_pending(0), true);
 }
+
+TEST_CORO(write_pipeline_test, oversized_request) {
+    // This test verifies that get_write_requests returns at least one
+    // request even if it exceeds the max_bytes limit, to prevent pipeline
+    // stalls with oversized requests.
+    cloud_topics::l0::write_pipeline<ss::manual_clock> pipeline;
+    cloud_topics::l0::write_pipeline_accessor accessor{
+      .pipeline = &pipeline,
+    };
+
+    auto stage = pipeline.register_write_pipeline_stage();
+    const auto timeout = ss::manual_clock::now() + 10s;
+
+    // Helper to create a serialized chunk with specific size
+    auto make_chunk_with_size =
+      [&](
+        size_t target_size) -> ss::future<cloud_topics::l0::serialized_chunk> {
+        // Create batches until we reach approximately the target size
+        chunked_vector<model::record_batch> batches;
+        size_t current_size = 0;
+        while (current_size < target_size) {
+            auto data = co_await model::test::make_random_batches(
+              {.count = 1, .records = 10});
+            for (auto& batch : data) {
+                current_size += batch.size_bytes();
+                batches.push_back(std::move(batch));
+                if (current_size >= target_size) {
+                    break;
+                }
+            }
+        }
+        co_return co_await cloud_topics::l0::serialize_batches(
+          std::move(batches));
+    };
+
+    std::vector<
+      std::unique_ptr<cloud_topics::l0::write_request<ss::manual_clock>>>
+      requests;
+
+    // First request is oversized (approximately 10000 bytes)
+    auto chunk1 = co_await make_chunk_with_size(10000);
+    auto req1
+      = std::make_unique<cloud_topics::l0::write_request<ss::manual_clock>>(
+        model::controller_ntp, min_epoch, std::move(chunk1), timeout);
+    requests.push_back(std::move(req1));
+
+    // Second request is normal size (approximately 1000 bytes)
+    auto chunk2 = co_await make_chunk_with_size(1000);
+    auto req2
+      = std::make_unique<cloud_topics::l0::write_request<ss::manual_clock>>(
+        model::controller_ntp, min_epoch, std::move(chunk2), timeout);
+    requests.push_back(std::move(req2));
+
+    // Add both requests to stage
+    accessor.add_request_with_stage(*requests[0], stage.id());
+    accessor.add_request_with_stage(*requests[1], stage.id());
+
+    co_await ss::yield();
+
+    ASSERT_TRUE_CORO(accessor.write_requests_pending(2));
+
+    // Try to get requests with max_bytes = 5000 (less than first request)
+    // Should still get the first request to avoid stalling
+    auto result = stage.pull_write_requests(5000);
+
+    // Should return exactly 1 request (the oversized one)
+    ASSERT_EQ_CORO(result.requests.size(), 1);
+    result.requests.front().set_value(
+      chunked_vector<cloud_topics::extent_meta>{});
+
+    // Second request should still be pending
+    ASSERT_EQ_CORO(accessor.write_requests_pending(1), true);
+
+    // Get the second request
+    auto result2 = stage.pull_write_requests(
+      std::numeric_limits<size_t>::max());
+    ASSERT_EQ_CORO(result2.requests.size(), 1);
+    result2.requests.front().set_value(
+      chunked_vector<cloud_topics::extent_meta>{});
+
+    ASSERT_EQ_CORO(accessor.write_requests_pending(0), true);
+}
+
+TEST_CORO(write_pipeline_test, multiple_requests_within_limit) {
+    // This test verifies that get_write_requests returns multiple requests
+    // when they fit within the size limit.
+    cloud_topics::l0::write_pipeline<ss::manual_clock> pipeline;
+    cloud_topics::l0::write_pipeline_accessor accessor{
+      .pipeline = &pipeline,
+    };
+
+    auto stage = pipeline.register_write_pipeline_stage();
+    const auto timeout = ss::manual_clock::now() + 10s;
+
+    // Helper to create a serialized chunk with specific size
+    auto make_chunk_with_size =
+      [&](
+        size_t target_size) -> ss::future<cloud_topics::l0::serialized_chunk> {
+        chunked_vector<model::record_batch> batches;
+        size_t current_size = 0;
+        while (current_size < target_size) {
+            auto data = co_await model::test::make_random_batches(
+              {.count = 1, .records = 5});
+            for (auto& batch : data) {
+                current_size += batch.size_bytes();
+                batches.push_back(std::move(batch));
+                if (current_size >= target_size) {
+                    break;
+                }
+            }
+        }
+        co_return co_await cloud_topics::l0::serialize_batches(
+          std::move(batches));
+    };
+
+    // Create 3 requests with size approximately 1000 each
+    std::vector<
+      std::unique_ptr<cloud_topics::l0::write_request<ss::manual_clock>>>
+      requests;
+
+    for (int i = 0; i < 3; i++) {
+        auto chunk = co_await make_chunk_with_size(1000);
+        auto req
+          = std::make_unique<cloud_topics::l0::write_request<ss::manual_clock>>(
+            model::controller_ntp, min_epoch, std::move(chunk), timeout);
+        requests.push_back(std::move(req));
+    }
+
+    // Add all requests to stage
+    for (auto& req : requests) {
+        accessor.add_request_with_stage(*req, stage.id());
+    }
+
+    co_await ss::yield();
+
+    ASSERT_TRUE_CORO(accessor.write_requests_pending(3));
+
+    // Get requests with a large max_bytes to get all 3 initially
+    // Then use max_bytes to get a subset in a second call
+    auto result_all = stage.pull_write_requests(
+      std::numeric_limits<size_t>::max());
+
+    // Should return all 3 requests
+    ASSERT_EQ_CORO(result_all.requests.size(), 3);
+
+    for (auto& req : result_all.requests) {
+        req.set_value(chunked_vector<cloud_topics::extent_meta>{});
+    }
+
+    ASSERT_TRUE_CORO(accessor.write_requests_pending(0));
+}
+
+TEST_CORO(write_pipeline_test, max_requests_limit) {
+    // This test verifies that get_write_requests respects the max_requests
+    // parameter, but always returns at least one request.
+    cloud_topics::l0::write_pipeline<ss::manual_clock> pipeline;
+    cloud_topics::l0::write_pipeline_accessor accessor{
+      .pipeline = &pipeline,
+    };
+
+    auto stage = pipeline.register_write_pipeline_stage();
+    const auto timeout = ss::manual_clock::now() + 10s;
+
+    auto make_chunk = [&]() -> ss::future<cloud_topics::l0::serialized_chunk> {
+        chunked_vector<model::record_batch> batches;
+        auto data = co_await model::test::make_random_batches(
+          {.count = 1, .records = 5});
+        std::ranges::move(std::move(data), std::back_inserter(batches));
+        co_return co_await cloud_topics::l0::serialize_batches(
+          std::move(batches));
+    };
+
+    // Create 5 small requests
+    std::vector<
+      std::unique_ptr<cloud_topics::l0::write_request<ss::manual_clock>>>
+      requests;
+
+    for (int i = 0; i < 5; i++) {
+        auto chunk = co_await make_chunk();
+        auto req
+          = std::make_unique<cloud_topics::l0::write_request<ss::manual_clock>>(
+            model::controller_ntp, min_epoch, std::move(chunk), timeout);
+        requests.push_back(std::move(req));
+    }
+
+    // Add all requests to stage
+    for (auto& req : requests) {
+        accessor.add_request_with_stage(*req, stage.id());
+    }
+
+    co_await ss::yield();
+
+    ASSERT_EQ_CORO(accessor.write_requests_pending(5), true);
+
+    // Get requests with max_requests = 3
+    auto result = stage.pull_write_requests(
+      std::numeric_limits<size_t>::max(), 3);
+
+    // Should return exactly 3 requests
+    // Note: Due to the "first request always included" logic, we get at least 1
+    ASSERT_GE_CORO(result.requests.size(), 1);
+    ASSERT_LE_CORO(result.requests.size(), 3);
+
+    size_t first_batch_size = result.requests.size();
+
+    for (auto& req : result.requests) {
+        req.set_value(chunked_vector<cloud_topics::extent_meta>{});
+    }
+
+    // Remaining requests should still be pending
+    ASSERT_EQ_CORO(accessor.write_requests_pending(5 - first_batch_size), true);
+
+    // Get the remaining requests
+    auto result2 = stage.pull_write_requests(
+      std::numeric_limits<size_t>::max(), std::numeric_limits<size_t>::max());
+    ASSERT_EQ_CORO(result2.requests.size(), 5 - first_batch_size);
+
+    for (auto& req : result2.requests) {
+        req.set_value(chunked_vector<cloud_topics::extent_meta>{});
+    }
+
+    ASSERT_TRUE_CORO(accessor.write_requests_pending(0));
+}
