@@ -203,6 +203,7 @@ struct partition_balancer_planner_fixture {
             .segment_fallocation_step = 16,
             .node_responsiveness_timeout = std::chrono::seconds(10),
             .topic_aware = true,
+            .node_autodecommission_timeout = {},
           },
           workers.state.local(),
           workers.allocator.local());

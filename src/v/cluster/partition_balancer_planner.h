@@ -65,6 +65,8 @@ struct planner_config {
     // partitions on each node, as opposed to balancing the total number of
     // partitions.
     bool topic_aware = false;
+    // Timeout after which a node is considered for automatic decommissioning
+    std::optional<std::chrono::seconds> node_autodecommission_timeout;
 
     // If true, expects nodes to report their space management statistics in the
     // health report.
