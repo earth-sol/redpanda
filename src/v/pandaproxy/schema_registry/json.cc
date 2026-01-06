@@ -303,7 +303,7 @@ private:
     int _ref_units{max_recursion_depth};
 };
 
-struct context {
+struct compatibility_context {
     schema_context older;
     schema_context newer;
 };
@@ -502,7 +502,7 @@ result<document_context> parse_json(iobuf buf) {
 // for N is also valid for O. precondition: older and newer are both valid
 // schemas
 json_compatibility_result is_superset(
-  context ctx,
+  compatibility_context ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p);
@@ -1033,7 +1033,7 @@ json_compatibility_result is_numeric_property_value_superset(
 enum class additional_field_for { object, array };
 
 json_compatibility_result is_additional_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   additional_field_for field_type,
@@ -1349,7 +1349,7 @@ json_compatibility_result is_numeric_superset(
 }
 
 json_compatibility_result is_array_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -1536,7 +1536,7 @@ json_compatibility_result is_array_superset(
 }
 
 json_compatibility_result is_object_properties_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -1678,7 +1678,7 @@ json_compatibility_result is_object_required_superset(
 }
 
 json_compatibility_result is_object_dependencies_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -1771,7 +1771,7 @@ json_compatibility_result is_object_dependencies_superset(
 }
 
 json_compatibility_result is_object_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -1878,7 +1878,7 @@ json_compatibility_result is_enum_superset(
 }
 
 json_compatibility_result is_not_combinator_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -1929,7 +1929,7 @@ json::Value to_keyword(p_combinator c) {
 }
 
 json_compatibility_result is_positive_combinator_superset(
-  const context& ctx,
+  const compatibility_context& ctx,
   const json::Value& older,
   const json::Value& newer,
   std::filesystem::path p) {
@@ -2120,7 +2120,7 @@ using namespace is_superset_impl;
 // for N is also valid for O. precondition: older and newer are both valid
 // schemas
 json_compatibility_result is_superset(
-  context ctx,
+  compatibility_context ctx,
   const json::Value& older_schema,
   const json::Value& newer_schema,
   std::filesystem::path p) {
@@ -2433,7 +2433,7 @@ compatibility_result check_compatible(
     auto raw_compat_result = [&]() {
         // reader is a superset of writer iff every schema that is valid for
         // writer is also valid for reader
-        context ctx{.older{reader()}, .newer{writer()}};
+        compatibility_context ctx{.older{reader()}, .newer{writer()}};
         return is_superset(ctx, reader().ctx.doc, writer().ctx.doc, "#/");
     }();
 
