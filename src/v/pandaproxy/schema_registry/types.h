@@ -129,14 +129,14 @@ using registry_resource = named_type<ss::sstring, struct registry_resource_tag>;
 ///
 /// Typically it will be "<topic>-key" or "<topic>-value".
 using subject = named_type<ss::sstring, struct subject_tag>;
-static const subject invalid_subject{};
+inline const subject invalid_subject{};
 
 ///\brief The version of the schema registered with a subject.
 ///
 /// A subject may evolve its schema over time. Each version is associated with a
 /// schema_id.
 using schema_version = named_type<int32_t, struct schema_version_tag>;
-static constexpr schema_version invalid_schema_version{-1};
+inline constexpr schema_version invalid_schema_version{-1};
 
 struct schema_reference {
     friend bool
@@ -416,7 +416,7 @@ private:
 
 ///\brief Globally unique identifier for a schema.
 using schema_id = named_type<int32_t, struct schema_id_tag>;
-static constexpr schema_id invalid_schema_id{-1};
+inline constexpr schema_id invalid_schema_id{-1};
 
 struct subject_version {
     subject_version(subject s, schema_version v)
