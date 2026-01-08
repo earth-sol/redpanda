@@ -127,7 +127,7 @@ ss::future<> seq_writer::check_mutable(const std::optional<subject>& sub) {
     auto mode = sub ? co_await _store.get_mode(*sub, default_to_global::yes)
                     : co_await _store.get_mode();
     if (mode == mode::read_only) {
-        throw as_exception(mode_is_readonly(sub));
+        throw as_exception(mode_is_readonly(default_context, sub));
     }
     co_return;
 }
