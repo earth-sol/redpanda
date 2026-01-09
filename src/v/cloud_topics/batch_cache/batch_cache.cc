@@ -89,6 +89,13 @@ batch_cache::get(const model::ntp& ntp, model::offset o) {
               rb->term() > model::term_id{-1},
               "Batch without term in the cache: {}",
               rb->header());
+            vassert(
+              rb->base_offset() <= o && o <= rb->last_offset(),
+              "Unexpected batch for {}, got range: [{},{}] for offset {}",
+              ntp,
+              rb->base_offset(),
+              rb->last_offset(),
+              o);
             _probe.register_get(rb->size_bytes());
         } else {
             _probe.register_miss();
