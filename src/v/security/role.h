@@ -26,6 +26,8 @@ enum class role_member_type {
     user = 0,
 };
 
+std::ostream& operator<<(std::ostream& os, role_member_type t);
+
 class role_member;
 
 /**
