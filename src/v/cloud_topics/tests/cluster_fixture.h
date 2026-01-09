@@ -38,7 +38,7 @@ public:
             remove_node_application(id);
         }
     }
-    void add_node() {
+    void add_node(bool use_lsm_metastore = true) {
         static constexpr int kafka_port_base = 9092;
         static constexpr int rpc_port_base = 11000;
         auto [s3_conf, a_conf, cs_conf] = get_cloud_storage_configurations(
@@ -56,7 +56,10 @@ public:
           cs_conf,
           /*legacy_upload_mode_enabled=*/true,
           /*iceberg_enabled=*/false,
-          /*cloud_topics_enabled=*/true);
+          /*cloud_topics_enabled=*/true,
+          /*cluster_linking_enabled=*/false,
+          /*seed_node_id=*/model::node_id{0},
+          use_lsm_metastore);
     }
 
     ss::future<kafka_produce_transport*> make_producer(model::node_id id) {
