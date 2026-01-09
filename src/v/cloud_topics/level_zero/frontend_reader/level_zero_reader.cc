@@ -393,7 +393,7 @@ ss::future<> level_zero_log_reader_impl::materialize_batches(
                         _ctp->ntp(),
                         batch.base_offset(),
                         batch.term());
-                      _ct_api->cache_put(_ctp->ntp(), batch.copy());
+                      _ct_api->cache_put(_ctp->ntp(), batch);
                   }
                   return batch;
               },
