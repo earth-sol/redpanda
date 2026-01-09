@@ -145,6 +145,18 @@ struct context_subject {
       : ctx{std::move(c)}
       , sub{std::move(s)} {}
 
+    // TODO: remove this, it is only for gradual commit-by-commit source code
+    // migration
+    context_subject(subject sub)
+      : ctx{default_context}
+      , sub{std::move(sub)} {}
+
+    // TODO: remove this, it is only for gradual commit-by-commit source code
+    // migration
+    context_subject(ss::sstring sub)
+      : ctx{default_context}
+      , sub{std::move(sub)} {}
+
     friend auto
     operator<=>(const context_subject& lhs, const context_subject& rhs)
       = default;
@@ -183,6 +195,10 @@ struct context_subject {
             return fmt::format_to(it, "{}", sub);
         }
         return fmt::format_to(it, ":{}:{}", ctx, sub);
+    }
+
+    bool starts_with(const ss::sstring& prefix) const {
+        return to_string().starts_with(prefix);
     }
 
     context ctx;
@@ -478,6 +494,12 @@ inline constexpr schema_id invalid_schema_id{-1};
 
 // A schema id that is valid within a context.
 struct context_schema_id {
+    // TODO: remove this, it is only for gradual commit-by-commit source code
+    // migration
+    context_schema_id(schema_id id)
+      : ctx{default_context}
+      , id{id} {}
+
     context_schema_id(context c, schema_id s)
       : ctx{std::move(c)}
       , id{s} {}
@@ -591,13 +613,13 @@ struct stored_schema {
 ///\brief A mapping of version and schema id for a subject.
 struct subject_version_entry {
     subject_version_entry(
-      schema_version version, schema_id id, is_deleted deleted)
+      schema_version version, context_schema_id id, is_deleted deleted)
       : version{version}
-      , id{id}
+      , id{std::move(id)}
       , deleted(deleted) {}
 
     schema_version version;
-    schema_id id;
+    context_schema_id id;
     is_deleted deleted{is_deleted::no};
 };
 
