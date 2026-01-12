@@ -1018,4 +1018,8 @@ class ControllerForcedReconfiguration_Size6(
         """ step G: ensure 'some' is in the topic list """
         rpk = RpkTool(self.redpanda)
         assert "some" in rpk.list_topics()
-        assert int(self.redpanda.node_id(self.redpanda.controller())) == 1
+        leader_node = self.redpanda.controller()
+        assert leader_node is not None, "there should be a controller leader"
+        leader_id = self.redpanda.node_id(leader_node)
+        assert leader_id is not None, "there should be a controller leader"
+        assert int(leader_id) == 1
