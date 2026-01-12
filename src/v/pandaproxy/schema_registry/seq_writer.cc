@@ -59,7 +59,7 @@ struct batch_builder : public storage::record_batch_builder {
           to_json_iobuf(std::forward<V>(value)));
     }
 
-    void add_tombstone(const subject& sub, const seq_marker& s) {
+    void add_tombstone(const context_subject& sub, const seq_marker& s) {
         vlog(
           srlog.debug,
           "Delete {} tombstoning sub={} at {}",
@@ -81,11 +81,13 @@ struct batch_builder : public storage::record_batch_builder {
             add_raw_kv(to_json_iobuf(std::move(key)), std::nullopt);
         } break;
         case seq_marker_key_type::config: {
-            auto key = config_key{.seq{s.seq}, .node{s.node}, .sub{sub}};
+            // TODO: use the full context_subject once it is stored
+            auto key = config_key{.seq{s.seq}, .node{s.node}, .sub{sub.sub}};
             add_raw_kv(to_json_iobuf(std::move(key)), std::nullopt);
         } break;
         case seq_marker_key_type::mode: {
-            auto key = mode_key{.seq{s.seq}, .node{s.node}, .sub{sub}};
+            // TODO: use the full context_subject once it is stored
+            auto key = mode_key{.seq{s.seq}, .node{s.node}, .sub{sub.sub}};
             add_raw_kv(to_json_iobuf(std::move(key)), std::nullopt);
         } break;
         case seq_marker_key_type::invalid:
@@ -95,7 +97,7 @@ struct batch_builder : public storage::record_batch_builder {
     }
 
     void add_tombstones(
-      const subject& sub, const chunked_vector<seq_marker>& sequences) {
+      const context_subject& sub, const chunked_vector<seq_marker>& sequences) {
         for (const seq_marker& s : sequences) {
             add_tombstone(sub, s);
         }
@@ -476,8 +478,8 @@ ss::future<bool> seq_writer::delete_mode(subject sub) {
 
 /// Impermanent delete: update a version with is_deleted=true
 ss::future<std::optional<bool>> seq_writer::do_delete_subject_version(
-  subject sub, schema_version version, model::offset write_at) {
-    co_await check_mutable(default_context, sub);
+  context_subject sub, schema_version version, model::offset write_at) {
+    co_await check_mutable(sub.ctx, sub.sub);
 
     if (co_await _store.is_referenced(sub, version)) {
         throw as_exception(has_references(sub, version));
@@ -492,7 +494,6 @@ ss::future<std::optional<bool>> seq_writer::do_delete_subject_version(
     schema_value value{
       .schema{subject_schema{sub, std::move(schema)}},
       .version{version},
-      // TODO: use the full s_id here
       .id{s_id.id},
       .deleted{is_deleted::yes}};
 
@@ -515,8 +516,8 @@ ss::future<std::optional<bool>> seq_writer::do_delete_subject_version(
     }
 }
 
-ss::future<bool>
-seq_writer::delete_subject_version(subject sub, schema_version version) {
+ss::future<bool> seq_writer::delete_subject_version(
+  context_subject sub, schema_version version) {
     return sequenced_write(
       [sub{std::move(sub)}, version](model::offset write_at, seq_writer& seq) {
           return seq.do_delete_subject_version(sub, version, write_at);
@@ -524,8 +525,9 @@ seq_writer::delete_subject_version(subject sub, schema_version version) {
 }
 
 ss::future<std::optional<chunked_vector<schema_version>>>
-seq_writer::do_delete_subject_impermanent(subject sub, model::offset write_at) {
-    co_await check_mutable(default_context, sub);
+seq_writer::do_delete_subject_impermanent(
+  context_subject sub, model::offset write_at) {
+    co_await check_mutable(sub.ctx, sub.sub);
 
     // Grab the versions before they're gone.
     auto versions = co_await _store.get_versions(sub, include_deleted::no);
@@ -573,7 +575,7 @@ seq_writer::do_delete_subject_impermanent(subject sub, model::offset write_at) {
 }
 
 ss::future<chunked_vector<schema_version>>
-seq_writer::delete_subject_impermanent(subject sub) {
+seq_writer::delete_subject_impermanent(context_subject sub) {
     vlog(srlog.debug, "delete_subject_impermanent sub={}", sub);
     return sequenced_write(
       [sub{std::move(sub)}](model::offset write_at, seq_writer& seq) {
@@ -586,7 +588,7 @@ seq_writer::delete_subject_impermanent(subject sub) {
 /// Include a version if we are only to hard delete that version, otherwise
 /// will hard-delete the whole subject.
 ss::future<chunked_vector<schema_version>> seq_writer::delete_subject_permanent(
-  subject sub, std::optional<schema_version> version) {
+  context_subject sub, std::optional<schema_version> version) {
     return sequenced_write(
       [sub{std::move(sub)}, version](model::offset, seq_writer& seq) {
           return seq.delete_subject_permanent_inner(sub, version);
@@ -595,7 +597,7 @@ ss::future<chunked_vector<schema_version>> seq_writer::delete_subject_permanent(
 
 ss::future<std::optional<chunked_vector<schema_version>>>
 seq_writer::delete_subject_permanent_inner(
-  subject sub, std::optional<schema_version> version) {
+  context_subject sub, std::optional<schema_version> version) {
     chunked_vector<seq_marker> sequences;
     batch_builder rb{model::offset{0}};
 
@@ -603,7 +605,7 @@ seq_writer::delete_subject_permanent_inner(
     /// within these store functions (will throw a 404-equivalent if so)
     vlog(srlog.debug, "delete_subject_permanent sub={}", sub);
 
-    co_await check_mutable(default_context, sub);
+    co_await check_mutable(sub.ctx, sub.sub);
 
     if (version.has_value()) {
         // Check version first to see if the version exists

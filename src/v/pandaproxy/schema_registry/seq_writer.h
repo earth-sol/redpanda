@@ -79,13 +79,13 @@ public:
     ss::future<bool> delete_mode(subject sub);
 
     ss::future<bool>
-    delete_subject_version(subject sub, schema_version version);
+    delete_subject_version(context_subject sub, schema_version version);
 
     ss::future<chunked_vector<schema_version>>
-    delete_subject_impermanent(subject sub);
+    delete_subject_impermanent(context_subject sub);
 
     ss::future<chunked_vector<schema_version>> delete_subject_permanent(
-      subject sub, std::optional<schema_version> version);
+      context_subject sub, std::optional<schema_version> version);
 
 private:
     ss::smp_submit_to_options _smp_opts;
@@ -114,14 +114,14 @@ private:
     do_delete_mode(subject sub, model::offset write_at);
 
     ss::future<std::optional<bool>> do_delete_subject_version(
-      subject sub, schema_version version, model::offset write_at);
+      context_subject sub, schema_version version, model::offset write_at);
 
     ss::future<std::optional<chunked_vector<schema_version>>>
-    do_delete_subject_impermanent(subject sub, model::offset write_at);
+    do_delete_subject_impermanent(context_subject sub, model::offset write_at);
 
     ss::future<std::optional<chunked_vector<schema_version>>>
     delete_subject_permanent_inner(
-      subject sub, std::optional<schema_version> version);
+      context_subject sub, std::optional<schema_version> version);
 
     simple_time_jitter<ss::lowres_clock> _jitter{std::chrono::milliseconds{50}};
 
