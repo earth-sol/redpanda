@@ -524,7 +524,8 @@ ss::future<server::reply_t>
 post_subject(server::request_t rq, server::reply_t rp) {
     parse_content_type_header(rq);
     parse_accept_header(rq, rp);
-    auto sub = parse::request_param<subject>(*rq.req, "subject");
+    auto ctx_sub = context_subject::from_string(
+      parse::request_param<ss::sstring>(*rq.req, "subject"));
     auto inc_del{
       parse::query_param<std::optional<include_deleted>>(*rq.req, "deleted")
         .value_or(include_deleted::no)};
@@ -534,7 +535,7 @@ post_subject(server::request_t rq, server::reply_t rp) {
     vlog(
       srlog.debug,
       "post_subject subject='{}', normalize='{}', deleted='{}', format='{}'",
-      sub,
+      ctx_sub,
       norm,
       inc_del,
       format);
@@ -545,22 +546,22 @@ post_subject(server::request_t rq, server::reply_t rp) {
     co_await rq.service().writer().read_sync();
 
     // Force 40401 if no subject
-    co_await st.get_versions(sub, inc_del);
+    co_await st.get_versions(ctx_sub, inc_del);
 
     subject_schema schema;
     try {
         auto unparsed = co_await rjson_parse(
-          *rq.req, post_subject_versions_request_handler<>{sub});
-        const auto mode = co_await st.get_mode(sub, default_to_global::yes);
+          *rq.req, post_subject_versions_request_handler<>{ctx_sub});
+        const auto mode = co_await st.get_mode(ctx_sub, default_to_global::yes);
         schema = co_await make_canonical_schema_with_metadata(
           st, std::move(unparsed.def), norm, mode);
     } catch (const exception& e) {
         if (e.code() == error_code::schema_empty) {
-            throw as_exception(invalid_subject_schema(sub));
+            throw as_exception(invalid_subject_schema(ctx_sub));
         }
         throw;
     } catch (const ppj::parse_error&) {
-        throw as_exception(invalid_subject_schema(sub));
+        throw as_exception(invalid_subject_schema(ctx_sub));
     }
 
     auto sub_schema = co_await rq.service().schema_store().has_schema(

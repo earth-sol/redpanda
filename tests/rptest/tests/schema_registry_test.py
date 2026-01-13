@@ -1711,9 +1711,34 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         self.assert_equal(result.status_code, requests.codes.ok)
         self.assert_equal(result.json()["id"], 1)
 
+        result = self.sr_client.post_subjects_subject(
+            subject=":.:default-ctx-subject", data=schema_data
+        )
+        self.assert_equal(result.status_code, requests.codes.ok)
+        self.assert_equal(result.json()["id"], 1)
+
+    @cluster(num_nodes=1)
+    def test_contexts(self):
+        """Verify context-aware endpoints work with qualified subjects."""
+
+        schema_data = json.dumps({"schema": schema1_def})
+        ctx_subject = ":.ctx1:sub1"
+
+        # Register in context
+        result = self.sr_client.post_subjects_subject_versions(
+            subject=ctx_subject, data=schema_data
+        )
+        self.assert_equal(result.status_code, requests.codes.ok)
+
+        # Lookup in context
+        result = self.sr_client.post_subjects_subject(
+            subject=ctx_subject, data=schema_data
+        )
+        self.assert_equal(result.status_code, requests.codes.ok)
+
     @cluster(num_nodes=1)
     def test_context_isolation(self):
-        """Verify contexts are isolated: independent IDs."""
+        """Verify contexts are isolated: independent IDs, no cross-context lookups."""
 
         # Register in default context
         result = self.sr_client.post_subjects_subject_versions(
@@ -1728,6 +1753,12 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         )
         self.assert_equal(result.status_code, requests.codes.ok)
         self.assert_equal(result.json()["id"], 1)
+
+        # Lookup schema in different context - should fail
+        result = self.sr_client.post_subjects_subject(
+            subject=":.ctx2:sub1", data=json.dumps({"schema": schema1_def})
+        )
+        self.assert_equal(result.status_code, requests.codes.not_found)
 
     @cluster(num_nodes=3)
     def test_post_subjects_subject_versions_null_metadata_ruleset(self):
