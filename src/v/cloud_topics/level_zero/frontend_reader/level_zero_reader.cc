@@ -159,7 +159,8 @@ level_zero_log_reader_impl::maybe_read_batches_from_cache() {
     return ret;
 }
 
-storage::local_log_reader_config level_zero_log_reader_impl::ctp_read_config() const {
+storage::local_log_reader_config
+level_zero_log_reader_impl::ctp_read_config() const {
     /*
      * The requested offset range in the cloud topic reader configuration are
      * specified as offsets in the kafka address space and need to first be
@@ -216,49 +217,49 @@ level_zero_log_reader_impl::fetch_metadata(
       "Invalid state transition, unexpected current state: {}",
       std::to_underlying(_current));
     chunked_circular_buffer<local_log_batch> ret;
-        auto cfg = ctp_read_config();
-        auto reader = co_await _ctp->make_local_reader(cfg);
-        auto batches = std::move(reader).generator(deadline);
+    auto cfg = ctp_read_config();
+    auto reader = co_await _ctp->make_local_reader(cfg);
+    auto batches = std::move(reader).generator(deadline);
 
-        // Convert L0 meta batches to extent_meta structures.
-        while (auto maybe_batch = co_await batches()) {
-            auto batch = std::move(maybe_batch->get());
-            auto& header = batch.header();
-            if (header.type == model::record_batch_type::raft_data) {
-                local_log_batch local_batch{.header = header};
-                local_batch.data = std::move(batch).release_data();
-                ret.push_back(std::move(local_batch));
-                continue;
-            }
-            if (header.type != model::record_batch_type::ctp_placeholder) {
-                continue;
-            }
-            cloud_topics::extent_meta e{
-              .base_offset = model::offset_cast(batch.base_offset()),
-              .last_offset = model::offset_cast(batch.last_offset()),
-            };
-            auto placeholder = parse_placeholder_batch(std::move(batch));
-            e.id = placeholder.id;
-            e.first_byte_offset = placeholder.offset;
-            e.byte_range_size = placeholder.size_bytes;
-            ret.push_back(local_log_batch{.header = header, .data = e});
+    // Convert L0 meta batches to extent_meta structures.
+    while (auto maybe_batch = co_await batches()) {
+        auto batch = std::move(maybe_batch->get());
+        auto& header = batch.header();
+        if (header.type == model::record_batch_type::raft_data) {
+            local_log_batch local_batch{.header = header};
+            local_batch.data = std::move(batch).release_data();
+            ret.push_back(std::move(local_batch));
+            continue;
         }
-        if (!ret.empty()) {
-            vlog(
-              _log.debug,
-              "Fetched {} L0 meta batches from the underlying "
-              "partition, first offset: {}, last offset: {}",
-              ret.size(),
-              ret.front().header.base_offset,
-              ret.back().header.last_offset());
-        } else {
-            vlog(
-              _log.debug,
-              "No L0 meta batches fetched from the underlying partition, "
-              "start offset: {}, max offset: {}",
-              cfg.start_offset,
-              cfg.max_offset);
+        if (header.type != model::record_batch_type::ctp_placeholder) {
+            continue;
         }
+        cloud_topics::extent_meta e{
+          .base_offset = model::offset_cast(batch.base_offset()),
+          .last_offset = model::offset_cast(batch.last_offset()),
+        };
+        auto placeholder = parse_placeholder_batch(std::move(batch));
+        e.id = placeholder.id;
+        e.first_byte_offset = placeholder.offset;
+        e.byte_range_size = placeholder.size_bytes;
+        ret.push_back(local_log_batch{.header = header, .data = e});
+    }
+    if (!ret.empty()) {
+        vlog(
+          _log.debug,
+          "Fetched {} L0 meta batches from the underlying "
+          "partition, first offset: {}, last offset: {}",
+          ret.size(),
+          ret.front().header.base_offset,
+          ret.back().header.last_offset());
+    } else {
+        vlog(
+          _log.debug,
+          "No L0 meta batches fetched from the underlying partition, "
+          "start offset: {}, max offset: {}",
+          cfg.start_offset,
+          cfg.max_offset);
+    }
     co_return ret;
 }
 
