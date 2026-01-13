@@ -105,7 +105,9 @@ private:
 
     ss::future<
       chunked_circular_buffer<level_zero_log_reader_impl::local_log_batch>>
-    fetch_metadata(model::timeout_clock::time_point deadline) const;
+    fetch_metadata(
+      storage::local_log_reader_config cfg,
+      model::timeout_clock::time_point deadline) const;
     ss::future<chunked_circular_buffer<model::record_batch>>
     materialize_batches(
       chunked_circular_buffer<local_log_batch> unhydrated,

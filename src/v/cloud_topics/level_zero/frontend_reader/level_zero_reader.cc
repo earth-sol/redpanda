@@ -83,11 +83,26 @@ level_zero_log_reader_impl::read_some(
      * cloud topics partition. In the case of placeholders, the payloads are
      * missing, and will be handled below.
      */
-    auto log_read_metadata = co_await fetch_metadata(deadline);
+    auto log_read_cfg = ctp_read_config();
+    auto log_read_metadata = co_await fetch_metadata(log_read_cfg, deadline);
     if (log_read_metadata.empty()) {
+        vlog(
+          _log.debug,
+          "No L0 meta batches fetched from the underlying partition, "
+          "start offset: {}, max offset: {}",
+          log_read_cfg.start_offset,
+          log_read_cfg.max_offset);
         set_end_of_stream();
         co_return model::record_batch_reader::storage_t{};
     }
+
+    vlog(
+      _log.debug,
+      "Fetched {} L0 meta batches from the underlying "
+      "partition, first offset: {}, last offset: {}",
+      log_read_metadata.size(),
+      log_read_metadata.front().header.base_offset,
+      log_read_metadata.back().header.last_offset());
 
     /*
      * Combine metadata with payloads (from cache or object storage) to
@@ -199,9 +214,9 @@ level_zero_log_reader_impl::ctp_read_config() const {
 
 ss::future<chunked_circular_buffer<level_zero_log_reader_impl::local_log_batch>>
 level_zero_log_reader_impl::fetch_metadata(
+  storage::local_log_reader_config cfg,
   model::timeout_clock::time_point deadline) const {
     chunked_circular_buffer<local_log_batch> ret;
-    auto cfg = ctp_read_config();
     auto reader = co_await _ctp->make_local_reader(cfg);
     auto batches = std::move(reader).generator(deadline);
 
@@ -228,22 +243,7 @@ level_zero_log_reader_impl::fetch_metadata(
         e.byte_range_size = placeholder.size_bytes;
         ret.push_back(local_log_batch{.header = header, .data = e});
     }
-    if (!ret.empty()) {
-        vlog(
-          _log.debug,
-          "Fetched {} L0 meta batches from the underlying "
-          "partition, first offset: {}, last offset: {}",
-          ret.size(),
-          ret.front().header.base_offset,
-          ret.back().header.last_offset());
-    } else {
-        vlog(
-          _log.debug,
-          "No L0 meta batches fetched from the underlying partition, "
-          "start offset: {}, max offset: {}",
-          cfg.start_offset,
-          cfg.max_offset);
-    }
+
     co_return ret;
 }
 
