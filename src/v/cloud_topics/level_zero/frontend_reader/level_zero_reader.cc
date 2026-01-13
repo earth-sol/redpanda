@@ -70,10 +70,6 @@ level_zero_log_reader_impl::read_some(
         co_return chunked_circular_buffer<model::record_batch>{};
     }
 
-    if (is_over_limit(0)) {
-        set_end_of_stream();
-        co_return chunked_circular_buffer<model::record_batch>{};
-    }
     // We're only fetching from the record batch cache if the reader is in
     // the 'empty' state. It doesn't make any difference if the reader is in
     // the 'materialized' state. If we're in 'ready' state we risk to go out
@@ -137,12 +133,13 @@ level_zero_log_reader_impl::maybe_read_batches_from_cache() {
           batch.value().term());
 
         auto batch_size = batch.value().size_bytes();
-        if (is_over_limit(batch_size)) {
+        if (is_over_limit_with_bytes(batch_size)) {
+            set_end_of_stream();
             break;
         }
+        _bytes_consumed += batch_size;
 
         ret.push_back(std::move(batch.value()));
-        _bytes_consumed += batch_size;
         _next_offset = model::offset_cast(
           model::next_offset(ret.back().last_offset()));
     }
@@ -267,7 +264,7 @@ level_zero_log_reader_impl::materialize_batches(
           [](const cloud_topics::extent_meta& meta) {
               return meta.byte_range_size();
           });
-        if (is_over_limit(hydrated_batch_size)) {
+        if (is_over_limit_with_bytes(hydrated_batch_size)) {
             // If the next meta batch exceeds the max bytes limit, we stop
             // materializing. The only exception is if we didn't collect any
             // batches yet, in which case we still materialize the next
@@ -282,6 +279,7 @@ level_zero_log_reader_impl::materialize_batches(
               materialize_bytes,
               _config,
               hydrated_batch_size);
+            set_end_of_stream();
             break;
         }
         _bytes_consumed += hydrated_batch_size;
@@ -401,7 +399,7 @@ bool level_zero_log_reader_impl::is_end_of_stream() const {
     return _end_of_stream;
 }
 
-bool level_zero_log_reader_impl::is_over_limit(size_t size) const {
+bool level_zero_log_reader_impl::is_over_limit_with_bytes(size_t size) const {
     return (_config.strict_max_bytes || _bytes_consumed > 0)
            && (_bytes_consumed + size) > _config.max_bytes;
 }

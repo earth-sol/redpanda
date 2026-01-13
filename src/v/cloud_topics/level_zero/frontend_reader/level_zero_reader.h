@@ -117,7 +117,7 @@ private:
     maybe_read_batches_from_cache();
 
     // If adding a batch of `size` would cause this to go over the bytes limit.
-    bool is_over_limit(size_t size) const;
+    bool is_over_limit_with_bytes(size_t size) const;
 
     // Data from the local log that is not yet hydrated from data in L0
     //
