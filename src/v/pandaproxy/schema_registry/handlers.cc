@@ -836,7 +836,8 @@ delete_subject(server::request_t rq, server::reply_t rp) {
 ss::future<server::reply_t>
 delete_subject_version(server::request_t rq, server::reply_t rp) {
     parse_accept_header(rq, rp);
-    auto sub{parse::request_param<subject>(*rq.req, "subject")};
+    auto ctx_sub = context_subject::from_string(
+      parse::request_param<ss::sstring>(*rq.req, "subject"));
     auto ver = parse::request_param<ss::sstring>(*rq.req, "version");
     auto permanent{
       parse::query_param<std::optional<permanent_delete>>(*rq.req, "permanent")
@@ -852,9 +853,9 @@ delete_subject_version(server::request_t rq, server::reply_t rp) {
         // (Clearly this will never succeed for permanent=true -- calling
         //  with latest+permanent is a bad request per API docs)
         auto versions = co_await rq.service().schema_store().get_versions(
-          sub, include_deleted::no);
+          ctx_sub, include_deleted::no);
         if (versions.empty()) {
-            throw as_exception(not_found(sub, version));
+            throw as_exception(not_found(ctx_sub, version));
         }
         version = versions.back();
     } else {
@@ -863,16 +864,17 @@ delete_subject_version(server::request_t rq, server::reply_t rp) {
 
     // A permanent deletion emits tombstones for prior schema_key messages
     if (permanent) {
-        co_await rq.service().writer().delete_subject_permanent(sub, version);
+        co_await rq.service().writer().delete_subject_permanent(
+          ctx_sub, version);
     } else {
         // Refuse to soft-delete the same thing twice
         if (co_await rq.service().schema_store().is_subject_version_deleted(
-              sub, version)) {
-            throw as_exception(soft_deleted(sub, version));
+              ctx_sub, version)) {
+            throw as_exception(soft_deleted(ctx_sub, version));
         }
 
         // Upsert the version with is_deleted=1
-        co_await rq.service().writer().delete_subject_version(sub, version);
+        co_await rq.service().writer().delete_subject_version(ctx_sub, version);
     }
 
     auto resp = ppj::rjson_serialize_iobuf(version);

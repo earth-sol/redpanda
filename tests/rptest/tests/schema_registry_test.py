@@ -1756,10 +1756,14 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         self.assert_equal(result.status_code, requests.codes.ok)
         self.assert_equal(result.json()["version"], 1)
 
-        # Delete subject in context
-        result = self.sr_client.delete_subject(subject=ctx_subject)
+        # Delete specific version in context
+        result = self.sr_client.delete_subject_version(subject=ctx_subject, version=1)
         self.assert_equal(result.status_code, requests.codes.ok)
-        self.assert_equal(result.json(), [1])
+        self.assert_equal(result.json(), 1)
+
+        # Delete subject in context (cleanup)
+        result = self.sr_client.delete_subject(subject=ctx_subject, permanent=True)
+        self.assert_equal(result.status_code, requests.codes.ok)
 
     @cluster(num_nodes=1)
     def test_context_isolation(self):
