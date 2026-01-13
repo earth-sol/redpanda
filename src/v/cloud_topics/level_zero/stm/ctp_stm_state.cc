@@ -15,8 +15,10 @@
 namespace cloud_topics {
 
 void ctp_stm_state::advance_max_seen_epoch(cluster_epoch epoch) noexcept {
-    _max_seen_epoch = std::max(
-      epoch, _max_seen_epoch.value_or(cluster_epoch{}));
+    if (epoch > _max_seen_epoch) {
+        _previous_seen_epoch = _max_seen_epoch;
+        _max_seen_epoch = epoch;
+    }
 }
 
 std::optional<kafka::offset>
@@ -34,16 +36,24 @@ ctp_stm_state::estimate_min_epoch() const noexcept {
     return _min_epoch_lower_bound;
 }
 
+std::optional<cluster_epoch>
+ctp_stm_state::get_previous_epoch() const noexcept {
+    return std::max(_previous_epoch, _previous_seen_epoch);
+}
+
 void ctp_stm_state::advance_epoch(cluster_epoch epoch, model::offset offset) {
     // The STM works on both leader and followers, on a leader the
     // max_seen_epoch epoch is updated by the fencing mechanism.
     // On the follower the max_seen_epoch epoch has to follow the max epoch.
     _max_seen_epoch = std::max(
-      _max_seen_epoch.value_or(cluster_epoch{}), epoch);
+      _max_seen_epoch.value_or(cluster_epoch::min()), epoch);
     // Register new epoch
-    if (_max_applied_epoch.value_or(cluster_epoch{}) != epoch) {
-        _max_applied_epoch = std::max(
-          epoch, _max_applied_epoch.value_or(cluster_epoch{}));
+    if (_max_applied_epoch.value_or(cluster_epoch::min()) < epoch) {
+        // Record previous max applied epoch and offset.
+        // The condition above guarantees that the invariant of the
+        // _previous_epoch is respected.
+        _previous_epoch = _max_applied_epoch;
+        _max_applied_epoch = epoch;
         _max_applied_epoch_offset = offset;
         if (!_min_epoch_lower_bound.has_value()) {
             // First epoch applied to the STM

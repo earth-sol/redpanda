@@ -178,10 +178,10 @@ TEST_F_CORO(ctp_stm_fixture, test_fencing) {
       = co_await api(node(*get_leader())).fence_epoch(ct::cluster_epoch{3});
     ASSERT_TRUE_CORO(write_fence.has_value());
 
-    // Out of order fence for epoch 2 (should be waiting for the fence to be
+    // Out of order fence for epoch 1 (should be waiting for the fence to be
     // released)
     auto leader_api = api(node(*get_leader()));
-    auto fut = leader_api.fence_epoch(ct::cluster_epoch{2});
+    auto fut = leader_api.fence_epoch(ct::cluster_epoch{1});
     co_await ss::sleep(100ms);
 
     write_fence = {};

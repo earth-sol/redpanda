@@ -78,6 +78,22 @@ public:
     /// \note This value might be stale.
     std::optional<cluster_epoch> estimate_min_epoch() const noexcept;
 
+    /// Return the previous epoch value.
+    /// The request can be replicated only if its epoch is greater or
+    /// equal to epoch returned by this method. If the method returns
+    /// nullopt then the epoch wasn't advanced yet so there is no
+    /// previous epoch.
+    /// Note that this value is not necessary equal to estimate_min_epoch.
+    std::optional<cluster_epoch> get_previous_epoch() const noexcept;
+
+    bool epoch_in_window(cluster_epoch epoch) const noexcept {
+        auto end = _max_seen_epoch.value_or(
+          _max_applied_epoch.value_or(cluster_epoch::min()));
+        auto begin = _previous_seen_epoch.value_or(
+          _previous_epoch.value_or(end));
+        return epoch >= begin && epoch <= end;
+    }
+
     /// Advance LRO and it's translated log offset counterpart.
     void advance_last_reconciled_offset(
       kafka::offset new_last_reconciled_offset,
@@ -95,6 +111,7 @@ public:
           _last_reconciled_log_offset,
           _max_applied_epoch_offset,
           _min_epoch_lower_bound,
+          _previous_epoch,
           _start_offset);
     }
 
@@ -133,6 +150,17 @@ private:
     /// view of the partition) but it's guaranteed that all epochs before
     /// this epoch are "inactive".
     std::optional<cluster_epoch> _min_epoch_lower_bound;
+
+    /// The previous epoch after the current in flight requests are applied.
+    /// Not persisted with the snapshot because it reflects the state of
+    /// in-flight requests.
+    std::optional<cluster_epoch> _previous_seen_epoch;
+
+    /// The previous epoch applied to the STM state.
+    /// Invariant:
+    /// - _previous_epoch < _max_applied_epoch
+    /// - _previous_epoch <= _previous_seen_epoch
+    std::optional<cluster_epoch> _previous_epoch;
 
     /// The last offset that was uploaded to L1. This value may lag behind
     /// the value stored in the L1 metastore, but should never be ahead of
