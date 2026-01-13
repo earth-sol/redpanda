@@ -1744,6 +1744,11 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
         self.assert_equal(result.status_code, requests.codes.ok)
         self.assert_equal(result.json()["is_compatible"], True)
 
+        # List versions in context
+        result = self.sr_client.get_subjects_subject_versions(subject=ctx_subject)
+        self.assert_equal(result.status_code, requests.codes.ok)
+        self.assert_equal(result.json(), [1])
+
     @cluster(num_nodes=1)
     def test_context_isolation(self):
         """Verify contexts are isolated: independent IDs, no cross-context lookups."""

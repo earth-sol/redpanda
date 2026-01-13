@@ -504,7 +504,8 @@ ss::future<server::reply_t> get_subjects(
 ss::future<server::reply_t>
 get_subject_versions(server::request_t rq, server::reply_t rp) {
     parse_accept_header(rq, rp);
-    auto sub = parse::request_param<subject>(*rq.req, "subject");
+    auto ctx_sub = context_subject::from_string(
+      parse::request_param<ss::sstring>(*rq.req, "subject"));
     auto inc_del{
       parse::query_param<std::optional<include_deleted>>(*rq.req, "deleted")
         .value_or(include_deleted::no)};
@@ -513,7 +514,7 @@ get_subject_versions(server::request_t rq, server::reply_t rp) {
     co_await rq.service().writer().read_sync();
 
     auto versions = ppj::rjson_serialize_iobuf(
-      co_await rq.service().schema_store().get_versions(sub, inc_del));
+      co_await rq.service().schema_store().get_versions(ctx_sub, inc_del));
 
     log_response(*rq.req, versions);
     rp.rep->write_body("json", ppj::as_body_writer(std::move(versions)));
