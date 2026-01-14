@@ -384,6 +384,7 @@ class Grafana:
         env["GF_AUTH_DISABLE_LOGIN_FORM"] = "true"
         env["GF_AUTH_ANONYMOUS_ENABLED"] = "true"
         env["GF_AUTH_ANONYMOUS_ORG_ROLE"] = "Admin"
+        env["GF_DASHBOARDS_MIN_REFRESH_INTERVAL"] = "1s"
 
         args = [str(grafana_binary), "server"]
         print(f"Running: {' '.join(args)}")
