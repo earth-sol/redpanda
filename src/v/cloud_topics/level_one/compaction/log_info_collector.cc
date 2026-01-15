@@ -118,9 +118,13 @@ ss::future<> max_compactible_offset_provider_impl::fill_max_compactible_offsets(
 
 log_info_collector::log_info_collector(
   metastore* metastore,
-  std::unique_ptr<topic_cfg_provider> tp_metadata_provider)
+  std::unique_ptr<topic_cfg_provider> tp_metadata_provider,
+  std::unique_ptr<max_compactible_offset_provider>
+    max_compactible_offset_provider)
   : _metastore(metastore)
-  , _topic_metadata_provider(std::move(tp_metadata_provider)) {}
+  , _topic_metadata_provider(std::move(tp_metadata_provider))
+  , _max_compactible_offset_provider(
+      std::move(max_compactible_offset_provider)) {}
 
 ss::future<> log_info_collector::collect_info_for_logs(
   log_set_t& logs_set,
@@ -142,8 +146,31 @@ ss::future<> log_info_collector::collect_info_for_logs(
 
     auto compaction_infos = std::move(compaction_infos_res).value();
 
+    // Collect NTPs that need max compactible offset lookups.
+    chunked_hash_map<model::ntp, kafka::offset> ntp_to_max_compactible_offset;
+    for (const auto& log : logs_list) {
+        // We have to iterate over logs_list and perform a look-up in
+        // compaction_infos unfortunately due to grouping by tidp, but needing
+        // to look up compactible_offsets by ntp. If shard_table offered a way
+        // to look up by tidp, this wouldn't be pessimized.
+        if (log.link.is_linked() && compaction_infos.contains(log.tidp)) {
+            // Use kafka::offset::min() as a placeholder; real values are filled
+            // in by fill_max_compactible_offsets below.
+            ntp_to_max_compactible_offset.insert_or_assign(
+              log.ntp, kafka::offset::min());
+        }
+    }
+
+    co_await _max_compactible_offset_provider->fill_max_compactible_offsets(
+      ntp_to_max_compactible_offset);
+
     populate_log_infos(
-      compaction_infos, logs_set, logs_list, compaction_queue, now);
+      compaction_infos,
+      logs_set,
+      logs_list,
+      compaction_queue,
+      ntp_to_max_compactible_offset,
+      now);
 }
 
 chunked_vector<metastore::compaction_info_spec>
@@ -233,6 +260,8 @@ void log_info_collector::populate_log_infos(
   log_set_t& logs_set,
   log_list_t& logs_list,
   log_compaction_queue& compaction_queue,
+  const chunked_hash_map<model::ntp, kafka::offset>&
+    ntp_to_max_compactible_offset,
   model::timestamp collection_timestamp) const {
     for (auto& log : logs_list) {
         if (!log.link.is_linked()) {
@@ -263,15 +292,27 @@ void log_info_collector::populate_log_infos(
             continue;
         }
 
+        auto offset_it = ntp_to_max_compactible_offset.find(log.ntp);
+        if (offset_it == ntp_to_max_compactible_offset.end()) {
+            // Likely this log was concurrently removed during some scheduling
+            // point.
+            continue;
+        }
+
+        auto max_compactible_offset = offset_it->second;
+
         log.info_and_ts = compaction_info_and_timestamp{
           .info = std::move(compaction_info).value(),
-          .collected_at = collection_timestamp};
+          .collected_at = collection_timestamp,
+          .max_compactible_offset = max_compactible_offset};
 
         vlog(
           compaction_log.debug,
-          "Compaction info for CTP {} returned {}",
+          "Compaction info for CTP {} returned {} with max_compactible_offset: "
+          "{}",
           log.ntp,
-          log.info_and_ts->info);
+          log.info_and_ts->info,
+          max_compactible_offset);
 
         if (log.state != log_compaction_meta::log_state::idle) {
             // We don't need to queue an already queued log.
@@ -298,9 +339,15 @@ void log_info_collector::populate_log_infos(
 }
 
 log_info_collector make_default_log_info_collector(
-  metastore* metastore, cluster::metadata_cache* metadata_cache) {
+  metastore* metastore,
+  cluster::metadata_cache* metadata_cache,
+  ss::sharded<cluster::shard_table>* shard_table,
+  ss::sharded<cluster::partition_manager>* partition_manager) {
     return log_info_collector(
-      metastore, std::make_unique<topic_cfg_provider_impl>(metadata_cache));
+      metastore,
+      std::make_unique<topic_cfg_provider_impl>(metadata_cache),
+      std::make_unique<max_compactible_offset_provider_impl>(
+        shard_table, partition_manager));
 }
 
 } // namespace cloud_topics::l1

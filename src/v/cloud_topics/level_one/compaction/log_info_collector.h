@@ -79,7 +79,10 @@ private:
 // when attempting to schedule a round of compactions.
 class log_info_collector {
 public:
-    log_info_collector(metastore*, std::unique_ptr<topic_cfg_provider>);
+    log_info_collector(
+      metastore*,
+      std::unique_ptr<topic_cfg_provider>,
+      std::unique_ptr<max_compactible_offset_provider>);
 
     // Populates `info_and_ts` within `log_compaction_meta`s from the provided
     // `log_list_t` by collecting each log's compaction info from the metastore.
@@ -108,15 +111,21 @@ private:
       log_set_t&,
       log_list_t&,
       log_compaction_queue&,
+      const chunked_hash_map<model::ntp, kafka::offset>&,
       model::timestamp) const;
 
     // Owned by `app`.
     metastore* _metastore;
 
     std::unique_ptr<topic_cfg_provider> _topic_metadata_provider;
+    std::unique_ptr<max_compactible_offset_provider>
+      _max_compactible_offset_provider;
 };
 
-log_info_collector
-make_default_log_info_collector(metastore*, cluster::metadata_cache*);
+log_info_collector make_default_log_info_collector(
+  metastore*,
+  cluster::metadata_cache*,
+  ss::sharded<cluster::shard_table>*,
+  ss::sharded<cluster::partition_manager>*);
 
 } // namespace cloud_topics::l1
