@@ -11,6 +11,8 @@
 #include "cloud_topics/level_zero/stm/ctp_stm_state.h"
 #include "cloud_topics/types.h"
 #include "gtest/gtest.h"
+#include "model/fundamental.h"
+#include "random/generators.h"
 #include "test_utils/test.h"
 #include "utils/uuid.h"
 
@@ -284,6 +286,180 @@ TEST(ctp_stm_state_test, sliding_window_issue) {
 
     // Now the inactive epoch can be advanced because we're reconciled up to it.
     EXPECT_EQ(estimate_inactive_epoch(), 9_epoch);
+}
+
+TEST(ctp_stm_state_test, l0_simulation) {
+    struct uploaded_l0_file_batch {
+        ct::cluster_epoch epoch;
+    };
+    struct placeholder_batch {
+        ct::cluster_epoch epoch;
+        kafka::offset offset;
+    };
+    struct l0_simulation_state {
+        // The state for the STM
+        ct::ctp_stm_state stm;
+        // Batches that are uploaded, but have not yet been fenced nor
+        // replicated, so this is basically just a queue of epochs that will
+        // be applied to the log. The epochs may not be in order because they
+        // may come from different shards/brokers.
+        ss::chunked_fifo<uploaded_l0_file_batch> uploaded_batches;
+        // Placeholders that are replicated, but not yet applied to the
+        // to the STM.
+        ss::chunked_fifo<placeholder_batch> unapplied_placeholders;
+        // All the placeholders in the log
+        ss::chunked_fifo<placeholder_batch> log_placeholders;
+        // hwm for the partition
+        kafka::offset hwm = 0_offset;
+
+        testing::AssertionResult validate() {
+            // The main thing we want to validate is that there are no batches
+            // in the log that are GC eligable but have not been reconciled.
+            auto lro = stm.get_last_reconciled_offset();
+            // Remove reconciled batches
+            auto non_reconciled_batches = std::views::filter(
+              log_placeholders, [lro](const placeholder_batch& batch) {
+                  return batch.offset > lro.value_or(kafka::offset::min());
+              });
+            // Find the min active epoch in the log
+            auto min_active_epoch = std::ranges::min_element(
+              non_reconciled_batches,
+              std::less<>(),
+              [](const placeholder_batch& batch) { return batch.epoch; });
+            // What do we say we can GC?
+            auto inactive_epoch = stm.estimate_inactive_epoch();
+            if (min_active_epoch == non_reconciled_batches.end()) {
+                // There is nothing in the log unreconcilded, we should not yet
+                // have an inactive epoch above what is yet to be replicated.
+                if (!uploaded_batches.empty()) {
+                    auto it = std::ranges::min_element(
+                      uploaded_batches, std::less<>(), [](const auto& batch) {
+                          return batch.epoch;
+                      });
+                    if (inactive_epoch > it->epoch) {
+                        return testing::AssertionFailure() << fmt::format(
+                                 "expected inactive epoch ({}) to not be above "
+                                 "active epochs {}",
+                                 inactive_epoch.value(),
+                                 it->epoch);
+                    }
+                }
+            } else if (inactive_epoch >= min_active_epoch->epoch) {
+                return testing::AssertionFailure() << fmt::format(
+                         "expected the min log epoch ({}) to be all be "
+                         "above inactive_epoch: {}",
+                         min_active_epoch->epoch,
+                         inactive_epoch.value());
+            }
+            return testing::AssertionSuccess();
+        }
+    };
+    // We simulate the operations for a single partition in l0
+    l0_simulation_state universe;
+
+    {
+        std::vector<uploaded_l0_file_batch> batches{
+          // clang-format off
+          {.epoch = 5_epoch},
+          {.epoch = 5_epoch},
+          {.epoch = 6_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 6_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 9_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 8_epoch},
+          {.epoch = 15_epoch},
+          {.epoch = 15_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 12_epoch},
+          {.epoch = 10_epoch},
+          {.epoch = 15_epoch},
+          // clang-format on
+        };
+        std::ranges::copy(
+          batches, std::back_inserter(universe.uploaded_batches));
+    }
+
+    std::vector<std::string> oplog;
+
+    while (true) {
+        // Always check our invariants
+        ASSERT_TRUE(universe.validate())
+          << fmt::format("operations:\n{}", fmt::join(oplog, "\n"));
+        // Possible operations we can perform in the universe.
+        std::vector<std::function<void()>> possible_operations;
+        // If there are batches to upload, let's do it.
+        if (!universe.uploaded_batches.empty()) {
+            possible_operations.emplace_back([&universe, &oplog] {
+                auto batch = universe.uploaded_batches.front();
+                universe.uploaded_batches.pop_front();
+                if (!universe.stm.epoch_in_window(batch.epoch)) {
+                    universe.stm.advance_max_seen_epoch(batch.epoch);
+                    ASSERT_TRUE(universe.stm.epoch_in_window(batch.epoch));
+                }
+                placeholder_batch placeholder{
+                  .epoch = batch.epoch, .offset = universe.hwm++};
+                universe.unapplied_placeholders.push_back(placeholder);
+                universe.log_placeholders.push_back(placeholder);
+                oplog.push_back(
+                  fmt::format(
+                    "replicated batch {} with epoch {}",
+                    placeholder.offset,
+                    placeholder.epoch));
+            });
+        }
+        // Apply to STM if we haven't yet
+        if (!universe.unapplied_placeholders.empty()) {
+            possible_operations.emplace_back([&universe, &oplog] {
+                auto batch = universe.unapplied_placeholders.front();
+                universe.unapplied_placeholders.pop_front();
+                // Apply to the STM
+                universe.stm.advance_epoch(
+                  batch.epoch, kafka::offset_cast(batch.offset));
+                oplog.push_back(
+                  fmt::format(
+                    "applied batch {} with epoch {}",
+                    batch.offset,
+                    batch.epoch));
+            });
+        }
+        // Run reconciliation
+        auto last_offset = kafka::prev_offset(universe.hwm);
+        auto lro = universe.stm.get_last_reconciled_offset().value_or(
+          kafka::offset::min());
+        if (lro < last_offset) {
+            possible_operations.emplace_back(
+              [&universe, &oplog, lro, last_offset] {
+                  auto new_lro = random_generators::get_int(
+                    kafka::next_offset(lro)(), last_offset());
+                  universe.stm.advance_last_reconciled_offset(
+                    kafka::offset(new_lro), model::offset(new_lro));
+                  oplog.push_back(fmt::format("reconciled to {}", new_lro));
+              });
+        }
+        if (possible_operations.empty()) {
+            // No more possible operations
+            fmt::print(
+              std::cerr,
+              "min_epoch: {}\n",
+              universe.stm.estimate_inactive_epoch().value_or(
+                ct::cluster_epoch::min()));
+            fmt::print(std::cerr, "operations:\n{}\n", fmt::join(oplog, "\n"));
+            return;
+        }
+        // Run a random operation
+        auto op = random_generators::random_choice(possible_operations);
+        op();
+    }
 }
 
 } // anonymous namespace
