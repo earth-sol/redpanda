@@ -205,6 +205,11 @@ collect(collect_context& ctx, const conversion::json_schema::subschema& s) {
 
     constraint c;
 
+    if (s.ref() != nullptr) {
+        // draft-07: $ref takes precedence over all other keywords
+        return collect(ctx, *s.ref());
+    }
+
     // Type keyword.
     const auto& schema_types = s.types();
     if (!schema_types.empty()) {
