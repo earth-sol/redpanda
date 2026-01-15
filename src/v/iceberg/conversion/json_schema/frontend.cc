@@ -347,17 +347,17 @@ public:
             compile_types(ctx, *sub, *types_node);
         }
 
-        if (
-          const auto defs_node = find_keyword(
-            node, "$defs", {json_value_type::object})) {
+        if (const auto defs_node = find_keyword(
+              node, "definitions", {json_value_type::object});
+            new_ctx && defs_node) {
             for (const auto& [k, v] : defs_node->GetObject()) {
                 if (!v.IsObject()) {
                     throw std::runtime_error(
-                      "The $defs keyword must be an object");
+                      "The definitions keyword must be an object");
                 }
 
                 auto [it, inserted] = sub->subschemas_.emplace(
-                  fmt::format("$defs/{}", k.GetString()),
+                  fmt::format("definitions/{}", k.GetString()),
                   compile_subschema(ctx, v));
                 if (!inserted) {
                     throw std::runtime_error(

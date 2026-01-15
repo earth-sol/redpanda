@@ -42,11 +42,11 @@ json::Document parse_json(std::string_view json_str) {
 constexpr std::string_view schema_identification_example = R"({
     "$id": "https://example.com/root.json",
     "type": "string",
-    "$defs": {
+    "definitions": {
         "A": { "$anchor": "foo" },
         "B": {
             "$id": "other.json",
-            "$defs": {
+            "definitions": {
                 "X": { "$anchor": "bar" },
                 "Y": {
                     "$id": "t/inner.json",
@@ -113,19 +113,19 @@ TEST(frontend_test, compile_valid_schema) {
   base uri: https://example.com/root.json
   dialect: http://json-schema.org/draft-07/schema#
   types: [string]
-#/$defs/A
+#/definitions/A
   base uri: https://example.com/root.json
   dialect: http://json-schema.org/draft-07/schema#
-#/$defs/B
+#/definitions/B
   base uri: https://example.com/other.json
   dialect: http://json-schema.org/draft-07/schema#
-#/$defs/B/$defs/X
+#/definitions/B/definitions/X
   base uri: https://example.com/other.json
   dialect: http://json-schema.org/draft-07/schema#
-#/$defs/B/$defs/Y
+#/definitions/B/definitions/Y
   base uri: https://example.com/t/inner.json
   dialect: http://json-schema.org/draft-07/schema#
-#/$defs/C
+#/definitions/C
   base uri: urn:uuid:ee564b8a-7a87-4125-8c96-e9f123d6766f
   dialect: http://json-schema.org/draft-07/schema#
 )";
@@ -423,8 +423,8 @@ TEST(frontend_test, ref) {
           frontend{}.compile(
             parse_json(R"({
           "$id": "https://example.com/root.json",
-          "$ref": "#/$defs/inner",
-          "$defs": {
+          "$ref": "#/definitions/inner",
+          "definitions": {
               "inner": {
                   "type": "string"
               }
@@ -551,7 +551,7 @@ TEST(frontend_test, duplicate_ids) {
           frontend{}.compile(
             parse_json(R"({
           "$id": "https://example.com/root.json",
-          "$defs": {
+          "definitions": {
               "inner": {
                   "$id": "/",
                   "type": "string"
