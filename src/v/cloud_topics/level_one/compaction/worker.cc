@@ -38,11 +38,15 @@ compaction_worker::compaction_worker(
         "Unexpected compaction worker update queue error: {}",
         ex);
   })
+  , _poll_interval(
+      config::shard_local_cfg().cloud_topics_compaction_interval_ms.bind())
   , _worker_manager(worker_manager)
   , _io(io)
   , _metastore(metastore)
   , _committer(committer)
-  , _metadata_cache(metadata_cache) {}
+  , _metadata_cache(metadata_cache) {
+    _poll_interval.watch([this]() { _worker_cv.signal(); });
+}
 
 ss::future<> compaction_worker::start() {
     _probe.setup_metrics();
@@ -79,13 +83,17 @@ void compaction_worker::start_work_loop() {
 }
 
 ss::future<> compaction_worker::work_loop() {
-    constexpr std::chrono::seconds poll_frequency(60);
-
     while (is_active()) {
+        auto poll_interval = _poll_interval();
         try {
-            co_await _worker_cv.wait(poll_frequency);
+            co_await _worker_cv.wait(_poll_interval());
         } catch (const ss::semaphore_timed_out&) {
             // Fall through
+        }
+
+        if (poll_interval != _poll_interval()) {
+            // Cluster config was changed while waiting.
+            continue;
         }
 
         while (is_active()) {
