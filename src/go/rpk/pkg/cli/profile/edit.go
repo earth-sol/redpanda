@@ -30,6 +30,10 @@ func newEditCommand(fs afero.Fs, p *config.Params) *cobra.Command {
 This command opens your default editor to edit the specified profile, or
 the current profile if no profile is specified. If the profile does not
 exist, this command creates it and switches to it.
+
+The editor will display all available configuration fields. Fields that are
+not currently set are shown as comments with documentation. To set a field,
+uncomment it and provide a value.
 `,
 		Args:              cobra.MaximumNArgs(1),
 		ValidArgsFunction: ValidProfiles(fs, p),
@@ -55,7 +59,7 @@ exist, this command creates it and switches to it.
 			original := *p
 			preFromCloud := p.FromCloud
 			preCloudDetails := p.CloudCluster
-			update, err := rpkos.EditTmpYAMLFile(fs, *p)
+			update, err := rpkos.EditTmpYAMLFileWithEncoder(fs, *p, config.ProfileToDocumentedYAML)
 			out.MaybeDieErr(err)
 
 			if preFromCloud {
