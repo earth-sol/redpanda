@@ -299,7 +299,7 @@ class EndToEndCloudTopicsCompactionTest(EndToEndCloudTopicsBase):
             "storage_compaction_key_map_memory_kb"
         ]
         extra_rp_conf = {
-            "log_compaction_interval_ms": 4000,
+            "cloud_topics_compaction_interval_ms": 4000,
             "storage_compaction_key_map_memory": key_map_memory_kb * 1024,
         }
         environment = {"__REDPANDA_TEST_DISABLE_BOUNDED_PROPERTY_CHECKS": "ON"}

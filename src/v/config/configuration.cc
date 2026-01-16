@@ -4607,6 +4607,12 @@ configuration::configuration()
       "compaction.",
       {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
       128_MiB)
+  , cloud_topics_compaction_interval_ms(
+      *this,
+      "cloud_topics_compaction_interval_ms",
+      "How often to trigger background compaction for cloud topics.",
+      {.needs_restart = needs_restart::no, .visibility = visibility::tunable},
+      30s)
   , cloud_topics_long_term_garbage_collection_interval(
       *this,
       "cloud_topics_long_term_garbage_collection_interval",
