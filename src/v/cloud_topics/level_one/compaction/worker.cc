@@ -88,7 +88,7 @@ ss::future<> compaction_worker::work_loop() {
         auto poll_interval = _poll_interval();
         try {
             co_await _worker_cv.wait(_poll_interval());
-        } catch (const ss::semaphore_timed_out&) {
+        } catch (const ss::condition_variable_timed_out&) {
             // Fall through
         }
 
