@@ -113,7 +113,7 @@ def omb_workload_config() -> str:
         "producerRate": 20000,
         "consumerBacklogSizeGB": 0,
         "warmupDurationMinutes": 0,
-        "testDurationMinutes": 1,
+        "testDurationMinutes": 2,
         "keyDistributor": "NO_KEY",
     }
 
