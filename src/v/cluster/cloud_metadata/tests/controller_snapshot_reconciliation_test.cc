@@ -257,6 +257,71 @@ TEST_F(controller_snapshot_reconciliation_fixture, test_reconciler_roles) {
 }
 
 TEST_F(
+  controller_snapshot_reconciliation_fixture,
+  test_reconciler_roles_with_group_members) {
+    // Test that roles with Group members are properly recovered.
+    cluster::controller_snapshot snap;
+    auto& security_snap = snap.security;
+    security_snap.roles.emplace_back(
+      security::role_name("role_with_groups"),
+      security::role({{security::role_member_type::group, "admin_group"}}));
+
+    auto actions = reconciler.get_actions(snap);
+    ASSERT_TRUE(
+      actions_contain(actions, cluster::recovery_stage::recovered_acls));
+    validate_actions(actions);
+
+    // Verify the role with group member is in the actions.
+    ASSERT_EQ(actions.roles.size(), 1);
+    ASSERT_EQ(actions.roles[0].name, security::role_name("role_with_groups"));
+    ASSERT_EQ(actions.roles[0].role.members().size(), 1);
+    ASSERT_TRUE(actions.roles[0].role.members().contains(
+      security::role_member{security::role_member_type::group, "admin_group"}));
+}
+
+TEST_F(
+  controller_snapshot_reconciliation_fixture,
+  test_reconciler_roles_with_mixed_members) {
+    // Test that roles with both user and group members are recovered.
+    cluster::controller_snapshot snap;
+    auto& security_snap = snap.security;
+
+    // Create a role with both user and group members
+    security::role mixed_role{{
+      {security::role_member_type::user, "test_user"},
+      {security::role_member_type::group, "test_group"},
+      {security::role_member_type::group, "admin_group"},
+    }};
+    security_snap.roles.emplace_back(
+      security::role_name("mixed_member_role"), std::move(mixed_role));
+
+    auto actions = reconciler.get_actions(snap);
+    ASSERT_TRUE(
+      actions_contain(actions, cluster::recovery_stage::recovered_acls));
+    validate_actions(actions);
+
+    // Verify the role with mixed members is in the actions.
+    ASSERT_EQ(actions.roles.size(), 1);
+    ASSERT_EQ(actions.roles[0].name, security::role_name("mixed_member_role"));
+
+    const auto& members = actions.roles[0].role.members();
+    ASSERT_EQ(members.size(), 3);
+
+    // Verify user member
+    ASSERT_TRUE(members.contains(
+      security::role_member{security::role_member_type::user, "test_user"}))
+      << "User member not found in role";
+
+    // Verify group members
+    ASSERT_TRUE(members.contains(
+      security::role_member{security::role_member_type::group, "test_group"}))
+      << "test_group member not found in role";
+    ASSERT_TRUE(members.contains(
+      security::role_member{security::role_member_type::group, "admin_group"}))
+      << "admin_group member not found in role";
+}
+
+TEST_F(
   controller_snapshot_reconciliation_fixture, test_reconcile_remote_topics) {
     cluster::controller_snapshot snap;
     model::topic_namespace tp_ns{model::kafka_namespace, model::topic{"foo"}};

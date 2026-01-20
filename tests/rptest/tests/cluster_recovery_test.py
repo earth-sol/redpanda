@@ -20,12 +20,15 @@ from ducktape.tests.test import TestContext
 from ducktape.utils.util import wait_until
 
 from rptest.services.admin import RoleMember
+from rptest.clients.admin.proto.redpanda.core.admin.v2 import security_pb2
+from rptest.clients.admin.v2 import Admin as AdminV2
 from rptest.clients.rpk import RPKACLInput, RpkTool
 from rptest.clients.types import TopicSpec
 from rptest.services.cluster import cluster
 from rptest.services.kgo_verifier_services import KgoVerifierProducer
 from rptest.services.redpanda import SISettings
 from rptest.tests.redpanda_test import RedpandaTest
+from rptest.util import wait_until_result
 from rptest.utils.si_utils import quiesce_uploads
 
 KiB = 1024
@@ -421,6 +424,190 @@ class ClusterRecoveryTest(RedpandaTest):
         )
 
         self.logger.info("All mixed principal ACLs successfully restored")
+
+    @cluster(num_nodes=4)
+    def test_role_with_group_members_restore(self):
+        """
+        Tests that roles with Group members (not just User members) are properly
+        backed up and restored by cluster recovery.
+        """
+        for t in self.topics:
+            KgoVerifierProducer.oneshot(
+                self.test_context,
+                self.redpanda,
+                t.name,
+                self.message_size,
+                100,
+                batch_max_bytes=self.message_size * 8,
+                timeout_sec=60,
+            )
+        quiesce_uploads(self.redpanda, [t.name for t in self.topics], timeout_sec=60)
+
+        # Use Admin v2 API to create roles with Group members
+        superuser = self.redpanda.SUPERUSER_CREDENTIALS
+        admin_v2 = AdminV2(self.redpanda, auth=(superuser.username, superuser.password))
+
+        # Create a role with only Group members
+        group_only_role = f"group-only-role-{random_string(6)}"
+        group_name_1 = f"admin-group-{random_string(4)}"
+        group_name_2 = f"dev-group-{random_string(4)}"
+        group_members = [
+            security_pb2.RoleMember(group=security_pb2.RoleGroup(name=group_name_1)),
+            security_pb2.RoleMember(group=security_pb2.RoleGroup(name=group_name_2)),
+        ]
+        admin_v2.security().create_role(
+            security_pb2.CreateRoleRequest(
+                role=security_pb2.Role(name=group_only_role, members=group_members)
+            )
+        )
+
+        # Create a role with mixed User and Group members
+        mixed_role = f"mixed-role-{random_string(6)}"
+        user_name = f"user-{random_string(6)}"
+        user_password = f"pass-{random_string(9)}"
+        self.redpanda._admin.create_user(user_name, user_password, "SCRAM-SHA-256")
+
+        ops_group_name = f"ops-group-{random_string(4)}"
+        mixed_members = [
+            security_pb2.RoleMember(user=security_pb2.RoleUser(name=user_name)),
+            security_pb2.RoleMember(group=security_pb2.RoleGroup(name=ops_group_name)),
+        ]
+        admin_v2.security().create_role(
+            security_pb2.CreateRoleRequest(
+                role=security_pb2.Role(name=mixed_role, members=mixed_members)
+            )
+        )
+
+        self.logger.info(
+            f"Created roles - group_only_role: {group_only_role} with groups [{group_name_1}, {group_name_2}], "
+            f"mixed_role: {mixed_role} with user [{user_name}] and group [{ops_group_name}]"
+        )
+
+        # Helper to extract members from protobuf Role
+        def get_group_members(role: security_pb2.Role) -> list[str]:
+            return [
+                m.group.name for m in role.members if m.WhichOneof("member") == "group"
+            ]
+
+        def get_user_members(role: security_pb2.Role) -> list[str]:
+            return [
+                m.user.name for m in role.members if m.WhichOneof("member") == "user"
+            ]
+
+        # Verify roles were created correctly before recovery using AdminV2
+        group_only_role_obj = (
+            admin_v2.security()
+            .get_role(security_pb2.GetRoleRequest(name=group_only_role))
+            .role
+        )
+        assert len(group_only_role_obj.members) == 2, (
+            f"Expected 2 members in {group_only_role}, got {group_only_role_obj.members}"
+        )
+
+        def get_role_if_it_exists(
+            role_name: str,
+        ) -> tuple[bool, security_pb2.Role | None]:
+            try:
+                role = (
+                    admin_v2.security()
+                    .get_role(security_pb2.GetRoleRequest(name=role_name))
+                    .role
+                )
+                return True, role
+            except Exception:
+                return False, None
+
+        mixed_role_obj = wait_until_result(
+            lambda: get_role_if_it_exists(mixed_role),
+            timeout_sec=30,
+            backoff_sec=1,
+            err_msg=f"Unable to find role {mixed_role}",
+        )
+
+        assert len(mixed_role_obj.members) == 2, (
+            f"Expected 2 members in {mixed_role}, got {mixed_role_obj.members}"
+        )
+
+        time.sleep(5)
+
+        # Stop and wipe the cluster
+        self.redpanda.stop()
+        for n in self.redpanda.nodes:
+            self.redpanda.remove_local_data(n)
+        self.redpanda.restart_nodes(
+            self.redpanda.nodes, auto_assign_node_id=True, omit_seeds_on_idx_one=False
+        )
+        self.redpanda._admin.await_stable_leader(
+            "controller", partition=0, namespace="redpanda", timeout_s=60, backoff_s=2
+        )
+
+        # Recreate AdminV2 client after cluster restart
+        admin_v2 = AdminV2(self.redpanda, auth=(superuser.username, superuser.password))
+
+        self.logger.info("Verifying that no roles are present before recovery")
+        roles_before_recovery = (
+            admin_v2.security().list_roles(security_pb2.ListRolesRequest()).roles
+        )
+        assert len(roles_before_recovery) == 0, "Expected no roles before recovery"
+
+        self.logger.info("Initializing cluster recovery")
+        self.redpanda._admin.initialize_cluster_recovery()
+
+        def cluster_recovery_complete():
+            return (
+                "inactive"
+                in self.redpanda._admin.get_cluster_recovery_status().json()["state"]
+            )
+
+        wait_until(cluster_recovery_complete, timeout_sec=30, backoff_sec=1)
+
+        self.logger.info("Verifying roles with Group members are restored")
+
+        # Verify group-only role using AdminV2
+        restored_roles = (
+            admin_v2.security().list_roles(security_pb2.ListRolesRequest()).roles
+        )
+        restored_role_names = [r.name for r in restored_roles]
+        assert group_only_role in restored_role_names, (
+            f"Role {group_only_role} not restored"
+        )
+
+        group_only_restored = (
+            admin_v2.security()
+            .get_role(security_pb2.GetRoleRequest(name=group_only_role))
+            .role
+        )
+        restored_group_members = get_group_members(group_only_restored)
+        assert len(restored_group_members) == 2, (
+            f"Expected 2 Group members in {group_only_role}, got {restored_group_members}"
+        )
+        for group_name in [group_name_1, group_name_2]:
+            assert group_name in restored_group_members, (
+                f"Group member {group_name} not restored in {group_only_role}"
+            )
+
+        # Verify mixed role using AdminV2
+        assert mixed_role in restored_role_names, f"Role {mixed_role} not restored"
+
+        mixed_restored = (
+            admin_v2.security()
+            .get_role(security_pb2.GetRoleRequest(name=mixed_role))
+            .role
+        )
+        restored_user_members = get_user_members(mixed_restored)
+        restored_mixed_group_members = get_group_members(mixed_restored)
+
+        assert user_name in restored_user_members, (
+            f"User {user_name} not restored as member of {mixed_role}"
+        )
+        assert len(restored_mixed_group_members) == 1, (
+            f"Expected 1 Group member in {mixed_role}, got {restored_mixed_group_members}"
+        )
+        assert ops_group_name in restored_mixed_group_members, (
+            f"Group member {ops_group_name} not restored in {mixed_role}"
+        )
+
+        self.logger.info("All roles with Group members successfully restored")
 
     @cluster(num_nodes=4)
     def test_bootstrap_with_recovery(self):
