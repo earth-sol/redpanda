@@ -15,16 +15,9 @@
 #include "cluster/scheduling/leader_balancer_types.h"
 #include "container/chunked_hash_map.h"
 #include "model/metadata.h"
-#include "raft/fundamental.h"
-
-#include <seastar/core/metrics.hh>
-#include <seastar/core/sstring.hh>
-
-#include <boost/range/adaptor/reversed.hpp>
 
 #include <functional>
 #include <numeric>
-#include <optional>
 
 namespace cluster::leader_balancer_types {
 
