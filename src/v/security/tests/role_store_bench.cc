@@ -97,11 +97,11 @@ const role_store store_8_r_1Ki_m_data = make_store(
   generate_role_names(8ul), members_data);
 
 template<bool materialize>
-void run_get_member_roles() {
-    const auto& m
-      = members_data[random_generators::get_int(members_data.size() - 1)];
+void run_get_member_roles(
+  const std::vector<role_member>& members, const role_store& store) {
+    const auto& m = members[random_generators::get_int(members.size() - 1)];
     perf_tests::start_measuring_time();
-    auto rng = store_512_r_1Ki_m_data.roles_for_member(m);
+    auto rng = store.roles_for_member(m);
     perf_tests::do_not_optimize(rng);
     if constexpr (materialize) {
         bool is_empty = rng.empty();
@@ -111,11 +111,11 @@ void run_get_member_roles() {
 }
 
 template<bool materialize>
-void run_range_queries() {
-    const auto& m
-      = members_data[random_generators::get_int(members_data.size() - 1)];
+void run_range_queries(
+  const std::vector<role_member>& members, const role_store& store) {
+    const auto& m = members[random_generators::get_int(members.size() - 1)];
     perf_tests::start_measuring_time();
-    auto rng = store_512_r_1Ki_m_data.range(
+    auto rng = store.range(
       [&m](const auto& e) { return role_store::has_member(e, m); });
     perf_tests::do_not_optimize(rng);
     if constexpr (materialize) {
@@ -127,16 +127,20 @@ void run_range_queries() {
 
 } // namespace
 
-PERF_TEST(role_store_bench, get_member_roles) { run_get_member_roles<true>(); }
-
-PERF_TEST(role_store_bench, get_member_roles_bare_query) {
-    run_get_member_roles<false>();
+PERF_TEST(role_store_bench, get_member_roles) {
+    run_get_member_roles<true>(members_data, store_512_r_1Ki_m_data);
 }
 
-PERF_TEST(role_store_bench, user_range_query) { run_range_queries<true>(); }
+PERF_TEST(role_store_bench, get_member_roles_bare_query) {
+    run_get_member_roles<false>(members_data, store_512_r_1Ki_m_data);
+}
+
+PERF_TEST(role_store_bench, user_range_query) {
+    run_range_queries<true>(members_data, store_512_r_1Ki_m_data);
+}
 
 PERF_TEST(role_store_bench, user_range_query_bare_query) {
-    run_range_queries<false>();
+    run_range_queries<false>(members_data, store_512_r_1Ki_m_data);
 }
 
 PERF_TEST(role_store_bench, remove_role) {
