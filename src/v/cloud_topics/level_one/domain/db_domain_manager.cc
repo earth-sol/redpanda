@@ -315,10 +315,155 @@ db_domain_manager::get_offsets(rpc::get_offsets_request req) {
 }
 
 ss::future<rpc::get_compaction_info_reply>
-db_domain_manager::get_compaction_info(rpc::get_compaction_info_request req) {
+db_domain_manager::do_get_compaction_info(
+  const gate_read_lock&,
+  state_reader& reader,
+  rpc::get_compaction_info_request req) {
+    // Get metadata for start_offset and next_offset.
+    auto metadata_res = co_await reader.get_metadata(req.tp);
+    if (!metadata_res.has_value()) {
+        co_return rpc::get_compaction_info_reply{
+          .ec = log_and_convert(
+            metadata_res.error(), "Error getting metadata: "),
+        };
+    }
+    if (!metadata_res.value().has_value()) {
+        co_return rpc::get_compaction_info_reply{
+          .ec = rpc::errc::missing_ntp,
+        };
+    }
+    const auto& metadata = **metadata_res;
+    const auto start_offset = metadata.start_offset;
+    const auto next_offset = metadata.next_offset;
+
+    // Check for empty log.
+    if (start_offset >= next_offset) {
+        co_return rpc::get_compaction_info_reply{
+          .ec = rpc::errc::ok,
+          .dirty_ranges = {},
+          .removable_tombstone_ranges = {},
+          .dirty_ratio = 0.0,
+          .earliest_dirty_ts = std::nullopt,
+          .compaction_epoch = metadata.compaction_epoch,
+          .start_offset = start_offset,
+        };
+    }
+
+    // Get compaction state if any.
+    auto compaction_res = co_await reader.get_compaction_metadata(req.tp);
+    if (!compaction_res.has_value()) {
+        co_return rpc::get_compaction_info_reply{
+          .ec = log_and_convert(
+            metadata_res.error(), "Error getting compaction metadata: "),
+        };
+    }
+
+    offset_interval_set dirty_ranges;
+    offset_interval_set removable_tombstone_ranges;
+    std::optional<model::timestamp> earliest_dirty_ts;
+
+    const auto log_last_offset = kafka::prev_offset(next_offset);
+
+    if (!compaction_res.value().has_value()) {
+        // Nothing has been compacted yet, the whole log is dirty.
+        dirty_ranges.insert(start_offset, log_last_offset);
+    } else {
+        const auto& cmp_state = **compaction_res;
+
+        // Compute dirty_ranges by inverting cleaned_ranges.
+        auto offsets_stream = cmp_state.cleaned_ranges.make_stream();
+        auto dirty_base_candidate = start_offset;
+        while (offsets_stream.has_next()) {
+            auto cleaned_range = offsets_stream.next();
+            if (cleaned_range.base_offset > dirty_base_candidate) {
+                dirty_ranges.insert(
+                  dirty_base_candidate,
+                  kafka::prev_offset(cleaned_range.base_offset));
+            }
+            dirty_base_candidate = kafka::next_offset(
+              cleaned_range.last_offset);
+        }
+        if (dirty_base_candidate <= log_last_offset) {
+            dirty_ranges.insert(dirty_base_candidate, log_last_offset);
+        }
+
+        // Collect removable_tombstone_ranges.
+        for (const auto& r : cmp_state.cleaned_ranges_with_tombstones) {
+            if (
+              r.cleaned_with_tombstones_at
+              <= req.tombstone_removal_upper_bound_ts) {
+                removable_tombstone_ranges.insert(r.base_offset, r.last_offset);
+            }
+        }
+    }
+
+    // Iterate extents to compute dirty_ratio and earliest_dirty_ts.
+    size_t total_size = 0;
+    size_t dirty_size = 0;
+    const auto& cleaned_ranges = compaction_res->has_value()
+                                   ? (*compaction_res)->cleaned_ranges
+                                   : offset_interval_set{};
+
+    auto extents_res = co_await reader.get_inclusive_extents(
+      req.tp, std::nullopt, std::nullopt);
+    if (!extents_res.has_value()) {
+        co_return rpc::get_compaction_info_reply{
+          .ec = log_and_convert(extents_res.error(), "Error getting extents: "),
+        };
+    }
+    if (extents_res.value().has_value()) {
+        auto gen = (*extents_res)->get_rows();
+        while (auto row_opt = co_await gen()) {
+            const auto& row = row_opt->get();
+            if (!row.has_value()) {
+                co_return rpc::get_compaction_info_reply{
+                  .ec = log_and_convert(
+                    row.error(), "Error iterating through extents: "),
+                };
+            }
+            const auto& extent = *row;
+            auto key = extent_row_key::decode(extent.key);
+            auto base = key->base_offset;
+            if (base < start_offset) {
+                // The extent is partially truncated.
+                base = start_offset;
+            }
+            auto last = extent.val.last_offset;
+
+            total_size += extent.val.len;
+            if (!cleaned_ranges.covers(base, last)) {
+                dirty_size += extent.val.len;
+                // Track earliest dirty timestamp.
+                if (!earliest_dirty_ts.has_value()) {
+                    earliest_dirty_ts = extent.val.max_timestamp;
+                }
+            }
+        }
+    }
+
+    double dirty_ratio = total_size == 0 ? 0.0
+                                         : static_cast<double>(dirty_size)
+                                             / static_cast<double>(total_size);
+
     co_return rpc::get_compaction_info_reply{
-      .ec = rpc::errc::concurrent_requests,
+      .ec = rpc::errc::ok,
+      .dirty_ranges = std::move(dirty_ranges),
+      .removable_tombstone_ranges = std::move(removable_tombstone_ranges),
+      .dirty_ratio = dirty_ratio,
+      .earliest_dirty_ts = earliest_dirty_ts,
+      .compaction_epoch = metadata.compaction_epoch,
+      .start_offset = start_offset,
     };
+}
+
+ss::future<rpc::get_compaction_info_reply>
+db_domain_manager::get_compaction_info(rpc::get_compaction_info_request req) {
+    auto gl_res = co_await gate_and_open_reads();
+    if (!gl_res.has_value()) {
+        co_return rpc::get_compaction_info_reply{.ec = gl_res.error()};
+    }
+    auto reader = state_reader(db_->db().create_snapshot());
+    co_return co_await do_get_compaction_info(gl_res.value(), reader, req);
 }
 
 ss::future<rpc::get_term_for_offset_reply>
@@ -411,14 +556,30 @@ ss::future<rpc::remove_topics_reply>
 db_domain_manager::remove_topics(rpc::remove_topics_request) {
     co_return rpc::remove_topics_reply{
       .ec = rpc::errc::concurrent_requests,
+      .not_removed = {},
     };
 }
 
 ss::future<rpc::get_compaction_infos_reply>
 db_domain_manager::get_compaction_infos(rpc::get_compaction_infos_request req) {
+    auto gl_res = co_await gate_and_open_reads();
+    if (!gl_res.has_value()) {
+        co_return rpc::get_compaction_infos_reply{
+          .ec = gl_res.error(),
+        };
+    }
+
+    auto reader = state_reader(db_->db().create_snapshot());
+    chunked_hash_map<model::topic_id_partition, rpc::get_compaction_info_reply>
+      compaction_infos;
+    for (auto& log_req : req.logs) {
+        auto log_info = co_await do_get_compaction_info(
+          gl_res.value(), reader, log_req);
+        compaction_infos.insert_or_assign(log_req.tp, std::move(log_info));
+    }
+
     co_return rpc::get_compaction_infos_reply{
-      .ec = rpc::errc::concurrent_requests,
-    };
+      .responses = std::move(compaction_infos)};
 }
 
 ss::future<rpc::get_extent_metadata_reply>
