@@ -354,8 +354,73 @@ db_domain_manager::get_first_timestamp_ge(
 ss::future<rpc::get_first_offset_for_bytes_reply>
 db_domain_manager::get_first_offset_for_bytes(
   rpc::get_first_offset_for_bytes_request req) {
+    auto gl_res = co_await gate_and_open_reads();
+    if (!gl_res.has_value()) {
+        co_return rpc::get_first_offset_for_bytes_reply{.ec = gl_res.error()};
+    }
+    auto reader = state_reader(db_->db().create_snapshot());
+
+    // Get metadata to find next_offset for size==0 case
+    auto metadata_res = co_await reader.get_metadata(req.tp);
+    if (!metadata_res.has_value()) {
+        co_return rpc::get_first_offset_for_bytes_reply{
+          .ec = log_and_convert(
+            metadata_res.error(), "Error getting metadata: "),
+        };
+    }
+    if (!metadata_res.value().has_value()) {
+        vlog(cd_log.debug, "Partition {} not tracked", req.tp);
+        co_return rpc::get_first_offset_for_bytes_reply{
+          .ec = rpc::errc::missing_ntp,
+        };
+    }
+    const auto& metadata = metadata_res.value().value();
+    kafka::offset offset = metadata.next_offset;
+    if (req.size == 0) {
+        co_return rpc::get_first_offset_for_bytes_reply{
+          .offset = offset,
+          .ec = rpc::errc::ok,
+        };
+    }
+
+    auto extents_res = co_await reader.get_inclusive_extents_backward(
+      req.tp, std::nullopt, std::nullopt);
+    if (!extents_res.has_value()) {
+        co_return rpc::get_first_offset_for_bytes_reply{
+          .ec = log_and_convert(
+            metadata_res.error(), "Error getting backwards iterator: "),
+        };
+    }
+    if (!extents_res.value().has_value()) {
+        co_return rpc::get_first_offset_for_bytes_reply{
+          .ec = rpc::errc::out_of_range,
+        };
+    }
+
+    uint64_t remaining = req.size;
+    auto gen = extents_res.value().value().get_rows();
+    while (auto row_opt = co_await gen()) {
+        const auto& row = row_opt->get();
+        if (!row.has_value()) {
+            co_return rpc::get_first_offset_for_bytes_reply{
+              .ec = log_and_convert(
+                metadata_res.error(), "Error iterating through extents: "),
+            };
+        }
+        const auto& extent = row.value();
+        auto key = extent_row_key::decode(extent.key);
+        offset = key->base_offset;
+        remaining -= std::min(remaining, extent.val.len);
+        if (remaining == 0) {
+            co_return rpc::get_first_offset_for_bytes_reply{
+              .offset = offset,
+              .ec = rpc::errc::ok,
+            };
+        }
+    }
+
     co_return rpc::get_first_offset_for_bytes_reply{
-      .ec = rpc::errc::concurrent_requests,
+      .ec = rpc::errc::out_of_range,
     };
 }
 
