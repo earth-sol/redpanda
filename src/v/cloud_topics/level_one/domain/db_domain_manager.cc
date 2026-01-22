@@ -323,8 +323,43 @@ db_domain_manager::get_compaction_info(rpc::get_compaction_info_request req) {
 
 ss::future<rpc::get_term_for_offset_reply>
 db_domain_manager::get_term_for_offset(rpc::get_term_for_offset_request req) {
+    auto gl_res = co_await gate_and_open_reads();
+    if (!gl_res.has_value()) {
+        co_return rpc::get_term_for_offset_reply{.ec = gl_res.error()};
+    }
+    auto reader = state_reader(db_->db().create_snapshot());
+    auto metadata_res = co_await reader.get_metadata(req.tp);
+    if (!metadata_res.has_value()) {
+        co_return rpc::get_term_for_offset_reply{
+          .ec = log_and_convert(
+            metadata_res.error(), "Error getting metadata: "),
+        };
+    }
+    if (!metadata_res.value().has_value()) {
+        co_return rpc::get_term_for_offset_reply{
+          .ec = rpc::errc::missing_ntp,
+        };
+    }
+    const auto& metadata = metadata_res.value().value();
+    if (req.offset > metadata.next_offset) {
+        co_return rpc::get_term_for_offset_reply{
+          .ec = rpc::errc::out_of_range,
+        };
+    }
+    auto term_res = co_await reader.get_term_le(req.tp, req.offset);
+    if (!term_res.has_value()) {
+        co_return rpc::get_term_for_offset_reply{
+          .ec = log_and_convert(term_res.error(), "Error getting term: "),
+        };
+    }
+    if (!term_res.value().has_value()) {
+        co_return rpc::get_term_for_offset_reply{
+          .ec = rpc::errc::out_of_range,
+        };
+    }
     co_return rpc::get_term_for_offset_reply{
-      .ec = rpc::errc::concurrent_requests,
+      .ec = rpc::errc::ok,
+      .term = term_res.value().value().term_id,
     };
 }
 
