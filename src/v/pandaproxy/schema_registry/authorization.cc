@@ -279,4 +279,46 @@ void handle_get_subjects_authz(
     }
 }
 
+void handle_config_mode_authz(
+  const server::request_t& rq,
+  std::string_view operation_name,
+  std::optional<request_auth_result>& auth_result,
+  const context_subject& ctx_sub,
+  security::acl_operation op) {
+    if (!auth_result.has_value()) {
+        // ACLs or authentication is disabled
+        return;
+    }
+
+    check_authenticated(rq, operation_name, op, *auth_result);
+
+    auto params = detail::auth_params{rq};
+
+    // Context-level operations require sr_registry access
+    // Subject-level operations require sr_subject access
+    auto authz_result = ctx_sub.is_context_only()
+                          ? rq.service().authorizor().authorized(
+                              registry_resource{},
+                              op,
+                              params.principal,
+                              params.host,
+                              security::superuser_required::no,
+                              auth_result.value().get_groups())
+                          : rq.service().authorizor().authorized(
+                              ctx_sub,
+                              op,
+                              params.principal,
+                              params.host,
+                              security::superuser_required::no,
+                              auth_result.value().get_groups());
+
+    const bool is_authorized = authz_result.is_authorized();
+
+    audit_authz(rq, operation_name, std::move(authz_result));
+
+    if (!is_authorized) {
+        throw_unauthorized();
+    }
+}
+
 } // namespace pandaproxy::schema_registry::enterprise

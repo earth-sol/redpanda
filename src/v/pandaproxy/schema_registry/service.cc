@@ -157,22 +157,22 @@ server::routes_t get_schema_registry_routes(ss::gate& gate, one_shot& es) {
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::get_config_subject,
       auth::level::user,
-      acl_operation::describe_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       get_config_subject));
 
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::put_config_subject,
       auth::level::user,
-      acl_operation::alter_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       put_config_subject));
 
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::delete_config_subject,
       auth::level::user,
-      acl_operation::alter_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       delete_config_subject));
 
     routes.routes.emplace_back(wrap(
@@ -192,22 +192,22 @@ server::routes_t get_schema_registry_routes(ss::gate& gate, one_shot& es) {
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::get_mode_subject,
       auth::level::user,
-      acl_operation::describe_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       get_mode_subject));
 
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::put_mode_subject,
       auth::level::superuser,
-      acl_operation::alter_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       put_mode_subject));
 
     routes.routes.emplace_back(wrap(
       ss::httpd::schema_registry_json::delete_mode_subject,
       auth::level::superuser,
-      acl_operation::alter_configs,
-      context_subject{},
+      std::nullopt,
+      auth::deferred{},
       delete_mode_subject));
 
     routes.routes.emplace_back(wrap(

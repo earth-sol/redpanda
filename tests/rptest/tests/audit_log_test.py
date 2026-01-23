@@ -3084,6 +3084,85 @@ class AuditLogTestSchemaRegistryACLs(AuditLogTestSchemaRegistryBase):
 
     @skip_fips_mode
     @cluster(num_nodes=5)
+    @matrix(audit_transport_mode=get_audit_modes())
+    def test_sr_audit_context_config_authz(self, audit_transport_mode):
+        """
+        Verifies that config endpoints use different ACL resources for context
+        vs subject operations, and that audit logs contain the correct resource:
+        - Context-level (e.g., /config/:.ctx:) uses sr_registry
+        - Subject-level (e.g., /config/:.ctx:subject) uses sr_subject
+        """
+        self.setup_cluster()
+
+        context_only = ":.staging:"
+        subject_in_context = ":.staging:my-topic"
+
+        # Setup: create schema and config using superuser
+        self.sr_client.post_subjects_subject_versions(
+            subject=subject_in_context,
+            data=json.dumps({"schema": schema1_def}),
+            auth=self.super_auth,
+        )
+        self.sr_client.set_config_subject(
+            subject=subject_in_context,
+            data=json.dumps({"compatibility": "BACKWARD"}),
+            auth=self.super_auth,
+        )
+
+        # Grant sr_subject ACL - this should NOT grant context-level access
+        self._post_acl(
+            self._create_acl(context_only, "SUBJECT", "PREFIXED", "DESCRIBE_CONFIGS")
+        )
+
+        # Context-level access with only sr_subject ACL should fail
+        result = self.sr_client.get_config_subject(
+            subject=context_only, auth=self.user_auth
+        )
+        self.assert_equal(result.status_code, 403)
+
+        # Grant sr_registry ACL - now context-level should work
+        self._post_acl(self._create_acl("", "REGISTRY", "LITERAL", "DESCRIBE_CONFIGS"))
+
+        # Context-level: audit should show registry resource
+        result = self.sr_client.get_config_subject(
+            subject=context_only, auth=self.user_auth
+        )
+        self.assert_equal(result.status_code, 200)
+
+        records = self.find_matching_record(
+            lambda record: self.match_api_record(
+                record,
+                path=f"config/{context_only}",
+                resources={"name": "", "type": "registry"},
+                status_id=StatusID.SUCCESS,
+                operation="get_config_subject",
+            ),
+            lambda record_count: record_count >= 1,
+            "context-level config access",
+        )
+        self.assert_equal(len(records), 1)
+
+        # Subject-level: audit should show qualified subject resource
+        result = self.sr_client.get_config_subject(
+            subject=subject_in_context, auth=self.user_auth
+        )
+        self.assert_equal(result.status_code, 200)
+
+        records = self.find_matching_record(
+            lambda record: self.match_api_record(
+                record,
+                path=f"config/{subject_in_context}",
+                resources={"name": subject_in_context, "type": "subject"},
+                status_id=StatusID.SUCCESS,
+                operation="get_config_subject",
+            ),
+            lambda record_count: record_count >= 1,
+            "subject-level config access",
+        )
+        self.assert_equal(len(records), 1)
+
+    @skip_fips_mode
+    @cluster(num_nodes=5)
     @matrix(
         endpoint_name=[e.name for e in PUBLIC_ENDPOINTS],
         audit_transport_mode=get_audit_modes(),
