@@ -3770,6 +3770,37 @@ class SchemaRegistryTestMethods(SchemaRegistryEndpoints):
 
         test_runner(test_subjects_subject_versions_version_schema)
 
+    @cluster(num_nodes=1)
+    def test_qualified_subjects_flag_off(self):
+        """
+        With enable_qualified_subjects off (default), the qualified syntax is not parsed, and all
+        subjects are treated as if they are in the default context.
+        """
+
+        # Register a schema in the default context first
+        result = self.sr_client.post_subjects_subject_versions(
+            subject="normal-subject", data=json.dumps({"schema": schema1_def})
+        )
+        self.assert_equal(result.status_code, requests.codes.ok)
+        self.assert_equal(result.json()["id"], 1)
+
+        # Register a DIFFERENT schema with qualified-looking subject name
+        # Flag OFF: Same context as above, so gets id=2 (shared counter)
+        # Flag ON: Would be in .ctx context with independent counter, gets id=1
+        # TODO: once implemented, we could make this test simpler by just using the `GET /contexts`
+        # API instead of using schema ID allocation behaviour to verify that these subjects land in
+        # different contexts.
+        qualified_subject = ":.ctx:my-subject"
+        result = self.sr_client.post_subjects_subject_versions(
+            subject=qualified_subject, data=json.dumps({"schema": schema2_def})
+        )
+        self.assert_equal(result.status_code, requests.codes.ok)
+        self.assert_equal(
+            result.json()["id"],
+            2,
+            "Expected id=2 proving shared counter with default context",
+        )
+
 
 class SchemaRegistryModeNotMutableTest(SchemaRegistryEndpoints):
     """
