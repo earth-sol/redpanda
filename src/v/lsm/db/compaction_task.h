@@ -19,7 +19,7 @@
 namespace lsm::db {
 
 // Run a compaction task
-ss::future<version_edit> run_compaction_task(
+ss::future<ss::lw_shared_ptr<version_edit>> run_compaction_task(
   io::data_persistence* persistence,
   snapshot_list* snapshots,
   version_set* versions,

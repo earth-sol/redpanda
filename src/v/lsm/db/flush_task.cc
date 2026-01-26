@@ -26,15 +26,15 @@ using internal::operator""_level;
 
 namespace {
 
-ss::future<std::optional<version_edit>> do_run_flush_task(
+ss::future<std::optional<ss::lw_shared_ptr<version_edit>>> do_run_flush_task(
   ss::lw_shared_ptr<internal::options> opts,
   io::data_persistence* persistence,
   version_set* versions,
   ss::lw_shared_ptr<memtable> imm,
   ss::abort_source* as) {
     auto v = versions->current();
-    auto guard = versions->new_file_id();
-    auto id = guard.id();
+    auto edit = versions->new_edit();
+    auto id = edit->allocate_id();
     auto level = imm->empty()
                    ? 0_level
                    : v->pick_level_for_memtable_output(
@@ -58,16 +58,14 @@ ss::future<std::optional<version_edit>> do_run_flush_task(
       sst_options,
       as);
     if (!result) {
-        versions->reuse_file_id(id);
         vlog(
           log.trace,
           "flush_memtable_end level={} file_bytes=0 empty=true",
           level);
         co_return std::nullopt;
     }
-    version_edit edit(*opts);
-    edit.set_last_seqno(result->newest_seqno);
-    edit.add_file({
+    edit->set_last_seqno(result->newest_seqno);
+    edit->add_file({
       .level = level,
       .file_handle = {.id = id, .epoch = opts->database_epoch},
       .file_size = result->file_size,
@@ -76,19 +74,18 @@ ss::future<std::optional<version_edit>> do_run_flush_task(
       .oldest_seqno = result->oldest_seqno,
       .newest_seqno = result->newest_seqno,
     });
-    guard.cancel(); // Transfer ownership to manifest actor
     vlog(
       log.trace,
       "flush_memtable_end level={} file_id={} file_bytes={}",
       level,
       id,
       result->file_size);
-    co_return std::move(edit);
+    co_return edit;
 }
 
 } // namespace
 
-ss::future<std::optional<version_edit>> run_flush_task(
+ss::future<std::optional<ss::lw_shared_ptr<version_edit>>> run_flush_task(
   ss::lw_shared_ptr<internal::options> opts,
   io::data_persistence* persistence,
   version_set* versions,

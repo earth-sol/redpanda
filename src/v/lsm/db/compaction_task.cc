@@ -57,14 +57,12 @@ struct compaction_state {
     // sequence numbers < S.
     internal::sequence_number smallest_snapshot;
     std::optional<sst::builder> builder;
-    // RAII guards for in-flight file IDs
-    chunked_vector<uncommitted_file_guard> guards;
     uint64_t total_bytes = 0;
 };
 
 using internal::operator""_level;
 
-ss::future<version_edit> do_run_compaction_task(
+ss::future<ss::lw_shared_ptr<version_edit>> do_run_compaction_task(
   io::data_persistence* persistence,
   snapshot_list* snapshots,
   version_set* versions,
@@ -107,7 +105,7 @@ ss::future<version_edit> do_run_compaction_task(
           input_level,
           output_level,
           file->file_size);
-        co_return std::move(*compaction.edit());
+        co_return compaction.edit();
     }
     compaction_state state{
       // We need to preserve intermediate data between snapshots so we can
@@ -166,10 +164,8 @@ ss::future<version_edit> do_run_compaction_task(
             last_seqno_for_key = key_seqno;
             if (!drop) {
                 if (!state.builder) {
-                    auto guard = versions->new_file_id();
-                    auto id = guard.id();
+                    auto id = compaction.edit()->allocate_id();
                     vlog(log.trace, "compaction_start_new_file file_id={}", id);
-                    state.guards.push_back(std::move(guard));
                     co_await state.open_current_builder(
                       {
                         .id = id,
@@ -205,8 +201,8 @@ ss::future<version_edit> do_run_compaction_task(
     if (state.err) {
         std::rethrow_exception(state.err);
     }
-    auto* edit = compaction.edit();
-    compaction.add_input_deletions(edit);
+    auto edit = compaction.edit();
+    compaction.add_input_deletions(edit.get());
     for (auto& output : state.outputs) {
         edit->add_file({
           .level = compaction.level() + 1_level,
@@ -218,10 +214,6 @@ ss::future<version_edit> do_run_compaction_task(
           .newest_seqno = output.newest,
         });
     }
-    for (auto& guard : state.guards) {
-        // Transfer file IDs to manifest actor
-        guard.cancel();
-    }
     vlog(
       log.trace,
       "compaction_end input_level={} output_level={} output_files={} "
@@ -230,12 +222,12 @@ ss::future<version_edit> do_run_compaction_task(
       output_level,
       state.outputs.size(),
       state.total_bytes);
-    co_return std::move(*edit);
+    co_return edit;
 }
 
 } // namespace
 
-ss::future<version_edit> run_compaction_task(
+ss::future<ss::lw_shared_ptr<version_edit>> run_compaction_task(
   io::data_persistence* persistence,
   snapshot_list* snapshots,
   version_set* versions,

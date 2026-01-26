@@ -112,7 +112,7 @@ private:
 
     ss::future<> do_flush();
     ss::future<> do_compaction();
-    ss::future<> apply_edits(version_edit);
+    ss::future<> apply_edits(ss::lw_shared_ptr<version_edit>);
 
     io::persistence _persistence;
     ss::lw_shared_ptr<internal::options> _opts;

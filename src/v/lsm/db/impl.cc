@@ -323,7 +323,7 @@ void impl::maybe_schedule_compaction() {
     }
 }
 
-ss::future<> impl::apply_edits(version_edit edit) {
+ss::future<> impl::apply_edits(ss::lw_shared_ptr<version_edit> edit) {
     auto units = co_await _manifest_write_mu.get_units();
     vlog(log.trace, "apply_edits_start");
     auto fut = co_await ss::coroutine::as_future(

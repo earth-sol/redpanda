@@ -11,7 +11,6 @@
 
 #pragma once
 
-#include "absl/container/btree_set.h"
 #include "absl/container/fixed_array.h"
 #include "base/format_to.h"
 #include "lsm/core/internal/files.h"
@@ -27,30 +26,6 @@ namespace lsm::db {
 
 class version_set;
 class compaction;
-
-// RAII guard for in-flight file IDs.
-//
-// We must track uncommitted file IDs for garbage collection, otherwise
-// GC could accidently delete files that are in the process of being created.
-class uncommitted_file_guard {
-public:
-    uncommitted_file_guard(version_set* vs, internal::file_id id);
-    uncommitted_file_guard(const uncommitted_file_guard&) = delete;
-    uncommitted_file_guard& operator=(const uncommitted_file_guard&) = delete;
-    uncommitted_file_guard(uncommitted_file_guard&& other) noexcept;
-    uncommitted_file_guard& operator=(uncommitted_file_guard&& other) noexcept;
-    ~uncommitted_file_guard();
-
-    // Access the file ID
-    internal::file_id id() const { return _id; }
-
-    // Called when transferring responsibility to manifest actor
-    void cancel();
-
-private:
-    version_set* _vs; // nullptr if cancelled
-    internal::file_id _id;
-};
 
 // A single immutable version of the database.
 class version : public weak_intrusive_list<version> {
@@ -154,7 +129,7 @@ private:
 //
 // Each version keeps track of a set of table files per level. The entire set of
 // versions is maintained in this data structure.
-class version_set {
+class version_set : public file_id_allocator {
     class builder;
 
 public:
@@ -167,17 +142,13 @@ public:
     ss::lw_shared_ptr<version> current() { return _current; }
 
     // Allocate a new file ID.
-    //
-    // The returned guard automatically tracks the file as in-flight
-    // and cleans up on destruction unless cancel() is called.
-    uncommitted_file_guard new_file_id() {
-        auto id = _next_file_id++;
-        return {this, id};
-    }
+    internal::file_id allocate_id() override { return _next_file_id++; }
 
-    // Reuse a file ID (for example because a write failed or operation was
-    // cancelled).
-    void reuse_file_id(internal::file_id id);
+    // Create a new edit that can be applied to the version_set.
+    //
+    // These live edits are tracked so that we can ensure file GC does not
+    // delete any of the files allocated for these edits.
+    ss::lw_shared_ptr<version_edit> new_edit();
 
     // Apply the edit to form a new version of the database that is both saved
     // to persistence as well as set to be the current version.
@@ -185,7 +156,7 @@ public:
     // The edit is applied on top of the current version, and this method
     // requires external synchronization (it's not valid to call this method
     // concurrently).
-    ss::future<> log_and_apply(version_edit);
+    ss::future<> log_and_apply(ss::lw_shared_ptr<version_edit>);
 
     // Recover the last saved version of the database from the persistence
     // layer.
@@ -216,18 +187,9 @@ public:
 private:
     friend class version;
     friend class compaction;
-    friend class uncommitted_file_guard;
 
     void set_current(ss::lw_shared_ptr<version>);
     void finalize(version*);
-
-    void mark_file_in_flight(internal::file_id id) {
-        _in_flight_file_ids.insert(id);
-    }
-
-    void mark_file_not_in_flight(internal::file_id id) {
-        _in_flight_file_ids.erase(id);
-    }
 
     struct manifest {
         ss::lw_shared_ptr<version> version;
@@ -243,12 +205,11 @@ private:
     table_cache* _table_cache;
     ss::lw_shared_ptr<internal::options> _options;
     ss::lw_shared_ptr<version> _current;
+    intrusive_list<version_edit, &version_edit::_list_hook> _live_edits;
     internal::file_id _next_file_id = internal::file_id{2};
     internal::file_id _current_manifest_id;
     std::optional<internal::sequence_number> _last_seqno;
     absl::FixedArray<std::optional<internal::key>> _compact_pointer;
-    // Track in-flight file IDs. Uses btree_set for O(1) min() access.
-    absl::btree_set<internal::file_id> _in_flight_file_ids;
 };
 
 // Encapulate information about a compaction event.
@@ -259,7 +220,7 @@ public:
     internal::level level() const { return _level; }
     // Return the object that holds the edits to the descriptor done
     // by this compaction.
-    version_edit* edit() { return &_edit; }
+    ss::lw_shared_ptr<version_edit> edit() { return _edit; }
 
     enum which : uint8_t {
         input_level = 0,
@@ -298,15 +259,17 @@ private:
     friend class version_set;
 
     compaction(
-      ss::lw_shared_ptr<internal::options> options, internal::level level)
+      ss::lw_shared_ptr<internal::options> options,
+      ss::lw_shared_ptr<version_edit> edit,
+      internal::level level)
       : _level(level)
-      , _edit(*options)
+      , _edit(std::move(edit))
       , _level_ptrs(options->levels.size()) {}
 
     internal::level _level;
     uint64_t _max_output_file_size = 0;
     ss::lw_shared_ptr<version> _input_version;
-    version_edit _edit;
+    ss::lw_shared_ptr<version_edit> _edit;
     // Each compaction reads inputs from "level_" and "level_+1"
     std::array<chunked_vector<ss::lw_shared_ptr<file_meta_data>>, 2>
       _inputs; // The two sets of inputs

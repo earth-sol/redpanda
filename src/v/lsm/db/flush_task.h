@@ -19,7 +19,7 @@
 namespace lsm::db {
 
 // Run a flush task
-ss::future<std::optional<version_edit>> run_flush_task(
+ss::future<std::optional<ss::lw_shared_ptr<version_edit>>> run_flush_task(
   ss::lw_shared_ptr<internal::options> opts,
   io::data_persistence* persistence,
   version_set* versions,

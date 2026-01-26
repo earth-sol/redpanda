@@ -29,39 +29,9 @@
 
 namespace lsm::db {
 
-uncommitted_file_guard::uncommitted_file_guard(
-  version_set* vs, internal::file_id id)
-  : _vs(vs)
-  , _id(id) {
-    _vs->mark_file_in_flight(_id);
-}
-
-uncommitted_file_guard::uncommitted_file_guard(
-  uncommitted_file_guard&& other) noexcept
-  : _vs(std::exchange(other._vs, nullptr))
-  , _id(std::exchange(other._id, internal::file_id::min())) {}
-
-uncommitted_file_guard&
-uncommitted_file_guard::operator=(uncommitted_file_guard&& other) noexcept {
-    if (this != &other) {
-        _vs = std::exchange(other._vs, nullptr);
-        _id = std::exchange(other._id, internal::file_id::min());
-    }
-    return *this;
-}
-
-uncommitted_file_guard::~uncommitted_file_guard() {
-    if (_vs) {
-        _vs->mark_file_not_in_flight(_id);
-    }
-}
-
-void uncommitted_file_guard::cancel() { _vs = nullptr; }
-
 namespace {
 
 using internal::operator""_level;
-using internal::operator""_file_id;
 
 // An internal iterator. For a given version/level pair, yields information
 // about the files in the level. For a given entry, key() is the largest key
@@ -532,21 +502,21 @@ version_set::version_set(
     set_current(ss::make_lw_shared<version>(version::ctor{}, this));
 }
 
-void version_set::reuse_file_id(internal::file_id id) {
-    if (id + 1_file_id == _next_file_id) {
-        _next_file_id = id;
-    }
-}
-
 void version_set::set_current(ss::lw_shared_ptr<version> new_version) {
     weak_intrusive_list<version>::push_front(&_current, std::move(new_version));
 }
 
-ss::future<> version_set::log_and_apply(version_edit edit) {
+ss::lw_shared_ptr<version_edit> version_set::new_edit() {
+    auto new_edit = ss::make_lw_shared<version_edit>(this, *_options);
+    _live_edits.push_back(*new_edit);
+    return new_edit;
+}
+
+ss::future<> version_set::log_and_apply(ss::lw_shared_ptr<version_edit> edit) {
     auto v = ss::make_lw_shared<version>(version::ctor{}, this);
     {
         version_set::builder builder(this, _current);
-        builder.apply(edit);
+        builder.apply(*edit);
         builder.save_to(v.get());
     }
     finalize(v.get());
@@ -557,7 +527,7 @@ ss::future<> version_set::log_and_apply(version_edit edit) {
 
     // Invariant: Between the two we must have a seqno, either data exists or
     // we're writing the first data which must have a seqno
-    auto updated_seqno = std::max(_last_seqno, edit._last_seqno).value();
+    auto updated_seqno = std::max(_last_seqno, edit->_last_seqno).value();
     auto m = manifest{
       .version = v,
       .next_file_id = _next_file_id,
@@ -565,12 +535,6 @@ ss::future<> version_set::log_and_apply(version_edit edit) {
       .epoch = _options->database_epoch,
     };
     auto fut = co_await ss::coroutine::as_future(write_manifest(std::move(m)));
-    // Mark all added files as committed (no longer in-flight)
-    for (const auto& mutation : edit._mutations_by_level) {
-        for (const auto& file : mutation.added_files) {
-            _in_flight_file_ids.erase(file->handle.id);
-        }
-    }
     if (fut.failed()) {
         std::rethrow_exception(fut.get_exception());
     }
@@ -700,7 +664,7 @@ std::optional<compaction> version_set::pick_compaction() {
         vassert(
           level() + 1 < _options->levels.size(),
           "cannot compact the bottom-most level");
-        c.emplace(compaction(_options, level));
+        c.emplace(compaction(_options, new_edit(), level));
         // Pick the first file that comes after _compact_pointer[level]
         for (const auto& f : _current->_files[level]) {
             const auto& key = _compact_pointer[level];
@@ -716,7 +680,7 @@ std::optional<compaction> version_set::pick_compaction() {
         }
     } else if (seek_compaction) {
         level = _current->_file_to_compact_level;
-        c.emplace(compaction(_options, level));
+        c.emplace(compaction(_options, new_edit(), level));
         c->_inputs[which::input_level].push_back(*_current->_file_to_compact);
     } else {
         return std::nullopt;
@@ -778,7 +742,7 @@ std::optional<compaction> version_set::pick_compaction() {
     // to be applied so that if the compaction fails, we will try a different
     // key range next time.
     _compact_pointer[level] = largest;
-    c->_edit.set_compact_pointer(level, largest);
+    c->_edit->set_compact_pointer(level, largest);
     return c;
 }
 
@@ -835,10 +799,11 @@ chunked_hash_set<internal::file_handle> version_set::get_live_files() {
 }
 
 internal::file_id version_set::min_uncommitted_file_id() const {
-    if (_in_flight_file_ids.empty()) {
-        return _next_file_id;
+    auto min = _next_file_id;
+    for (auto& e : _live_edits) {
+        min = std::min(min, e._min_allocated_id);
     }
-    return *_in_flight_file_ids.begin();
+    return min;
 }
 
 bool compaction::is_trivial_move() const {
