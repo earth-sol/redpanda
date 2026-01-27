@@ -11,6 +11,8 @@
 #pragma once
 
 #include "base/seastarx.h"
+#include "container/chunked_vector.h"
+#include "container/json.h"
 #include "json/json.h"
 #include "json/stringbuffer.h"
 #include "utils/named_type.h"
@@ -232,7 +234,17 @@ struct user {
     ss::sstring name;
     type type_id{type::unknown};
     ss::sstring uid;
-    std::vector<group> groups;
+    chunked_vector<group> groups;
+
+    user copy() const {
+        user u;
+        u.domain = domain;
+        u.name = name;
+        u.type_id = type_id;
+        u.uid = uid;
+        u.groups = groups.copy();
+        return u;
+    }
 
     auto equality_fields() const {
         return std::tie(domain, name, type_id, uid, groups);
