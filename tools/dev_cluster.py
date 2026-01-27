@@ -427,8 +427,12 @@ class Redpanda:
     async def run(self) -> int:
         log_path = Path(os.path.dirname(self.node_meta.config_path)) / "redpanda.log"
 
+        def has_arg(*prefixes: str) -> bool:
+            """Check if any extra_arg starts with any of the given prefixes."""
+            return any(arg.startswith(prefixes) for arg in self.extra_args)
+
         # If user did not override cores with extra args, apply it from our internal cores setting
-        if not {"-c", "--smp"} & set(self.extra_args):
+        if not has_arg("-c", "--smp"):
             # Caller is required to pass a finite core count
             assert self.cores > 0
             base_core = self.cores * self.node_meta.index
@@ -438,7 +442,7 @@ class Redpanda:
             cores_args = ""
 
         # If user did not specify memory, share 75% of memory equally between nodes
-        if not {"-m", "--memory"} & set(self.extra_args):
+        if not has_arg("-m", "--memory"):
             memory_total = psutil.virtual_memory().total
             memory_per_node = (3 * (memory_total // 4)) // self.node_meta.cluster_size
             memory_args = f"-m {memory_per_node // (1024 * 1024)}M"
