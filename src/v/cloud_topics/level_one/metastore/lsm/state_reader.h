@@ -38,6 +38,11 @@ public:
         extent_row_value val;
     };
 
+    struct object_row {
+        ss::sstring key;
+        object_row_value val;
+    };
+
     enum class direction { forward, backward };
 
     class extent_key_range {
@@ -68,6 +73,30 @@ public:
         // Snapshot of the database.
         lsm::iterator _iter;
         direction _direction;
+    };
+
+    class object_key_range {
+    public:
+        object_key_range(ss::sstring base_key, lsm::iterator it)
+          : _inclusive_base_key(std::move(base_key))
+          , _iter(std::move(it)) {}
+
+        // Returns object_rows starting from _base_key (if provided), or
+        // generates an error if it can't.
+        //
+        // Stops generating after the first error.
+        ss::coroutine::experimental::generator<std::expected<object_row, error>>
+        get_rows();
+
+    private:
+        ss::sstring to_string();
+
+        // Optional lower bound for iteration. If nullopt, starts from the first
+        // object key.
+        ss::sstring _inclusive_base_key;
+
+        // Snapshot of the database.
+        lsm::iterator _iter;
     };
 
     explicit state_reader(lsm::snapshot snap)
@@ -137,6 +166,11 @@ public:
     // Returns all partition IDs that have metadata for the given topic.
     ss::future<std::expected<chunked_vector<model::partition_id>, error>>
     get_partitions_for_topic(const model::topic_id&);
+
+    // Returns an object_key_range starting from the given object_id. If
+    // start_oid is nullopt, starts from the first object in the database.
+    ss::future<std::expected<object_key_range, error>>
+    get_object_range(std::optional<object_id> start_oid);
 
 private:
     ss::future<
