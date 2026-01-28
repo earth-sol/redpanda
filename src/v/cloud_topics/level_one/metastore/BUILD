@@ -120,6 +120,7 @@ redpanda_cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":metastore_manifest",
         ":offset_interval_set",
         "//src/v/base",
         "//src/v/cloud_topics/level_one/common:object_id",
@@ -159,8 +160,13 @@ redpanda_cc_library(
     ],
     visibility = ["//visibility:public"],
     deps = [
+        ":manifest_io",
         ":metastore",
         "//src/v/base",
+        "//src/v/cloud_io:remote",
+        "//src/v/cloud_storage_clients",
+        "//src/v/model",
+        "//src/v/storage",
         "@seastar",
     ],
 )
