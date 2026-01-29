@@ -24,7 +24,6 @@ BENCH_START_MARKER = "Starting benchmark traffic"
 # brokers) into one file.
 
 ICEBERG_SCHEMA = """
-
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
@@ -35,22 +34,40 @@ message Simple {
     google.protobuf.Timestamp ts = 3;
 }
 """
-
 ICEBERG_SAMPLE_PAYLOAD = b"\n\x1fhello my name is protobuf shady\x10\xb9`\x1a\x0b\x08\xf4\xf4\xb7\xcb\x06\x10\xc0\xb1\xc3v"
-ICEBERG_TOPIC_NAME = "iceberg-topic"
+ICEBERG_TOPIC_NAME = "iceberg-protobuf-topic"
+
+AVRO_SCHEMA = """{
+  "type": "record",
+  "name": "Simple",
+  "fields": [
+    {"name": "name", "type": "string"},
+    {"name": "id", "type": "int"},
+    {"name": "ts", "type": {"type": "long", "logicalType": "timestamp-micros"}}
+  ]
+}"""
+AVRO_TOPIC_NAME = "iceberg-avro-topic"
+AVRO_SAMPLE_PAYLOAD = json.dumps(
+    {"name": "hello my name is avro shady", "id": 24680, "ts": 1625079045123456}
+).encode("utf8")
 
 
-async def setup_iceberg_schema_registry_and_topic(
-    args: argparse.Namespace, tmpdir: Path
+async def setup_schema_and_topic(
+    args: argparse.Namespace,
+    tmpdir: Path,
+    topic_name: str,
+    schema: str,
+    schema_filename: str,
+    iceberg_mode: str,
 ):
-    schema_path = tmpdir / "iceberg_schema.proto"
-    schema_path.write_text(ICEBERG_SCHEMA)
+    schema_path = tmpdir / schema_filename
+    schema_path.write_text(schema)
     schema_create_args: list[str] = [
         str(args.rpk_binary),
         "registry",
         "schema",
         "create",
-        f"{ICEBERG_TOPIC_NAME}-value",
+        f"{topic_name}-value",
         "--schema",
         str(schema_path),
     ]
@@ -60,17 +77,19 @@ async def setup_iceberg_schema_registry_and_topic(
     )
     await proc.wait()
     if proc.returncode != 0:
-        raise RuntimeError("Failed to create iceberg schema in schema registry")
+        raise RuntimeError(
+            f"Failed to create schema for {topic_name} in schema registry"
+        )
     topic_create_args: list[str] = [
         str(args.rpk_binary),
         "topic",
         "create",
-        ICEBERG_TOPIC_NAME,
+        topic_name,
         "-p",
         "18",
         "-r",
         "3",
-        "--topic-config=redpanda.iceberg.mode=value_schema_latest",
+        f"--topic-config=redpanda.iceberg.mode={iceberg_mode}",
         "--topic-config=redpanda.iceberg.target.lag.ms=20000",
     ]
     proc = await asyncio.create_subprocess_exec(
@@ -79,7 +98,7 @@ async def setup_iceberg_schema_registry_and_topic(
     )
     await proc.wait()
     if proc.returncode != 0:
-        raise RuntimeError("Failed to create iceberg topic")
+        raise RuntimeError(f"Failed to create topic {topic_name}")
 
 
 async def read_until(proc: asyncio.subprocess.Process, marker: str, tag: str):
@@ -248,11 +267,11 @@ async def check_iceberg_state(tmpdir: Path):
 
     iceberg_dir = (
         tmpdir
-        / "rp_data/minio/data/panda-bucket/redpanda-iceberg-catalog/redpanda/iceberg-topic/"
+        / f"rp_data/minio/data/panda-bucket/redpanda-iceberg-catalog/redpanda/{ICEBERG_TOPIC_NAME}/"
     )
     dlq_dir = (
         tmpdir
-        / "rp_data/minio/data/panda-bucket/redpanda-iceberg-catalog/redpanda/iceberg-topic~dlq/"
+        / f"rp_data/minio/data/panda-bucket/redpanda-iceberg-catalog/redpanda/{ICEBERG_TOPIC_NAME}~dlq/"
     )
 
     def check_sizes() -> str:
@@ -281,6 +300,30 @@ async def check_iceberg_state(tmpdir: Path):
         raise RuntimeError(status)
 
 
+async def send_avro_messages(args: argparse.Namespace):
+    print("Sending 100 Avro messages via rpk...")
+
+    for _ in range(100):
+        # rpk doesn't understand value_schema_latest so for rpk the topic needs to use value_schema_id_prefix
+        produce_args: list[str] = [
+            str(args.rpk_binary),
+            "topic",
+            "produce",
+            AVRO_TOPIC_NAME,
+            "--schema-id=topic",
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *produce_args,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            start_new_session=True,
+        )
+        await proc.communicate(input=AVRO_SAMPLE_PAYLOAD)
+        if proc.returncode != 0:
+            raise RuntimeError(f"Failed to send message to {topic_name}")
+
+
 async def terminate(proc: asyncio.subprocess.Process, name: str) -> int:
     try:
         print(f"Terminating {name} (pid {proc.pid})")
@@ -307,8 +350,26 @@ async def profile(args: argparse.Namespace, tmpdir: Path, redpanda_bin: Path):
         await read_until(cluster_proc, CLUSTER_STARTUP_MARKER, "cluster")
         cluster_task = asyncio.create_task(continue_stream(cluster_proc, "cluster"))
 
-        await setup_iceberg_schema_registry_and_topic(args, tmpdir)
+        # do very simple avro iceberg training
+        await setup_schema_and_topic(
+            args,
+            tmpdir,
+            AVRO_TOPIC_NAME,
+            AVRO_SCHEMA,
+            "avro_schema.avsc",
+            "value_schema_id_prefix",
+        )
+        await send_avro_messages(args)
 
+        # full produce plus protobuf iceberg
+        await setup_schema_and_topic(
+            args,
+            tmpdir,
+            ICEBERG_TOPIC_NAME,
+            ICEBERG_SCHEMA,
+            "iceberg_schema.proto",
+            "value_schema_latest",
+        )
         omb_proc, omb_target = await start_omb(tmpdir, args.omb_benchmark)
         await read_until(omb_proc, BENCH_START_MARKER, "omb")
         await asyncio.create_task(continue_stream(omb_proc, "omb"))
