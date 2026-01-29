@@ -821,7 +821,13 @@ db_domain_manager::get_extent_metadata(rpc::get_extent_metadata_request req) {
         }
     }();
     auto extents_result = co_await std::move(extents_res);
-    if (!extents_result.has_value() || !extents_result->has_value()) {
+    if (!extents_result.has_value()) {
+        co_return rpc::get_extent_metadata_reply{
+          .ec = log_and_convert(
+            extents_result.error(), "Error getting extent range: "),
+        };
+    }
+    if (!extents_result->has_value()) {
         co_return rpc::get_extent_metadata_reply{
           .ec = rpc::errc::out_of_range,
         };
