@@ -31,6 +31,7 @@ redpanda_cc_library(
         "s3_error.h",
         "types.h",
         "upstream.h",
+        "upstream_key.h",
         "upstream_registry.h",
         "util.h",
         "xml_sax_parser.h",

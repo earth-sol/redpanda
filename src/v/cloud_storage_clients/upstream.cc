@@ -26,10 +26,12 @@ constexpr auto self_configure_backoff = 1s;
 } // namespace
 
 upstream::upstream(
+  upstream_key key,
   client_configuration config,
   ss::shared_ptr<ss::tls::certificate_credentials> tls_credentials,
   ss::shared_ptr<client_probe> probe)
-  : _config(std::move(config))
+  : _key(std::move(key))
+  , _config(std::move(config))
   , _transport_config(build_transport_configuration(_config, tls_credentials))
   , _probe(std::move(probe))
   , _credential_manager(

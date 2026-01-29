@@ -34,10 +34,6 @@ constexpr auto pool_ready_timeout = 15s;
 
 namespace cloud_storage_clients {
 
-namespace {
-const auto default_upstream_key = upstream_key{};
-}
-
 client_pool::client_pool(
   upstream_registry& registry,
   size_t size,

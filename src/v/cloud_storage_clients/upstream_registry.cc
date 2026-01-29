@@ -12,7 +12,7 @@
 
 #include "cloud_storage_clients/detail/registry_def.h" // IWYU pragma: keep
 #include "cloud_storage_clients/logger.h"
-#include "utils/unresolved_address.h"
+#include "cloud_storage_clients/upstream_key.h"
 
 #include <seastar/core/sharded.hh>
 
@@ -102,6 +102,7 @@ ss::future<> upstream_registry::start_svc(
       });
 
     auto& svc = co_await ctor.start(
+      key,
       cfg,
       ss::sharded_parameter(
         [this] { return container().local()._tls_credentials; }),

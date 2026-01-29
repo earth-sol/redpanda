@@ -14,6 +14,7 @@
 #include "cloud_storage_clients/client.h"
 #include "cloud_storage_clients/configuration.h"
 #include "cloud_storage_clients/credential_manager.h"
+#include "cloud_storage_clients/upstream_key.h"
 
 #include <seastar/core/condition-variable.hh>
 #include <seastar/core/sharded.hh>
@@ -34,6 +35,7 @@ public:
     using client_ptr = ss::shared_ptr<client>;
 
     explicit upstream(
+      upstream_key key,
       client_configuration config,
       ss::shared_ptr<ss::tls::certificate_credentials> tls_credentials,
       ss::shared_ptr<client_probe> probe);
@@ -44,6 +46,8 @@ public:
     ss::future<> stop();
     void prepare_stop();
     /// @}
+
+    const upstream_key& key() const noexcept { return _key; }
 
     /// Create a client using the provided abort source.
     ///
@@ -80,6 +84,8 @@ private:
 
     ss::abort_source _as;
     ss::gate _gate;
+
+    upstream_key _key;
 
     client_configuration _config;
     net::base_transport::configuration _transport_config;
