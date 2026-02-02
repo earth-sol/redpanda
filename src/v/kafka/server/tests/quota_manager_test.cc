@@ -332,6 +332,33 @@ SEASTAR_THREAD_TEST_CASE(update_test) {
     }
 }
 
+struct delays {
+    quota_manager::clock::duration produce_delay;
+    quota_manager::clock::duration consume_delay;
+    std::chrono::milliseconds pm_delay;
+    friend bool operator==(const delays&, const delays&) = default;
+};
+
+std::ostream& operator<<(std::ostream& os, const delays& d) {
+    os << ss::format(
+      "produce delay: {}, consume_delay: {}, pm_delay: {}",
+      d.produce_delay,
+      d.consume_delay,
+      d.pm_delay);
+    return os;
+}
+
+constexpr delays no_delay{0ms, 0ms, 0ms};
+constexpr delays one_sec{1s, 1s, 1s};
+
+struct request_size {
+    uint64_t produce_bytes = 1;
+    uint64_t consume_bytes = 1;
+    uint32_t n_mutations = 1;
+};
+
+constexpr request_size zero_bytes{0, 0, 0};
+
 SEASTAR_THREAD_TEST_CASE(test_increasing_specificity) {
     fixture f;
 
@@ -339,18 +366,6 @@ SEASTAR_THREAD_TEST_CASE(test_increasing_specificity) {
 
     auto& buckets_map = f.sqm.local().get_global_map_for_testing();
     auto now = clock::now();
-
-    struct request_size {
-        uint64_t produce_bytes = 1;
-        uint64_t consume_bytes = 1;
-        uint32_t n_mutations = 1;
-    };
-
-    struct delays {
-        clock::duration produce_delay;
-        clock::duration consume_delay;
-        std::chrono::milliseconds pm_delay;
-    };
 
     const auto make_size = [](uint32_t i) {
         return request_size{
@@ -385,9 +400,7 @@ SEASTAR_THREAD_TEST_CASE(test_increasing_specificity) {
     // Sanity: no quotas
     const delays d = make_records(now);
     BOOST_REQUIRE(buckets_map->empty());
-    BOOST_REQUIRE_EQUAL(d.produce_delay, 0ms);
-    BOOST_REQUIRE_EQUAL(d.consume_delay, 0ms);
-    BOOST_REQUIRE_EQUAL(d.pm_delay, 0ms);
+    BOOST_REQUIRE_EQUAL(d, no_delay);
 
     auto kcid = k_client_id{cid};
     auto kgroup = k_group_name{cid};
@@ -468,11 +481,9 @@ SEASTAR_THREAD_TEST_CASE(test_increasing_specificity) {
             f.quota_store.local().set_quota(tc.ekey, quota);
 
             // Record zero bytes to update the global map to new rates
-            const delays d = make_records(now, {0, 0, 0});
+            const delays d = make_records(now, zero_bytes);
             // Sanity check: Zero byte-requests should not be throttled
-            BOOST_REQUIRE_EQUAL(d.produce_delay, 0ms);
-            BOOST_REQUIRE_EQUAL(d.consume_delay, 0ms);
-            BOOST_REQUIRE_EQUAL(d.pm_delay, 0ms);
+            BOOST_REQUIRE_EQUAL(d, no_delay);
 
             // Verify that all rates have been updated
             auto it = buckets_map->find(tc.tkey);
@@ -497,9 +508,7 @@ SEASTAR_THREAD_TEST_CASE(test_increasing_specificity) {
                2 * max_rate.consume_bytes,
                2 * max_rate.n_mutations});
 
-            BOOST_REQUIRE_EQUAL(throttle.produce_delay, 1s);
-            BOOST_REQUIRE_EQUAL(throttle.consume_delay, 1s);
-            BOOST_REQUIRE_EQUAL(throttle.pm_delay, 1s);
+            BOOST_REQUIRE_EQUAL(throttle, one_sec);
         }
     }
 }
