@@ -11,6 +11,7 @@ import collections
 import math
 import random
 import time
+from typing import Dict
 
 from ducktape.utils.util import wait_until
 
@@ -414,8 +415,12 @@ class LeadershipPinningTest(RedpandaTest):
         }
 
     def wait_for_racks(
-        self, partition_counts, topic2expected_racks, check_balance=True, timeout_sec=60
-    ):
+        self,
+        partition_counts: Dict[str, int],
+        topic2expected_racks: Dict[str, Set[str]],
+        check_balance: bool = True,
+        timeout_sec: int = 60
+    ) -> None:
         """
         wait for leadership balance with rack placement.
         balance is:
@@ -450,10 +455,10 @@ class LeadershipPinningTest(RedpandaTest):
                     )
                     return False
 
-                expected_racks = topic2expected_racks.get(topic, {})
+                expected_racks = topic2expected_racks.get(topic, set())
                 rack2leaders = self._rack_counts(node2leaders)
 
-                if expected_racks != rack2leaders.keys():
+                if expected_racks != set(rack2leaders.keys()):
                     self.logger.debug(
                         f"leader rack sets for topic {topic} differ, "
                         f"expected: {expected_racks}, actual counts: {rack2leaders}"
