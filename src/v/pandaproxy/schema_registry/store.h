@@ -474,6 +474,9 @@ public:
             return soft_deleted(sub);
         }
 
+        // Track the subject's deleted status before modification
+        is_deleted was_deleted = sub_it->second.deleted;
+
         sub_it->second.written_at.push_back(marker);
         sub_it->second.deleted = is_deleted::yes;
 
@@ -487,8 +490,21 @@ public:
         }
 
         if (permanent) {
+            // Permanent delete - decrement appropriate counter and erase
+            auto ctx_it = _context_stores.find(sub.ctx);
+            if (ctx_it != _context_stores.end()) {
+                // Decrement based on current status
+                ctx_it->second.decrement_subject_count(is_deleted::yes);
+            }
             _subjects.erase(sub_it);
         } else {
+            // Soft delete - move from not-deleted to deleted if it wasn't
+            // already deleted
+            if (!was_deleted) {
+                get_or_create_context_store(sub.ctx)
+                  .update_subject_deleted_status(
+                    is_deleted::no, is_deleted::yes);
+            }
             // Mark all versions within the store deleted too: this matters
             // if someone revives the subject with new versions later, as
             // these older versions should remain deleted.
@@ -746,16 +762,32 @@ public:
         bool inserted;
     };
     insert_subject_result insert_subject(context_subject sub, schema_id id) {
-        auto& subject_entry = get_or_create_subject_entry(std::move(sub));
+        auto [it, inserted] = _subjects.try_emplace(sub, sub);
+        auto& subject_entry = it->second;
+
+        // Track the previous deleted status
+        is_deleted was_deleted = subject_entry.deleted;
         subject_entry.deleted = is_deleted::no;
+
+        // Update counters based on whether this is a new subject or revival
+        if (inserted) {
+            // New subject - increment not-deleted counter
+            get_or_create_context_store(sub.ctx).increment_subject_count(
+              is_deleted::no);
+        } else if (was_deleted) {
+            // Reviving a deleted subject - move from deleted to not-deleted
+            get_or_create_context_store(sub.ctx).update_subject_deleted_status(
+              is_deleted::yes, is_deleted::no);
+        }
+
         auto& versions = subject_entry.versions;
         const auto v_it = std::find_if(
           versions.begin(), versions.end(), [id](auto v) {
               return v.id == id;
           });
         if (v_it != versions.cend()) {
-            auto inserted = std::exchange(v_it->deleted, is_deleted::no);
-            return {v_it->version, bool(inserted)};
+            auto was_deleted = std::exchange(v_it->deleted, is_deleted::no);
+            return {v_it->version, bool(was_deleted)};
         }
 
         const auto version = versions.empty() ? schema_version{1}
@@ -770,7 +802,12 @@ public:
       schema_version version,
       schema_id id,
       is_deleted deleted) {
-        auto& subject_entry = get_or_create_subject_entry(std::move(sub));
+        auto [it, inserted] = _subjects.try_emplace(sub, sub);
+        auto& subject_entry = it->second;
+
+        // Track if subject deletion status changed
+        is_deleted old_deleted = subject_entry.deleted;
+
         auto& versions = subject_entry.versions;
         subject_entry.written_at.push_back(marker);
 
@@ -806,6 +843,17 @@ public:
             subject_entry.deleted = deleted;
         }
 
+        // Update counters based on whether this is new or status changed
+        if (inserted) {
+            // New subject - increment appropriate counter
+            get_or_create_context_store(sub.ctx).increment_subject_count(
+              deleted);
+        } else if (old_deleted != subject_entry.deleted) {
+            // Deletion status changed - move between counters
+            get_or_create_context_store(sub.ctx).update_subject_deleted_status(
+              old_deleted, subject_entry.deleted);
+        }
+
         return !found;
     }
 
@@ -821,18 +869,6 @@ public:
 
     void setup_metrics() {
         namespace sm = ss::metrics;
-        const auto make_subject_count = [this](is_deleted deleted) {
-            return sm::make_gauge(
-              "subject_count",
-              [this, deleted] {
-                  return std::ranges::count_if(
-                    _subjects, [deleted](const auto& entry) {
-                        return entry.second.deleted == deleted;
-                    });
-              },
-              sm::description("The number of subjects in the store"),
-              {sm::label{"deleted"}(deleted)});
-        };
         const auto make_schema_bytes = [this]() {
             return sm::make_gauge(
               "schema_memory_bytes",
@@ -854,8 +890,6 @@ public:
               group_name,
               {
                 make_schema_bytes(),
-                make_subject_count(is_deleted::no),
-                make_subject_count(is_deleted::yes),
               },
               {},
               agg);
@@ -866,8 +900,6 @@ public:
               group_name,
               {
                 make_schema_bytes().aggregate(agg),
-                make_subject_count(is_deleted::no).aggregate(agg),
-                make_subject_count(is_deleted::yes).aggregate(agg),
               });
         }
     };
@@ -1054,6 +1086,39 @@ private:
 
         void clear_schema_count() { _schema_count = 0; }
 
+        void increment_subject_count(is_deleted deleted) {
+            if (deleted == is_deleted::yes) {
+                _subject_count_deleted++;
+            } else {
+                _subject_count_not_deleted++;
+            }
+        }
+
+        void decrement_subject_count(is_deleted deleted) {
+            if (deleted == is_deleted::yes) {
+                if (_subject_count_deleted > 0) {
+                    _subject_count_deleted--;
+                }
+            } else {
+                if (_subject_count_not_deleted > 0) {
+                    _subject_count_not_deleted--;
+                }
+            }
+        }
+
+        void update_subject_deleted_status(
+          is_deleted old_status, is_deleted new_status) {
+            if (old_status != new_status) {
+                decrement_subject_count(old_status);
+                increment_subject_count(new_status);
+            }
+        }
+
+        void clear_subject_counts() {
+            _subject_count_deleted = 0;
+            _subject_count_not_deleted = 0;
+        }
+
         chunked_vector<seq_marker> _config_written_at;
         chunked_vector<seq_marker> _mode_written_at;
 
@@ -1061,6 +1126,8 @@ private:
         metrics::internal_metric_groups _metrics;
         metrics::public_metric_groups _public_metrics;
         size_t _schema_count{0};
+        size_t _subject_count_not_deleted{0};
+        size_t _subject_count_deleted{0};
 
         void setup_metrics(const context& ctx) {
             namespace sm = ss::metrics;
@@ -1075,15 +1142,36 @@ private:
                   {sm::label{"context"}(ctx)});
             };
 
+            const auto make_subject_count = [this, &ctx](is_deleted deleted) {
+                return sm::make_gauge(
+                  "subject_count",
+                  [this, deleted] {
+                      return deleted == is_deleted::yes
+                               ? _subject_count_deleted
+                               : _subject_count_not_deleted;
+                  },
+                  sm::description("The number of subjects in the store"),
+                  {sm::label{"context"}(ctx), sm::label{"deleted"}(deleted)});
+            };
+
             if (!config::shard_local_cfg().disable_metrics()) {
                 _metrics.add_group(
-                  group_name, {make_schema_count()}, {}, {sm::shard_label});
+                  group_name,
+                  {make_schema_count(),
+                   make_subject_count(is_deleted::no),
+                   make_subject_count(is_deleted::yes)},
+                  {},
+                  {sm::shard_label});
             }
 
             if (!config::shard_local_cfg().disable_public_metrics()) {
                 _public_metrics.add_group(
                   group_name,
-                  {make_schema_count().aggregate({sm::shard_label})});
+                  {make_schema_count().aggregate({sm::shard_label}),
+                   make_subject_count(is_deleted::no)
+                     .aggregate({sm::shard_label}),
+                   make_subject_count(is_deleted::yes)
+                     .aggregate({sm::shard_label})});
             }
         }
 
