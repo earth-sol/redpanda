@@ -842,6 +842,8 @@ bool development_feature_property<T>::development_features_enabled(
     return conf.development_features_enabled();
 }
 
+std::unique_ptr<configuration> make_config();
+
 configuration& shard_local_cfg();
 
 } // namespace config
