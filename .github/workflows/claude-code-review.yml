@@ -2,10 +2,10 @@
 name: claude-code-review
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened, labeled]
+    types: [labeled]
 jobs:
   claude-review:
-    if: contains(github.event.pull_request.labels.*.name, 'claude-review')
+    if: github.event.label.name == 'claude-review'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -29,7 +29,7 @@ jobs:
           allowed_non_write_users: ""
           github_token: ${{ github.token }}  # needed to test changes to this file in a PR before merge
           show_full_output: false
-          track_progress: true
+          track_progress: false
           use_commit_signing: true
           additional_permissions: |
             actions: read
