@@ -155,7 +155,7 @@ ss::future<lookup_result> impl::get(internal::key_view key) {
     auto current = _versions->current();
     version::get_stats stats{};
     auto result = co_await current->get(key, &stats);
-    if (current->update_stats(stats)) {
+    if (!_opts->readonly && current->update_stats(stats)) {
         maybe_schedule_compaction();
     }
     co_return result;
@@ -177,7 +177,7 @@ impl::create_iterator(iterator_options opts) {
           [this](internal::key_view key) {
               return _versions->current()->record_read_sample(key).then(
                 [this](bool compaction_needed) {
-                    if (compaction_needed) {
+                    if (!_opts->readonly && compaction_needed) {
                         maybe_schedule_compaction();
                     }
                 });
@@ -274,7 +274,7 @@ ss::future<> impl::recover() {
 }
 
 void impl::maybe_schedule_compaction() {
-    if (_as.abort_requested()) {
+    if (_as.abort_requested() || _opts->readonly) {
         return;
     }
     if (!_flush_task && _imm) {

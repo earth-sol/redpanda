@@ -565,6 +565,11 @@ ss::future<> version_set::recover() {
 }
 
 void version_set::finalize(version* v) {
+    if (_options->readonly) {
+        // No need to compute any compaction states, as we won't run compaction
+        // in read-only mode.
+        return;
+    }
     // Precompute the best level for the next compaction
     internal::level best_level = 0_level;
     double best_score = static_cast<double>(v->_files[0_level].size())
