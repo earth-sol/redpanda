@@ -269,6 +269,28 @@ TEST(frontend_test, banned_keywords) {
     }
 }
 
+TEST(frontend_test, duplicate_non_adjacent_keyword) {
+    EXPECT_THAT(
+      []() {
+          frontend{}.compile(
+            parse_json(R"({
+              "$id": "https://example.com/root.json",
+              "type": "object",
+              "properties": {
+                  "name": { "type": "string" }
+              },
+              "additionalProperties": false,
+              "properties": {
+                  "name": { "type": "integer" }
+              }
+            })"),
+            "https://example.com/irrelevant-base.json",
+            dialect::draft7);
+      },
+      ThrowsMessage<std::runtime_error>(
+        StrEq("Duplicate keyword: properties")));
+}
+
 TEST(frontend_test, object_additional_properties) {
     frontend f;
     auto schema = f.compile(
