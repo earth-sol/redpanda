@@ -20,7 +20,7 @@ setup(
         "types-confluent-kafka==1.4.0",
         "zstandard==0.23.0",
         "xxhash==3.5.0",
-        "protobuf==5.29.0",
+        "protobuf==5.29.6",
         "fastavro==1.11.1",
         "falcon==4.0.2",
         "psutil==5.9.0",
